@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../../prisma/dev.db"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  role      Role     @default(AGENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedConversations Conversation[] @relation("AssignedTo")
+}
+
+model Patient {
+  id               String   @id @default(uuid())
+  phone            String   @unique
+  name             String
+  cpf              String?  @unique
+  email            String?
+  birthDate        DateTime?
+  address          String?
+  emergencyContact String?
+  insuranceCompany String?
+  insuranceNumber  String?
+  preferences      Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  conversations Conversation[]
+  interactions    PatientInteraction[]
+  procedures    PatientProcedure[]
+}
+
+model Conversation {
+  id              String             @id @default(uuid())
+  phone           String
+  status          ConversationStatus @default(BOT_QUEUE)
+  assignedToId    String?
+  assignedTo      User?              @relation("AssignedTo", fields: [assignedToId], references: [id])
+  patientId       String?
+  patient         Patient?           @relation(fields: [patientId], references: [id])
+  lastMessage     String
+  lastTimestamp   DateTime           @default(now())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  messages Message[]
+}
+
+model Message {
+  id           String         @id @default(uuid())
+  conversationId String
+  conversation Conversation   @relation(fields: [conversationId], references: [id])
+  phoneNumber  String
+  messageText  String
+  direction    MessageDirection
+  from         MessageFrom
+  timestamp    DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+}
+
+model PatientInteraction {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  type        String
+  description String
+  data        Json?
+  timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model PatientProcedure {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  procedure   String
+  insurance   String?
+  price       Float?
+  status      ProcedureStatus @default(SCHEDULED)
+  scheduledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  type        WorkflowType
+  config      Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AILearningData {
+  id        String   @id @default(uuid())
+  phone     String
+  intent    String?
+  sentiment String?
+  style     String?
+  context   Json?
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum ConversationStatus {
+  BOT_QUEUE
+  PRINCIPAL
+  EM_ATENDIMENTO
+  FECHADA
+}
+
+enum MessageDirection {
+  RECEIVED
+  SENT
+}
+
+enum MessageFrom {
+  USER
+  AGENT
+  BOT
+}
+
+enum ProcedureStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkflowType {
+  APPOINTMENT
+  REGISTRATION
+  CONSULTATION
+  SUPPORT
+}

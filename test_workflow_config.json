@@ -1,0 +1,137 @@
+{
+  "name": "Atendimento Inteligente Completo",
+  "description": "Workflow com respostas para valores de procedimentos e localização",
+  "type": "CONSULTATION",
+  "config": {
+    "nodes": [
+      {
+        "id": "start",
+        "type": "START",
+        "data": {
+          "welcomeMessage": "Olá! Como posso ajudar?"
+        },
+        "position": { "x": 100, "y": 100 },
+        "connections": []
+      },
+      {
+        "id": "condition_procedimentos",
+        "type": "CONDITION",
+        "data": {
+          "condition": "procedimentos|valor|preço|acupuntura|fisioterapia"
+        },
+        "position": { "x": 300, "y": 100 },
+        "connections": []
+      },
+      {
+        "id": "msg_acupuntura",
+        "type": "MESSAGE",
+        "data": {
+          "message": "Valor da acupuntura: R$ 150,00 por sessão. Pacote de 10 sessões: R$ 1.200,00 (20% desconto)."
+        },
+        "position": { "x": 500, "y": 50 },
+        "connections": []
+      },
+      {
+        "id": "msg_fisioterapia",
+        "type": "MESSAGE",
+        "data": {
+          "message": "Valor da fisioterapia: R$ 120,00 por sessão. Pacote de 10 sessões: R$ 960,00 (20% desconto)."
+        },
+        "position": { "x": 500, "y": 150 },
+        "connections": []
+      },
+      {
+        "id": "condition_localizacao",
+        "type": "CONDITION",
+        "data": {
+          "condition": "endereço|localização|onde fica|como chegar"
+        },
+        "position": { "x": 300, "y": 300 },
+        "connections": []
+      },
+      {
+        "id": "msg_localizacao",
+        "type": "MESSAGE",
+        "data": {
+          "message": "Nossa clínica fica na Rua Exemplo, 123 - Centro, São Paulo/SP. Estacionamento gratuito disponível."
+        },
+        "position": { "x": 500, "y": 300 },
+        "connections": []
+      },
+      {
+        "id": "msg_geral",
+        "type": "MESSAGE",
+        "data": {
+          "message": "Temos atendimento humano se preferir. Posso ajudar com mais alguma coisa?"
+        },
+        "position": { "x": 300, "y": 450 },
+        "connections": []
+      },
+      {
+        "id": "end",
+        "type": "END",
+        "data": {
+          "finalMessage": "Obrigado por entrar em contato!"
+        },
+        "position": { "x": 500, "y": 500 },
+        "connections": []
+      }
+    ],
+    "edges": [
+      {
+        "id": "e_start_condition",
+        "source": "start",
+        "target": "condition_procedimentos",
+        "data": { "port": "main" }
+      },
+      {
+        "id": "e_condition_acupuntura",
+        "source": "condition_procedimentos",
+        "target": "msg_acupuntura",
+        "data": { "port": "true" }
+      },
+      {
+        "id": "e_condition_fisioterapia",
+        "source": "condition_procedimentos",
+        "target": "msg_fisioterapia",
+        "data": { "port": "true" }
+      },
+      {
+        "id": "e_acupuntura_localizacao",
+        "source": "msg_acupuntura",
+        "target": "condition_localizacao",
+        "data": { "port": "main" }
+      },
+      {
+        "id": "e_fisioterapia_localizacao",
+        "source": "msg_fisioterapia",
+        "target": "condition_localizacao",
+        "data": { "port": "main" }
+      },
+      {
+        "id": "e_localizacao_geral",
+        "source": "condition_localizacao",
+        "target": "msg_localizacao",
+        "data": { "port": "true" }
+      },
+      {
+        "id": "e_geral_end",
+        "source": "msg_localizacao",
+        "target": "end",
+        "data": { "port": "main" }
+      },
+      {
+        "id": "e_condition_geral",
+        "source": "condition_procedimentos",
+        "target": "msg_geral",
+        "data": { "port": "false" }
+      },
+      {
+        "id": "e_geral_end_direct",
+        "source": "msg_geral",
+        "target": "end",
+        "data": { "port": "main" }
+      }
+    ]
+  }
+}

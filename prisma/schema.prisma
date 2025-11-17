@@ -1,0 +1,236 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String
+  password  String
+  role      String    @default("ATENDENTE")
+  isMasterFrozen Boolean @default(false)
+  lastLoginAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  conversations Conversation[]
+  auditLogs    AuditLog[]
+}
+
+model Patient {
+  id               String    @id @default(cuid())
+  phone            String    @unique
+  name             String
+  cpf              String?   @unique
+  email            String?
+  birthDate        DateTime?
+  address          String?
+  emergencyContact String?
+  insuranceCompany String?
+  insuranceNumber  String?
+  preferences      Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  conversations Conversation[]
+  appointments  Appointment[]
+  interactions  PatientInteraction[]
+}
+
+model Conversation {
+  id             String    @id @default(cuid())
+  phone          String
+  status         String    @default("BOT_QUEUE")
+  assignedToId   String?
+  patientId      String?
+  lastMessage    String
+  lastTimestamp  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workflowId     String?
+  currentWorkflowNode String?
+  workflowContext Json?
+  awaitingInput  Boolean   @default(false)
+  
+  assignedTo User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  messages   Message[]
+}
+
+model Message {
+  id             String    @id @default(cuid())
+  conversationId String
+  phoneNumber    String
+  messageText    String
+  direction      String
+  from           String
+  timestamp      DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+model PatientInteraction {
+  id          String   @id @default(cuid())
+  patientId   String
+  type        String
+  description String?
+  data        Json?
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   @default("CONVERSATION")
+  config      Json
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Appointment {
+  id             String    @id @default(cuid())
+  patientId      String
+  patientName    String
+  patientPhone   String
+  procedure      String
+  date           DateTime
+  time           String
+  notes          String?
+  status         String    @default("SCHEDULED")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+model InsuranceCompany {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  displayName String
+  discount  Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  procedures InsuranceProcedure[]
+}
+
+model Procedure {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  description String
+  basePrice Float
+  requiresEvaluation Boolean @default(false)
+  duration  Int
+  categories Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  insurances InsuranceProcedure[]
+}
+
+model Clinic {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  displayName String
+  address   String
+  neighborhood String
+  city      String
+  state     String
+  zipCode   String
+  phone     String
+  email     String?
+  openingHours Json
+  coordinates Json?
+  specialties Json
+  parkingAvailable Boolean @default(false)
+  accessibility Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinicInsurances ClinicInsurance[]
+  clinicProcedures ClinicProcedure[]
+}
+
+model ClinicInsurance {
+  id        String   @id @default(cuid())
+  clinicId  String
+  insuranceCode String
+  coveragePercentage Float @default(70)
+  copayment Float @default(0)
+  requiresPreAuthorization Boolean @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  
+  @@unique([clinicId, insuranceCode])
+}
+
+model ClinicProcedure {
+  id        String   @id @default(cuid())
+  clinicId  String
+  procedureCode String
+  particularPrice Float
+  insurancePrice Json // JSON object with insurance codes as keys and prices as values
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  
+  @@unique([clinicId, procedureCode])
+}
+
+model AILearningData {
+  id        String   @id @default(cuid())
+  phone     String
+  intent    String?
+  sentiment String?
+  style     String?
+  context   Json?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  targetUserId String?
+  action      String
+  details     Json?
+  createdAt   DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
+}
+
+model InsuranceProcedure {
+  insuranceId String
+  procedureId String
+  createdAt   DateTime @default(now())
+
+  insurance InsuranceCompany @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
+  procedure Procedure        @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+
+  @@id([insuranceId, procedureId])
+}

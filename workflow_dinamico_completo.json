@@ -1,0 +1,375 @@
+{
+  "name": "Sistema Multi-Clínica Dinâmico",
+  "description": "Workflow completo que carrega dados de clínicas, convênios e procedimentos diretamente do banco de dados",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start",
+      "type": "START",
+      "position": { "x": 100, "y": 50 },
+      "data": {
+        "message": "Olá! Em qual unidade você gostaria de ser atendido(a)?\n1️⃣ Unidade Vieiralves 📍 Rua Rio Içá, 850 — Nossa Sra. das Graças\n2️⃣ Unidade São José 📍 Av. Autaz Mirim, 5773 — São José Operário\n\nResponda com 1 ou 2, ou digite o nome da unidade."
+      }
+    },
+    {
+      "id": "clinic_selection",
+      "type": "CONDITION",
+      "position": { "x": 100, "y": 150 },
+      "data": {
+        "condition": "clinic_selection",
+        "trueMessage": "Ótima escolha! Agora, em que posso ajudar você?",
+        "falseMessage": "Por favor, escolha uma de nossas unidades."
+      }
+    },
+    {
+      "id": "gpt_welcome",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 230 },
+      "data": {
+        "message": "Você pode perguntar sobre consultas, nossos procedimentos ou convênios. Se quiser agendar, diga que quer agendar."
+      }
+    },
+    {
+      "id": "service_menu",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 250 },
+      "data": {
+        "message": "📋 Escolha uma opção:
+1️⃣ Valores de procedimentos
+2️⃣ Convênios aceitos
+3️⃣ Localização e horários
+4️⃣ Agendar consulta
+5️⃣ Falar com atendente"
+      }
+    },
+    {
+      "id": "service_selection",
+      "type": "CONDITION",
+      "position": { "x": 100, "y": 350 },
+      "data": {
+        "condition": "service_selection"
+      }
+    },
+    {
+      "id": "gpt_classifier",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 100, "y": 320 },
+      "data": {
+        "systemPrompt": "Você é um classificador de intenção simples. Analise a mensagem do usuário e encaminhe para: 1) valores de procedimentos, 2) convênios, 3) localização, 4) agendamento, 5) falar com atendente."
+      }
+    },
+    {
+      "id": "procedure_inquiry",
+      "type": "MESSAGE",
+      "position": { "x": -100, "y": 450 },
+      "data": {
+        "message": "💰 Qual procedimento você deseja consultar?
+Exemplos: Fisioterapia, Acupuntura, RPG, Pilates"
+      }
+    },
+    {
+      "id": "procedure_response",
+      "type": "API_CALL",
+      "position": { "x": -100, "y": 550 },
+      "data": {
+        "endpoint": "get_clinic_procedures",
+        "message": "Buscando valores para o procedimento solicitado..."
+      }
+    },
+    {
+      "id": "insurance_inquiry",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 450 },
+      "data": {
+        "message": "Vou verificar os convênios aceitos na unidade escolhida."
+      }
+    },
+    {
+      "id": "insurance_response",
+      "type": "API_CALL",
+      "position": { "x": 100, "y": 550 },
+      "data": {
+        "endpoint": "get_clinic_insurances",
+        "message": "Buscando convênios aceitos..."
+      }
+    },
+    {
+      "id": "location_inquiry",
+      "type": "API_CALL",
+      "position": { "x": 300, "y": 450 },
+      "data": {
+        "endpoint": "get_clinic_location",
+        "message": "Buscando informações de localização e horários..."
+      }
+    },
+    {
+      "id": "appointment_request",
+      "type": "MESSAGE",
+      "position": { "x": 500, "y": 450 },
+      "data": {
+        "message": "🗓️ Para agendar, informe:
+• 📅 Data preferencial
+• 🕐 Horário preferencial
+• 📋 Procedimento
+• 💳 Convênio ou particular"
+      }
+    },
+    {
+      "id": "appointment_collection",
+      "type": "COLLECT_INFO",
+      "position": { "x": 500, "y": 550 },
+      "data": {
+        "fields": ["procedure_type", "preferred_date", "preferred_time", "insurance"],
+        "message": "Aguarde enquanto processo suas informações..."
+      }
+    },
+    {
+      "id": "human_transfer",
+      "type": "MESSAGE",
+      "position": { "x": 700, "y": 450 },
+      "data": {
+        "message": "Estou transferindo você para um de nossos atendentes. Por favor, aguarde um momento."
+      }
+    },
+    {
+      "id": "continue_conversation",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 650 },
+      "data": {
+        "message": "ℹ️ Posso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "end_conversation",
+      "type": "END",
+      "position": { "x": 100, "y": 750 },
+      "data": {
+        "message": "Obrigado por entrar em contato! Se precisar de mais alguma coisa, estarei aqui. Tenha um ótimo dia!"
+      }
+    },
+    {
+      "id": "tmpl_prices",
+      "type": "MESSAGE",
+      "position": { "x": -300, "y": 520 },
+      "data": {
+        "message": "💰 Valores de Procedimentos\n\n• Procedimento: ${procedimento_x}\n• Valor: ${valor_procedimento}\n• Duração: ${duracao_procedimento}\n• Observações: ${observacao_procedimento}\n\nDeseja agendar este procedimento ou consultar outro?"
+      }
+    },
+    {
+      "id": "tmpl_insurance",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 520 },
+      "data": {
+        "message": "📋 Convênios\n\nConfirmamos atendimento ao convênio ${convenio_x}.\n\nProcedimentos cobertos:\n1️⃣ ${procedimento_1}\n2️⃣ ${procedimento_2}\n3️⃣ ${procedimento_3}\n\nDeseja agendar ou consultar valores?"
+      }
+    },
+    {
+      "id": "tmpl_location",
+      "type": "MESSAGE",
+      "position": { "x": 300, "y": 520 },
+      "data": {
+        "message": "📍 Localização e Horários\n\n• Unidade: ${unidade_nome}\n• Endereço: ${endereco}\n• Horário: ${horario_atendimento}\n• Contato: ${telefone}\n• Mapa: ${maps_url}\n\nDeseja agendar ou saber valores?"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "start_to_clinic",
+      "source": "start",
+      "sourcePort": "output",
+      "target": "clinic_selection",
+      "targetPort": "input"
+    },
+    {
+      "id": "clinic_to_welcome",
+      "source": "clinic_selection",
+      "sourcePort": "true",
+      "target": "gpt_welcome",
+      "targetPort": "input"
+    },
+    {
+      "id": "clinic_retry",
+      "source": "clinic_selection",
+      "sourcePort": "false",
+      "target": "start",
+      "targetPort": "input"
+    },
+    {
+      "id": "welcome_to_classifier",
+      "source": "gpt_welcome",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "menu_to_service",
+      "source": "service_menu",
+      "sourcePort": "output",
+      "target": "service_selection",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_procedure",
+      "source": "gpt_classifier",
+      "sourcePort": "1",
+      "target": "tmpl_prices",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_insurance",
+      "source": "gpt_classifier",
+      "sourcePort": "2",
+      "target": "tmpl_insurance",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_location",
+      "source": "gpt_classifier",
+      "sourcePort": "3",
+      "target": "tmpl_location",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_appointment",
+      "source": "gpt_classifier",
+      "sourcePort": "4",
+      "target": "appointment_request",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_human",
+      "source": "gpt_classifier",
+      "sourcePort": "5",
+      "target": "human_transfer",
+      "targetPort": "input"
+    },
+    {
+      "id": "service_to_procedure",
+      "source": "service_selection",
+      "sourcePort": "1",
+      "target": "procedure_inquiry",
+      "targetPort": "input"
+    },
+    {
+      "id": "service_to_insurance",
+      "source": "service_selection",
+      "sourcePort": "2",
+      "target": "insurance_inquiry",
+      "targetPort": "input"
+    },
+    {
+      "id": "service_to_location",
+      "source": "service_selection",
+      "sourcePort": "3",
+      "target": "location_inquiry",
+      "targetPort": "input"
+    },
+    {
+      "id": "service_to_appointment",
+      "source": "service_selection",
+      "sourcePort": "4",
+      "target": "appointment_request",
+      "targetPort": "input"
+    },
+    {
+      "id": "service_to_human",
+      "source": "service_selection",
+      "sourcePort": "5",
+      "target": "human_transfer",
+      "targetPort": "input"
+    },
+    {
+      "id": "procedure_to_response",
+      "source": "procedure_inquiry",
+      "sourcePort": "output",
+      "target": "procedure_response",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_to_response",
+      "source": "insurance_inquiry",
+      "sourcePort": "output",
+      "target": "insurance_response",
+      "targetPort": "input"
+    },
+    {
+      "id": "appointment_to_collection",
+      "source": "appointment_request",
+      "sourcePort": "output",
+      "target": "appointment_collection",
+      "targetPort": "input"
+    },
+    {
+      "id": "procedure_to_classifier",
+      "source": "procedure_response",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "tmpl_prices_to_classifier",
+      "source": "tmpl_prices",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_to_classifier",
+      "source": "insurance_response",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "tmpl_insurance_to_classifier",
+      "source": "tmpl_insurance",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "location_to_classifier",
+      "source": "location_inquiry",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "tmpl_location_to_classifier",
+      "source": "tmpl_location",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "appointment_to_classifier",
+      "source": "appointment_collection",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "human_to_end",
+      "source": "human_transfer",
+      "sourcePort": "output",
+      "target": "end_conversation",
+      "targetPort": "input"
+    },
+    {
+      "id": "continue_loop",
+      "source": "continue_conversation",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input",
+      "condition": "continue"
+    },
+    {
+      "id": "continue_to_end",
+      "source": "continue_conversation",
+      "sourcePort": "output",
+      "target": "end_conversation",
+      "targetPort": "input",
+      "condition": "end"
+    }
+  ]
+}

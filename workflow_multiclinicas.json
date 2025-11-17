@@ -1,0 +1,259 @@
+{
+  "name": "Atendimento Multiclínicas Completo",
+  "description": "Workflow inteligente para múltiplas clínicas com procedimentos, convênios e localizações",
+  "type": "CONSULTATION",
+  "config": {
+    "clinicas": [
+      {
+        "id": "clinica_001",
+        "nome": "Clínica Centro",
+        "endereco": "Rua Principal, 100 - Centro, São Paulo/SP",
+        "telefone": "(11) 1234-5678",
+        "convenios": ["bradesco", "amil", "sulamerica"],
+        "procedimentos": [
+          {
+            "codigo": "acupuntura",
+            "nome": "Acupuntura",
+            "valor_particular": 150.00,
+            "valor_convenio": {
+              "bradesco": 120.00,
+              "amil": 130.00,
+              "sulamerica": 125.00
+            },
+            "duracao": 60
+          },
+          {
+            "codigo": "fisioterapia-ortopedica",
+            "nome": "Fisioterapia Ortopédica",
+            "valor_particular": 120.00,
+            "valor_convenio": {
+              "bradesco": 95.00,
+              "amil": 105.00,
+              "sulamerica": 100.00
+            },
+            "duracao": 45
+          }
+        ]
+      },
+      {
+        "id": "clinica_002",
+        "nome": "Clínica Jardins",
+        "endereco": "Alameda Santos, 500 - Jardins, São Paulo/SP",
+        "telefone": "(11) 8765-4321",
+        "convenios": ["bradesco", "unimed", "golden_cross"],
+        "procedimentos": [
+          {
+            "codigo": "acupuntura",
+            "nome": "Acupuntura",
+            "valor_particular": 180.00,
+            "valor_convenio": {
+              "bradesco": 140.00,
+              "unimed": 150.00,
+              "golden_cross": 145.00
+            },
+            "duracao": 60
+          },
+          {
+            "codigo": "fisioterapia-ortopedica",
+            "nome": "Fisioterapia Ortopédica",
+            "valor_particular": 150.00,
+            "valor_convenio": {
+              "bradesco": 115.00,
+              "unimed": 125.00,
+              "golden_cross": 120.00
+            },
+            "duracao": 45
+          }
+        ]
+      }
+    ],
+    "nodes": [
+      {
+        "id": "start",
+        "type": "START",
+        "data": {
+          "welcomeMessage": "Olá! Bem-vindo às nossas clínicas. Como posso ajudar?"
+        },
+        "position": { "x": 100, "y": 100 },
+        "connections": []
+      },
+      {
+        "id": "selecao_clinica",
+        "type": "CONDITION",
+        "data": {
+          "condition": "clinica|centro|jardins|qual unidade",
+          "message": "Temos duas unidades: Clínica Centro (Rua Principal, 100) e Clínica Jardins (Alameda Santos, 500). Qual você prefere?"
+        },
+        "position": { "x": 300, "y": 100 },
+        "connections": []
+      },
+      {
+        "id": "clinica_centro",
+        "type": "MESSAGE",
+        "data": {
+          "message": "🏥 Clínica Centro\n📍 Rua Principal, 100 - Centro\n📞 (11) 1234-5678\n\nConvênios: Bradesco, Amil, SulAmérica\nProcedimentos: Acupuntura, Fisioterapia\n\nSobre qual procedimento você quer saber?"
+        },
+        "position": { "x": 500, "y": 50 },
+        "connections": []
+      },
+      {
+        "id": "clinica_jardins",
+        "type": "MESSAGE",
+        "data": {
+          "message": "🏥 Clínica Jardins\n📍 Alameda Santos, 500 - Jardins\n📞 (11) 8765-4321\n\nConvênios: Bradesco, Unimed, Golden Cross\nProcedimentos: Acupuntura, Fisioterapia\n\nSobre qual procedimento você quer saber?"
+        },
+        "position": { "x": 500, "y": 150 },
+        "connections": []
+      },
+      {
+        "id": "condition_procedimentos_centro",
+        "type": "CONDITION",
+        "data": {
+          "condition": "acupuntura|fisioterapia|valor|preço",
+          "clinica": "clinica_001"
+        },
+        "position": { "x": 700, "y": 50 },
+        "connections": []
+      },
+      {
+        "id": "condition_procedimentos_jardins",
+        "type": "CONDITION",
+        "data": {
+          "condition": "acupuntura|fisioterapia|valor|preço",
+          "clinica": "clinica_002"
+        },
+        "position": { "x": 700, "y": 150 },
+        "connections": []
+      },
+      {
+        "id": "valor_acupuntura_centro",
+        "type": "MESSAGE",
+        "data": {
+          "message": "💉 Acupuntura - Clínica Centro\n\n💰 Valores:\n• Particular: R$ 150,00/sessão\n• Bradesco: R$ 120,00/sessão\n• Amil: R$ 130,00/sessão\n• SulAmérica: R$ 125,00/sessão\n\n📦 Pacote 10 sessões: 20% desconto!\n⏱️ Duração: 60 minutos"
+        },
+        "position": { "x": 900, "y": 25 },
+        "connections": []
+      },
+      {
+        "id": "valor_fisioterapia_centro",
+        "type": "MESSAGE",
+        "data": {
+          "message": "🏃‍♀️ Fisioterapia Ortopédica - Clínica Centro\n\n💰 Valores:\n• Particular: R$ 120,00/sessão\n• Bradesco: R$ 95,00/sessão\n• Amil: R$ 105,00/sessão\n• SulAmérica: R$ 100,00/sessão\n\n📦 Pacote 10 sessões: 20% desconto!\n⏱️ Duração: 45 minutos"
+        },
+        "position": { "x": 900, "y": 75 },
+        "connections": []
+      },
+      {
+        "id": "valor_acupuntura_jardins",
+        "type": "MESSAGE",
+        "data": {
+          "message": "💉 Acupuntura - Clínica Jardins\n\n💰 Valores:\n• Particular: R$ 180,00/sessão\n• Bradesco: R$ 140,00/sessão\n• Unimed: R$ 150,00/sessão\n• Golden Cross: R$ 145,00/sessão\n\n📦 Pacote 10 sessões: 20% desconto!\n⏱️ Duração: 60 minutos"
+        },
+        "position": { "x": 900, "y": 125 },
+        "connections": []
+      },
+      {
+        "id": "valor_fisioterapia_jardins",
+        "type": "MESSAGE",
+        "data": {
+          "message": "🏃‍♀️ Fisioterapia Ortopédica - Clínica Jardins\n\n💰 Valores:\n• Particular: R$ 150,00/sessão\n• Bradesco: R$ 115,00/sessão\n• Unimed: R$ 125,00/sessão\n• Golden Cross: R$ 120,00/sessão\n\n📦 Pacote 10 sessões: 20% desconto!\n⏱️ Duração: 45 minutos"
+        },
+        "position": { "x": 900, "y": 175 },
+        "connections": []
+      },
+      {
+        "id": "condition_localizacao",
+        "type": "CONDITION",
+        "data": {
+          "condition": "endereço|localização|onde fica|como chegar|estacionamento"
+        },
+        "position": { "x": 500, "y": 300 },
+        "connections": []
+      },
+      {
+        "id": "localizacao_completa",
+        "type": "MESSAGE",
+        "data": {
+          "message": "📍 Nossas Unidades:\n\n🏥 Clínica Centro\n📌 Rua Principal, 100 - Centro\n🚗 Estacionamento gratuito no local\n\n🏥 Clínica Jardins\n📌 Alameda Santos, 500 - Jardins\n🚗 Estacionamento conveniado próximo\n\nAmbas próximas ao metrô! Qual você prefere?"
+        },
+        "position": { "x": 700, "y": 300 },
+        "connections": []
+      },
+      {
+        "id": "condition_agendamento",
+        "type": "CONDITION",
+        "data": {
+          "condition": "agendar|marcar|horário|disponibilidade"
+        },
+        "position": { "x": 500, "y": 450 },
+        "connections": []
+      },
+      {
+        "id": "agendamento_info",
+        "type": "MESSAGE",
+        "data": {
+          "message": "📅 Para agendar, posso transferir você para um atendente humano que verificará a disponibilidade de horários.\n\nVocê prefere:\n1️⃣ Ser transferido agora\n2️⃣ Receber mais informações primeiro"
+        },
+        "position": { "x": 700, "y": 450 },
+        "connections": []
+      },
+      {
+        "id": "transferencia_humano",
+        "type": "TRANSFER_HUMAN",
+        "data": {
+          "message": "Transferindo você para um atendente humano que cuidará do seu agendamento. Por favor, aguarde um momento."
+        },
+        "position": { "x": 900, "y": 450 },
+        "connections": []
+      },
+      {
+        "id": "msg_informacoes_adicionais",
+        "type": "MESSAGE",
+        "data": {
+          "message": "Posso ajudar com mais alguma informação? Valores, convênios, localização ou agendamento?"
+        },
+        "position": { "x": 700, "y": 550 },
+        "connections": []
+      },
+      {
+        "id": "end",
+        "type": "END",
+        "data": {
+          "finalMessage": "Obrigado por entrar em contato com nossas clínicas! Estamos à disposição. 😊"
+        },
+        "position": { "x": 900, "y": 600 },
+        "connections": []
+      }
+    ],
+    "edges": [
+      { "id": "e_start_selecao", "source": "start", "target": "selecao_clinica" },
+      
+      { "id": "e_selecao_centro", "source": "selecao_clinica", "target": "clinica_centro", "data": { "condition": "centro" } },
+      { "id": "e_selecao_jardins", "source": "selecao_clinica", "target": "clinica_jardins", "data": { "condition": "jardins" } },
+      
+      { "id": "e_centro_procedimentos", "source": "clinica_centro", "target": "condition_procedimentos_centro" },
+      { "id": "e_jardins_procedimentos", "source": "clinica_jardins", "target": "condition_procedimentos_jardins" },
+      
+      { "id": "e_centro_acupuntura", "source": "condition_procedimentos_centro", "target": "valor_acupuntura_centro", "data": { "condition": "acupuntura" } },
+      { "id": "e_centro_fisioterapia", "source": "condition_procedimentos_centro", "target": "valor_fisioterapia_centro", "data": { "condition": "fisioterapia" } },
+      
+      { "id": "e_jardins_acupuntura", "source": "condition_procedimentos_jardins", "target": "valor_acupuntura_jardins", "data": { "condition": "acupuntura" } },
+      { "id": "e_jardins_fisioterapia", "source": "condition_procedimentos_jardins", "target": "valor_fisioterapia_jardins", "data": { "condition": "fisioterapia" } },
+      
+      { "id": "e_acupuntura_localizacao", "source": "valor_acupuntura_centro", "target": "condition_localizacao" },
+      { "id": "e_fisioterapia_localizacao", "source": "valor_fisioterapia_centro", "target": "condition_localizacao" },
+      { "id": "e_acupuntura_jardins_localizacao", "source": "valor_acupuntura_jardins", "target": "condition_localizacao" },
+      { "id": "e_fisioterapia_jardins_localizacao", "source": "valor_fisioterapia_jardins", "target": "condition_localizacao" },
+      
+      { "id": "e_localizacao_msg", "source": "condition_localizacao", "target": "localizacao_completa", "data": { "port": "true" } },
+      { "id": "e_localizacao_agendamento", "source": "localizacao_completa", "target": "condition_agendamento" },
+      
+      { "id": "e_agendamento_info", "source": "condition_agendamento", "target": "agendamento_info", "data": { "port": "true" } },
+      { "id": "e_agendamento_transfer", "source": "agendamento_info", "target": "transferencia_humano", "data": { "condition": "transferir|atendente" } },
+      { "id": "e_agendamento_mais_info", "source": "agendamento_info", "target": "msg_informacoes_adicionais", "data": { "condition": "informação|mais" } },
+      
+      { "id": "e_mais_info_end", "source": "msg_informacoes_adicionais", "target": "end" },
+      { "id": "e_transfer_end", "source": "transferencia_humano", "target": "end" }
+    ]
+  }
+}

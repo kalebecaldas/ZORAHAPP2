@@ -1,0 +1,66 @@
+{
+  "clinicas": [
+    {
+      "id": "clinica_001",
+      "nome": "Clínica Centro",
+      "endereco": "Rua Principal, 100 - Centro, São Paulo/SP",
+      "telefone": "(11) 1234-5678",
+      "convenios": ["bradesco", "amil", "sulamerica"],
+      "procedimentos": [
+        {
+          "codigo": "acupuntura",
+          "nome": "Acupuntura",
+          "valor_particular": 150.00,
+          "valor_convenio": {
+            "bradesco": 120.00,
+            "amil": 130.00,
+            "sulamerica": 125.00
+          },
+          "duracao": 60
+        },
+        {
+          "codigo": "fisioterapia-ortopedica",
+          "nome": "Fisioterapia Ortopédica",
+          "valor_particular": 120.00,
+          "valor_convenio": {
+            "bradesco": 95.00,
+            "amil": 105.00,
+            "sulamerica": 100.00
+          },
+          "duracao": 45
+        }
+      ]
+    },
+    {
+      "id": "clinica_002",
+      "nome": "Clínica Jardins",
+      "endereco": "Alameda Santos, 500 - Jardins, São Paulo/SP",
+      "telefone": "(11) 8765-4321",
+      "convenios": ["bradesco", "unimed", "golden_cross"],
+      "procedimentos": [
+        {
+          "codigo": "acupuntura",
+          "nome": "Acupuntura",
+          "valor_particular": 180.00,
+          "valor_convenio": {
+            "bradesco": 140.00,
+            "unimed": 150.00,
+            "golden_cross": 145.00
+          },
+          "duracao": 60
+        },
+        {
+          "codigo": "fisioterapia-ortopedica",
+          "nome": "Fisioterapia Ortopédica",
+          "valor_particular": 150.00,
+          "valor_convenio": {
+            "bradesco": 115.00,
+            "unimed": 125.00,
+            "golden_cross": 120.00
+          },
+          "duracao": 45
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+/**
+ * This is a API server
+ */
+
+import express, {
+  type Request,
+  type Response,
+  type NextFunction,
+} from 'express'
+import cors from 'cors'
+import path from 'path'
+import dotenv from 'dotenv'
+import { fileURLToPath } from 'url'
+import helmet from 'helmet'
+import morgan from 'morgan'
+import rateLimit from 'express-rate-limit'
+
+// Import routes
+import authRoutes from './routes/auth.js'
+import patientsRoutes from './routes/patients.js'
+import conversationsRoutes from './routes/conversations.js'
+import workflowsRoutes from './routes/workflows.js'
+import statsRoutes from './routes/stats.js'
+import usersRoutes from './routes/users.js'
+import settingsRoutes from './routes/settings.js'
+import webhookRoutes from './routes/webhook.js'
+import coverageRoutes from './routes/coverage.js'
+import permissionsRoutes from './routes/permissions.js'
+import clinicRoutes from './routes/clinic.js'
+import messagesRoutes from './routes/messages.js'
+import aliasRoutes from './routes/aliases.js'
+import testRoutes from './routes/test.js'
+import appointmentsRoutes from './routes/appointments.js'
+import { authMiddleware } from './utils/auth.js'
+
+// for esm mode
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// load env
+dotenv.config()
+
+const app: express.Application = express()
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable for development
+  crossOriginEmbedderPolicy: false // Disable for development
+}))
+
+// CORS configuration
+app.use(cors({
+  origin: [
+    'http://localhost:4001',
+    'http://localhost:4002',
+    'http://localhost:5173',
+    'http://localhost:5174',
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}))
+
+// Logging
+app.use(morgan('dev'))
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Muitas requisições. Tente novamente mais tarde.'
+  }
+})
+
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 requests per minute for webhook
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Muitas requisições no webhook.'
+  }
+})
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+
+/**
+ * API Routes
+ */
+app.use('/api/auth', apiLimiter, authRoutes)
+app.use('/api/patients', apiLimiter, patientsRoutes)
+app.use('/api/conversations', apiLimiter, conversationsRoutes)
+app.use('/api/workflows', apiLimiter, workflowsRoutes)
+app.use('/api/stats', apiLimiter, statsRoutes)
+app.use('/api/users', apiLimiter, usersRoutes)
+app.use('/api/settings', apiLimiter, settingsRoutes)
+app.use('/api/appointments', apiLimiter, appointmentsRoutes)
+app.use('/api/test', testRoutes) // Test routes without auth
+app.use('/api/cobertura', apiLimiter, coverageRoutes)
+app.use('/api/permissions', apiLimiter, permissionsRoutes)
+app.use('/api/clinic', apiLimiter, clinicRoutes)
+app.use('/api/messages', apiLimiter, messagesRoutes)
+app.use('/api', apiLimiter, aliasRoutes)
+
+// Debug auth endpoint
+app.use('/api/debug/auth', apiLimiter, authMiddleware, (req: Request, res: Response) => {
+  res.json({
+    hasUser: !!req.user,
+    user: req.user || null,
+    headers: req.headers,
+    authHeader: req.headers.authorization
+  })
+})
+app.use('/webhook', webhookLimiter, webhookRoutes)
+
+/**
+ * Health check
+ */
+app.use(['/api/health','/health'], (req: Request, res: Response, next: NextFunction): void => {
+  res.status(200).json({
+    success: true,
+    message: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    version: process.version
+  })
+})
+
+/**
+ * Global error handler
+ */
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Erro global:', error)
+  
+  if (error.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      error: 'Erro de validação',
+      details: error.message
+    })
+  }
+  
+  if (error.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      success: false,
+      error: 'Não autorizado'
+    })
+  }
+  
+  res.status(500).json({
+    success: false,
+    error: 'Erro interno do servidor',
+    message: process.env.NODE_ENV === 'development' ? error.message : 'Erro interno'
+  })
+})
+
+/**
+ * 404 handler
+ */
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Rota não encontrada',
+    path: req.path,
+    method: req.method
+  })
+})
+
+export default app
