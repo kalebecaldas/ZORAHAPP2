@@ -6,7 +6,6 @@ import { Login } from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Conversations from "./pages/Conversations";
 import { Patients } from "./pages/Patients";
-import { Workflows } from "./pages/Workflows";
 import { WorkflowsBeta } from "./pages/WorkflowsBeta";
 import { Stats } from "./pages/Stats";
 import { Settings } from "./pages/Settings";
@@ -21,7 +20,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
-  
+
   if (isLoginPage) {
     return <>{children}</>;
   }
@@ -63,11 +62,6 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/workflows" element={
-        <ProtectedRoute>
-          <Workflows />
-        </ProtectedRoute>
-      } />
-      <Route path="/workflows-beta" element={
         <ProtectedRoute>
           <WorkflowsBeta />
         </ProtectedRoute>

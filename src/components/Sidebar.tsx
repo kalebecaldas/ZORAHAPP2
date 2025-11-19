@@ -1,11 +1,11 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  MessageSquare, 
-  Users, 
-  UserPlus, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  MessageSquare,
+  Users,
+  UserPlus,
+  BarChart3,
   Settings,
   Workflow,
   LogOut,
@@ -22,7 +22,6 @@ const Sidebar: React.FC = () => {
     { path: '/conversations', icon: MessageSquare, label: 'Conversas' },
     { path: '/patients', icon: Users, label: 'Pacientes' },
     { path: '/workflows', icon: Workflow, label: 'Workflows' },
-    { path: '/workflows-beta', icon: Workflow, label: 'Workflow editor Beta' },
     { path: '/stats', icon: BarChart3, label: 'Estatísticas' },
     ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: Users, label: 'Usuários' }] : []),
     { path: '/settings', icon: Settings, label: 'Configurações' },
@@ -53,11 +52,10 @@ const Sidebar: React.FC = () => {
               <li key={item.path}>
                 <Link
                   to={item.path}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive(item.path)
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-                  }`}
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                    }`}
                 >
                   <Icon className="h-5 w-5" />
                   <span>{item.label}</span>
@@ -78,7 +76,7 @@ const Sidebar: React.FC = () => {
             <p className="text-xs text-gray-400 capitalize">{user?.role?.toLowerCase()}</p>
           </div>
         </div>
-        
+
         <button
           onClick={logout}
           className="flex items-center space-x-3 w-full px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
