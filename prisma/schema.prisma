@@ -125,26 +125,29 @@ model InsuranceCompany {
   name      String
   displayName String
   discount  Boolean  @default(false)
+  isParticular Boolean @default(false)
+  isActive  Boolean  @default(true)
   notes     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  procedures InsuranceProcedure[]
+  clinicInsurances ClinicInsurance[]
+  clinicProcedures ClinicInsuranceProcedure[]
 }
 
 model Procedure {
-  id        String   @id @default(cuid())
-  code      String   @unique
-  name      String
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
   description String
-  basePrice Float
+  basePrice   Float
   requiresEvaluation Boolean @default(false)
-  duration  Int
-  categories Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  duration    Int
+  categories  Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  insurances InsuranceProcedure[]
+  clinicProcedures ClinicInsuranceProcedure[]
 }
 
 model Clinic {
@@ -169,38 +172,40 @@ model Clinic {
   updatedAt DateTime @updatedAt
 
   clinicInsurances ClinicInsurance[]
-  clinicProcedures ClinicProcedure[]
+  clinicProcedures ClinicInsuranceProcedure[]
 }
 
 model ClinicInsurance {
-  id        String   @id @default(cuid())
-  clinicId  String
+  id            String   @id @default(cuid())
+  clinicId      String
   insuranceCode String
-  coveragePercentage Float @default(70)
-  copayment Float @default(0)
-  requiresPreAuthorization Boolean @default(false)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
+  clinic    Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  insurance InsuranceCompany @relation(fields: [insuranceCode], references: [code], onDelete: Cascade)
+
   @@unique([clinicId, insuranceCode])
 }
 
-model ClinicProcedure {
-  id        String   @id @default(cuid())
-  clinicId  String
+model ClinicInsuranceProcedure {
+  id            String   @id @default(cuid())
+  clinicId      String
+  insuranceCode String
   procedureCode String
-  particularPrice Float
-  insurancePrice Json // JSON object with insurance codes as keys and prices as values
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  price         Float
+  hasPackage    Boolean  @default(false)
+  packageInfo   String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  
-  @@unique([clinicId, procedureCode])
+  clinic    Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  insurance InsuranceCompany @relation(fields: [insuranceCode], references: [code], onDelete: Cascade)
+  procedure Procedure        @relation(fields: [procedureCode], references: [code], onDelete: Cascade)
+
+  @@unique([clinicId, insuranceCode, procedureCode])
 }
 
 model AILearningData {
@@ -222,15 +227,4 @@ model AuditLog {
   createdAt   DateTime @default(now())
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Cascade)
-}
-
-model InsuranceProcedure {
-  insuranceId String
-  procedureId String
-  createdAt   DateTime @default(now())
-
-  insurance InsuranceCompany @relation(fields: [insuranceId], references: [id], onDelete: Cascade)
-  procedure Procedure        @relation(fields: [procedureId], references: [id], onDelete: Cascade)
-
-  @@id([insuranceId, procedureId])
 }

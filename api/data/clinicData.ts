@@ -670,6 +670,27 @@ export const insuranceCompanies: InsuranceCompany[] = [
     discount: true,
     notes: 'Convênio com desconto'
   }
+  ,
+  {
+    id: 'particular-vieiralves',
+    name: 'Convênio Particular Vieiralves',
+    displayName: 'Convênio Particular Vieiralves',
+    procedures: ['fisioterapia-ortopedica','fisioterapia-neurologica','fisioterapia-respiratoria','fisioterapia-pelvica','consulta-ortopedista','avaliacao-acupuntura','acupuntura','avaliacao-fisio-pelvica','rpg','pilates-2x','pilates-3x','pilates-avulsa','quiropraxia','consulta-clinico-geral','fisioterapia-pos-operatoria'],
+    coveragePercentage: 100,
+    copayment: 0,
+    requiresPreAuthorization: false,
+    contactInfo: { phone: '' }
+  },
+  {
+    id: 'particular-sao-jose',
+    name: 'Convênio Particular São José',
+    displayName: 'Convênio Particular São José',
+    procedures: ['fisioterapia-ortopedica','fisioterapia-neurologica','fisioterapia-respiratoria','fisioterapia-pelvica','consulta-ortopedista','avaliacao-acupuntura','acupuntura','avaliacao-fisio-pelvica','rpg','pilates-2x','pilates-3x','pilates-avulsa','quiropraxia','consulta-clinico-geral','fisioterapia-pos-operatoria'],
+    coveragePercentage: 100,
+    copayment: 0,
+    requiresPreAuthorization: false,
+    contactInfo: { phone: '' }
+  }
 ];
 
 // Clinic locations database

@@ -74,6 +74,14 @@ router.put('/', authMiddleware, async (req: Request, res: Response): Promise<voi
           cacheTTL: z.number().min(30)
         })
       }).optional(),
+      whatsapp: z.object({
+        token: z.string().optional(),
+        appId: z.string().optional(),
+        appSecret: z.string().optional(),
+        phoneNumberId: z.string().optional(),
+        businessAccountId: z.string().optional(),
+        webhookUrl: z.string().optional()
+      }).optional(),
       clinic: z.object({
         name: z.string().min(1),
         address: z.string().min(1),
@@ -84,7 +92,12 @@ router.put('/', authMiddleware, async (req: Request, res: Response): Promise<voi
         weekdays: z.string(),
         saturday: z.string(),
         sunday: z.string()
-      }).optional()
+      }).optional(),
+      templates: z.array(z.object({
+        key: z.string().min(1),
+        title: z.string().min(1),
+        content: z.string().min(1)
+      })).optional()
     })
 
     const data = settingsSchema.parse(req.body)
@@ -98,6 +111,13 @@ router.put('/', authMiddleware, async (req: Request, res: Response): Promise<voi
         actorId: req.user!.id,
         action: 'SETTINGS_OPENAI_API_KEY',
         details: { updatedAt: new Date().toISOString(), maskedValue: '********' }
+      } })
+    }
+    if (data.templates && data.templates.length > 0) {
+      await prisma.auditLog.create({ data: {
+        actorId: req.user!.id,
+        action: 'SETTINGS_TEMPLATES_UPDATED',
+        details: { count: data.templates.length, updatedAt: new Date().toISOString() }
       } })
     }
     res.json({ message: 'Configurações atualizadas com sucesso', settings: data })

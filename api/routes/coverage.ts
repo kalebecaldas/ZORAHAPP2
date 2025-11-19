@@ -35,8 +35,9 @@ async function ensureSeed(): Promise<void> {
     for (const pid of ic.procedures) {
       const insurance = await prisma.insuranceCompany.findUnique({ where: { code: ic.id } })
       const proc = await prisma.procedure.findUnique({ where: { code: pid } })
-      if (insurance && proc) {
-        await prisma.insuranceProcedure.create({ data: { insuranceId: insurance.id, procedureId: proc.id } })
+      const clinic = await prisma.clinic.findFirst()
+      if (insurance && proc && clinic) {
+        await prisma.clinicInsuranceProcedure.create({ data: { clinicId: clinic.code, insuranceCode: insurance.code, procedureCode: proc.code, price: proc.basePrice, isActive: true } })
       }
     }
   }
@@ -56,10 +57,23 @@ router.get('/convenios/:id/procedimentos', async (req: Request, res: Response): 
     res.status(404).json({ error: 'Convênio não encontrado' })
     return
   }
-  const links = await prisma.insuranceProcedure.findMany({ where: { insuranceId: ic.id } })
-  const procs = await prisma.procedure.findMany({ where: { id: { in: links.map(l => l.procedureId) } }, orderBy: { name: 'asc' } })
-  const list = procs.map(p => ({ id: p.code, name: p.name, description: p.description, duration: p.duration, requiresEvaluation: p.requiresEvaluation }))
-  res.json({ convenio: { id: ic.code, name: ic.name, displayName: ic.displayName, discount: ic.discount, notes: ic.notes || undefined }, procedimentos: list })
+  const links = await prisma.clinicInsuranceProcedure.findMany({ where: { insuranceCode: ic.code } })
+  const procs = await prisma.procedure.findMany({ where: { code: { in: links.map(l => l.procedureCode) } }, orderBy: { name: 'asc' } })
+  const byCode = new Map(procs.map(p => [p.code, p]))
+  const list = links.map(l => {
+    const p = byCode.get(l.procedureCode)
+    return {
+      id: p?.code || '',
+      name: p?.name || '',
+      description: p?.description || '',
+      duration: p?.duration || 0,
+      requiresEvaluation: !!p?.requiresEvaluation,
+      defaultParticularPrice: l.price ?? null,
+      defaultPackageInfo: l.packageInfo ?? null,
+      isActive: !!l.isActive
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+  res.json({ convenio: { id: ic.code, name: ic.name, displayName: ic.displayName, discount: ic.discount, isParticular: !!ic.isParticular, isActive: !!ic.isActive, notes: ic.notes || undefined }, procedimentos: list })
 })
 
 export default router

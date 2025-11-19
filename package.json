@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "server:dev": "nodemon",
     "dev": "concurrently \"npm run client:dev\" \"npm run server:dev\"",
-    "kill-ports": "sh -c 'lsof -ti tcp:4001 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4002 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4007 | xargs kill -9 2>/dev/null || true'",
+    "kill-ports": "sh -c 'lsof -ti tcp:3001 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4001 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4002 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4007 | xargs kill -9 2>/dev/null || true'",
     "up": "npm run kill-ports && npm run dev",
     "start": "./scripts/start-server.sh",
     "start:win": "scripts\\start-server.bat",

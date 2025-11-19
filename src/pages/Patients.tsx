@@ -233,6 +233,9 @@ const Patients: React.FC = () => {
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Nascimento
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Convênio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -263,12 +266,15 @@ const Patients: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatPhone(patient.phone)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {patient.email || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {patient.insuranceCompany || '-'}
-                    </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {patient.email || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {patient.birthDate ? formatDate(patient.birthDate) : '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {patient.insuranceCompany || '-'}
+                  </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {patient.interactionsCount}
                     </td>
@@ -361,6 +367,15 @@ const Patients: React.FC = () => {
                     type="text"
                     value={formData.insuranceNumber}
                     onChange={(e) => setFormData({ ...formData, insuranceNumber: e.target.value })}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Data de Nascimento</label>
+                  <input
+                    type="date"
+                    value={formData.birthDate ? new Date(formData.birthDate).toISOString().slice(0,10) : ''}
+                    onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>

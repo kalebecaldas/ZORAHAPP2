@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Conversations from "./pages/Conversations";
 import { Patients } from "./pages/Patients";
 import { Workflows } from "./pages/Workflows";
+import { WorkflowsBeta } from "./pages/WorkflowsBeta";
 import { Stats } from "./pages/Stats";
 import { Settings } from "./pages/Settings";
 import { Users } from "./pages/Users";
@@ -64,6 +65,11 @@ function AppRoutes() {
       <Route path="/workflows" element={
         <ProtectedRoute>
           <Workflows />
+        </ProtectedRoute>
+      } />
+      <Route path="/workflows-beta" element={
+        <ProtectedRoute>
+          <WorkflowsBeta />
         </ProtectedRoute>
       } />
       <Route path="/stats" element={

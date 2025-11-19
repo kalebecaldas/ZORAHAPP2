@@ -154,6 +154,20 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onCan
     setConnections(initialConnections);
   }, [workflow.nodes]);
 
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const handler = (ev: WheelEvent) => {
+      ev.preventDefault();
+      const delta = ev.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(prev => Math.min(2, Math.max(0.5, prev + delta)));
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', handler);
+    };
+  }, []);
+
   const getDefaultPorts = (type: WorkflowNode['type']): Port[] => {
     switch (type) {
       case 'START':
@@ -443,7 +457,6 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onCan
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
     setZoom(prev => Math.min(2, Math.max(0.5, prev + delta)));
   };
@@ -997,12 +1010,11 @@ const WorkflowEditor: React.FC<WorkflowEditorProps> = ({ workflow, onSave, onCan
 
       {/* Canvas */}
       <div className="flex-1 relative overflow-hidden" ref={canvasRef}>
-        <div 
-          className="absolute inset-0 bg-gray-100" 
-          onMouseDown={startPan}
-          onWheel={handleWheel}
-          style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
-        >
+          <div 
+            className="absolute inset-0 bg-gray-100" 
+            onMouseDown={startPan}
+            style={{ cursor: isPanning ? 'grabbing' : 'grab' }}
+          >
           {/* Grid */}
         <div 
           className="absolute inset-0 opacity-20"

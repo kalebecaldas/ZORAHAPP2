@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
+const prismaAny = prisma as any
 import { authMiddleware } from '../utils/auth.js'
 import { WhatsAppService } from '../services/whatsapp.js'
 import { AIService } from '../services/ai.js'
@@ -786,16 +787,25 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
   }
 
   if (lower.includes('convênio') || lower.includes('convênios') || lower.includes('planos')) {
-    const list = clinicDataService.getInsuranceCompanies()
-    let result = `📋 Convênios aceitos:\n\n`
-    result += `✅ Particular\n`
-    result += `   • Pagamento direto na clínica\n`
-    list.forEach((insurance: any) => {
-      const name = insurance.displayName || insurance.name || insurance.id
-      result += `✅ ${name}\n`
-    })
-    await sendAIMessage(conversation, result)
-    return true
+    try {
+      const list = await prisma.insuranceCompany.findMany()
+      let result = `📋 Convênios aceitos:\n\n`
+      list.forEach((insurance: any) => {
+        const name = insurance.displayName || insurance.name || insurance.code
+        result += `✅ ${name}\n`
+      })
+      await sendAIMessage(conversation, result)
+      return true
+    } catch {
+      const list = clinicDataService.getInsuranceCompanies()
+      let result = `📋 Convênios aceitos:\n\n`
+      list.forEach((insurance: any) => {
+        const name = insurance.displayName || insurance.name || insurance.id
+        result += `✅ ${name}\n`
+      })
+      await sendAIMessage(conversation, result)
+      return true
+    }
   }
 
   if (lower.includes('bradesco')) {
@@ -803,8 +813,8 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
     const ic = await prisma.insuranceCompany.findUnique({ where: { code: 'bradesco' } })
     let names: string[] = []
     if (ic) {
-      const links = await prisma.insuranceProcedure.findMany({ where: { insuranceId: ic.id } })
-      const procs = await prisma.procedure.findMany({ where: { id: { in: links.map(l => l.procedureId) } } })
+      const links = await prisma.clinicInsuranceProcedure.findMany({ where: { insuranceCode: ic.code } })
+      const procs = await prisma.procedure.findMany({ where: { code: { in: links.map(l => l.procedureCode) } } })
       names = procs.map(p => p.name)
     }
     const msg = `🛡️ Bradesco atendido. Procedimentos cobertos: ${names.join(', ')}.`
@@ -813,31 +823,71 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
   }
 
   if (lower.includes('acupuntura')) {
-    let proc = await prisma.procedure.findUnique({ where: { code: 'acupuntura' } })
-    if (!proc) {
-      const fromCatalog = clinicDataService.getProcedureById('acupuntura') as any
-      if (fromCatalog) {
-        proc = { code: fromCatalog.id, name: fromCatalog.name, basePrice: fromCatalog.basePrice } as any
+    try {
+      const proc = await prisma.procedure.findUnique({ where: { code: 'acupuntura' } })
+      if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
+      if (!draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
+      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves','sao-jose'] } } })
+      const parts: string[] = []
+      for (const c of clinics) {
+        const cp = await prismaAny.clinicProcedure.findFirst({ where: { clinicId: c.id, procedureCode: proc.code } })
+        const price = cp ? Number(cp.particularPrice || 0) : Number(proc.basePrice || 0)
+        parts.push(`• ${c.displayName || c.name}: R$ ${price.toFixed(2)}`)
       }
+      let msg = `ℹ️ ${proc.description || proc.name}\n\n`
+      msg += `💰 Valores Particular por unidade:\n${parts.join('\n')}\n`
+      msg += `\nInforme seu convênio e unidade para confirmar o valor.`
+      await sendAIMessage(conversation, msg)
+      return true
+    } catch {
+      const proc = clinicDataService.getProcedures().find(p => p.id === 'acupuntura') as any
+      if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
+      const clinics = clinicDataService.getLocations()
+      const parts: string[] = []
+      for (const c of clinics.filter((x:any)=> ['vieiralves','sao-jose'].includes(x.id))) {
+        const price = (proc.priceByLocation && proc.priceByLocation[c.id]) ? Number(proc.priceByLocation[c.id]) : Number(proc.basePrice || 0)
+        parts.push(`• ${c.name}: R$ ${price.toFixed(2)}`)
+      }
+      let msg = `ℹ️ ${proc.description || proc.name}\n\n`
+      msg += `💰 Valores Particular por unidade:\n${parts.join('\n')}\n`
+      msg += `\nInforme seu convênio e unidade para confirmar o valor.`
+      await sendAIMessage(conversation, msg)
+      return true
     }
-    if (proc && !draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
-    const msg = `💰 Valor particular de ${proc?.name}: R$ ${proc?.basePrice}.`
-    await sendAIMessage(conversation, msg)
-    return true
   }
 
   if (lower.includes('fisioterapia')) {
-    let proc = await prisma.procedure.findUnique({ where: { code: 'fisioterapia-ortopedica' } })
-    if (!proc) {
-      const fromCatalog = clinicDataService.getProcedureById('fisioterapia-ortopedica') as any
-      if (fromCatalog) {
-        proc = { code: fromCatalog.id, name: fromCatalog.name, basePrice: fromCatalog.basePrice } as any
+    try {
+      const proc = await prisma.procedure.findUnique({ where: { code: 'fisioterapia-ortopedica' } })
+      if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
+      if (!draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
+      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves','sao-jose'] } } })
+      const parts: string[] = []
+      for (const c of clinics) {
+        const cp = await prismaAny.clinicProcedure.findFirst({ where: { clinicId: c.id, procedureCode: proc.code } })
+        const price = cp ? Number(cp.particularPrice || 0) : Number(proc.basePrice || 0)
+        parts.push(`• ${c.displayName || c.name}: R$ ${price.toFixed(2)}`)
       }
+      let msg = `ℹ️ ${proc.description || proc.name}\n\n`
+      msg += `💰 Valores Particular por unidade:\n${parts.join('\n')}\n`
+      msg += `\nInforme seu convênio e unidade para confirmar o valor.`
+      await sendAIMessage(conversation, msg)
+      return true
+    } catch {
+      const proc = clinicDataService.getProcedures().find(p => p.id === 'fisioterapia-ortopedica') as any
+      if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
+      const clinics = clinicDataService.getLocations()
+      const parts: string[] = []
+      for (const c of clinics.filter((x:any)=> ['vieiralves','sao-jose'].includes(x.id))) {
+        const price = (proc.priceByLocation && proc.priceByLocation[c.id]) ? Number(proc.priceByLocation[c.id]) : Number(proc.basePrice || 0)
+        parts.push(`• ${c.name}: R$ ${price.toFixed(2)}`)
+      }
+      let msg = `ℹ️ ${proc.description || proc.name}\n\n`
+      msg += `💰 Valores Particular por unidade:\n${parts.join('\n')}\n`
+      msg += `\nInforme seu convênio e unidade para confirmar o valor.`
+      await sendAIMessage(conversation, msg)
+      return true
     }
-    if (proc && !draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
-    const msg = `💰 Valor particular de ${proc?.name}: R$ ${proc?.basePrice}.`
-    await sendAIMessage(conversation, msg)
-    return true
   }
 
   if (lower.includes('agendar') || lower.includes('marcar')) {
@@ -1386,8 +1436,22 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
     try {
       const clinic = clinicDataService.getLocationById(String(intent.clinic || ''))
       const procedures = await clinicDataService.getProcedures()
-      const procName = procedures.find(p => p.id === intent.procedure || p.name === intent.procedure)?.name || String(intent.procedure || '')
-      const convText = `📝 Intenção de Agendamento\nUnidade: ${clinic?.name || intent.clinic}\nConvênio: ${String(intent.insurance || 'Particular')}\nProcedimento: ${procName}\nDia: ${String(intent.date)}\nTurno: ${String(intent.shift)}`
+      const collected = (ctxUserData.collectedData || {}) as any
+      let patientName = String(collected.name || '')
+      if (!patientName && conv.patientId) {
+        try {
+          const pat2 = await prisma.patient.findUnique({ where: { id: conv.patientId } })
+          patientName = String(pat2?.name || '')
+        } catch {}
+      }
+      const birthISO = (collected.birth_date || '') as string
+      const birthLine = birthISO ? `\nNascimento: ${new Date(birthISO).toLocaleDateString('pt-BR')}` : ''
+      const insuranceDisplay = String(intent.insurance || collected.insurance || 'Particular')
+      const procRaw = (collected.procedure_type || intent.procedure || '') as string
+      const procName = procedures.find(p => p.id === procRaw || p.name === procRaw)?.name || procRaw
+      const day = String(collected.preferred_date || intent.date || '')
+      const shift = String(collected.preferred_shift || intent.shift || '')
+      const convText = `📝 Intenção de Agendamento\nPaciente: ${patientName || '-'}${birthLine}\nUnidade: ${clinic?.name || intent.clinic}\nConvênio: ${insuranceDisplay}\nProcedimento: ${procName}\nDia: ${day}\nTurno: ${shift}`
       await prisma.message.create({ data: { conversationId: conv.id, phoneNumber: conv.phone, messageText: convText, direction: 'SENT', from: 'BOT' } })
       if (conv.patientId) {
         await prisma.patientInteraction.create({ data: { patientId: conv.patientId, type: 'INTENT_SCHEDULING', description: 'Intenção de agendamento registrada', data: intent } })

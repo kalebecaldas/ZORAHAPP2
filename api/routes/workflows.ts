@@ -34,7 +34,7 @@ async function ensureDefaultWorkflows(): Promise<void> {
           { id: 'info_location', type: 'API_CALL', content: { endpoint: 'get_clinic_location', message: 'Localização e como chegar...' } },
           { id: 'continue_prompt', type: 'MESSAGE', content: { message: 'Deseja mais informações ou prefere agendar agora?' } },
           { id: 'continue_decision', type: 'CONDITION', content: { condition: 'continue|end' } },
-          { id: 'collect_info', type: 'COLLECT_INFO', content: { fields: ['procedure_type','preferred_date','preferred_time','payment_method'], message: 'Processando dados para agendamento...' } },
+          { id: 'collect_info', type: 'COLLECT_INFO', content: { fields: ['name','insurance','birth_date','procedure_type','preferred_date','preferred_shift'], message: 'Processando dados para agendamento...' } },
           { id: 'schedule', type: 'ACTION', content: { action: 'schedule_appointment' } },
           { id: 'transfer_human', type: 'TRANSFER_HUMAN', content: { finalMessage: 'Transferindo para atendimento humano...' } },
           { id: 'end', type: 'END', content: { finalMessage: 'Obrigado! Se precisar, posso continuar ajudando.' } }

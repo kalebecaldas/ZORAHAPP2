@@ -4,10 +4,20 @@ import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
 import { authorize, forbidModifyingMaster } from '../utils/auth.js'
 
+// In development, allow public access for listing users to ease bootstrapping
+const usersAuth = process.env.NODE_ENV === 'development'
+  ? ((req: Request, res: Response, next: any) => next())
+  : authMiddleware
+
+// Conditionally apply authorization: in development, skip role checks for listing
+const usersAuthorizeList = process.env.NODE_ENV === 'development'
+  ? ((req: Request, res: Response, next: any) => next())
+  : authorize(['MASTER','ADMIN'])
+
 const router = Router()
 
-// Get all users (admin only)
-router.get('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Request, res: Response): Promise<void> => {
+// Get all users (admin only; in development, public)
+router.get('/', usersAuth, usersAuthorizeList, async (req: Request, res: Response): Promise<void> => {
   try {
     const { page = 1, limit = 20, search = '' } = req.query
     const skip = (Number(page) - 1) * Number(limit)

@@ -22,6 +22,7 @@ const Sidebar: React.FC = () => {
     { path: '/conversations', icon: MessageSquare, label: 'Conversas' },
     { path: '/patients', icon: Users, label: 'Pacientes' },
     { path: '/workflows', icon: Workflow, label: 'Workflows' },
+    { path: '/workflows-beta', icon: Workflow, label: 'Workflow editor Beta' },
     { path: '/stats', icon: BarChart3, label: 'Estatísticas' },
     ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: Users, label: 'Usuários' }] : []),
     { path: '/settings', icon: Settings, label: 'Configurações' },

@@ -34,7 +34,7 @@ export function useSocket() {
   useEffect(() => {
     if (!token || !user) return;
 
-    const base = (import.meta as any).env?.VITE_API_URL || 'http://localhost:4001'
+    const base = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001'
     const socket = io(base, {
       path: '/socket.io',
       auth: { token },
