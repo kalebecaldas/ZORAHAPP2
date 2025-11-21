@@ -163,7 +163,7 @@ RPG )
 
 
 
-
+regra de convenios com desconto: vamos aplicar uma porcentagem de 20% de desconto em cima de todos os atendimentos particulares. então quando o paciente falar que tem um desses convenios que tem desconto o bot precisa retornar todos os procedimentos particulares trazendo o valor ja tendo sido calculado o desconto em cima, cada convenio vai possuir um desconto diferente um do outro, ou igual, quem vai decidir isso é o admin do sistema.
 
 
 
@@ -183,7 +183,7 @@ PILATES SESSÃO AVULSA R$ 70,00
 QUIROPRAXIA R$ 120,00
 REGRAS DO PARTICULAR UNIDADE VIEIRALVES:
 
-Para procedimentos como fisioterapia pélvica e acupuntura e fisioterapia, esses sempre terão que ter a avaliação primeiro, ou seja, se caso o paciente queira agendar somente uma sessão ele terá que pagar a avaliação. Mas se pagar o pacote de 10 sessões ele terá desconto na avaliação ficando 10  avaliação não cobrariamos, ficando somente valor de sessão avulsa.
+Para procedimentos como fisioterapia pélvica e acupuntura e fisioterapia, esses sempre terão que ter a avaliação primeiro, ou seja, se caso o paciente queira agendar somente uma sessão ele terá que pagar a avaliação. Mas se pagar o pacote de 10 sessões ele terá desconto na avaliação ficando 10  avaliação não cobrariamos, ficando somente valor de sessão avulsa. Então é preciso criar uma parte de inserir pacote na hora de inseri o procedimento ao convenio, se caso o convenio for particular.
 
 ______________________________________________
 

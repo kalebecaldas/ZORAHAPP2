@@ -58,9 +58,9 @@ export class WorkflowEngine {
   constructor(nodes: WorkflowNode[], workflowId: string, phone: string, message: string, connections?: Array<any>) {
     this.nodes = new Map(nodes.map(node => [node.id, node]));
     this.connections = new Map();
-    
+
     console.log(`🔧 WorkflowEngine constructor - nodes: ${nodes.length}, connections: ${connections?.length || 0}`);
-    
+
     // Build connection map from either node.connections or separate connections array
     if (connections && connections.length > 0) {
       // Handle dynamic workflow format with separate connections array
@@ -90,7 +90,7 @@ export class WorkflowEngine {
         }
       });
     }
-    
+
     console.log(`🔧 Connections built:`, Array.from(this.connections.entries()));
 
     this.context = {
@@ -109,7 +109,7 @@ export class WorkflowEngine {
 
   async executeNextNode(): Promise<NodeExecutionResult> {
     console.log(`🔧 executeNextNode - currentNodeId: ${this.context.currentNodeId}`);
-    
+
     const currentNode = this.nodes.get(this.context.currentNodeId);
     if (!currentNode) {
       console.log(`🔧 executeNextNode - no current node found, stopping`);
@@ -118,9 +118,9 @@ export class WorkflowEngine {
 
     console.log(`🔧 executeNextNode - executing node: ${currentNode.id} (${currentNode.type})`);
     const result = await this.executeNode(currentNode);
-    
+
     console.log(`🔧 executeNextNode - result:`, result);
-    
+
     if (result.context) {
       this.context = { ...this.context, ...result.context };
     }
@@ -210,27 +210,27 @@ export class WorkflowEngine {
 
   private executeStartNode(node: WorkflowNode): NodeExecutionResult {
     console.log(`🔧 executeStartNode - node.id: ${node.id}, connections:`, this.connections.get(node.id));
-    
+
     const connections = this.connections.get(node.id);
     let nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
     const clinicConn = connections?.find(c => c.targetId === 'clinic_selection');
     if (clinicConn) nextNodeId = clinicConn.targetId;
-    
+
     console.log(`🔧 executeStartNode - nextNodeId: ${nextNodeId}`);
-    
+
     const msg = (this.context.message || '').toLowerCase();
     const trimmed = msg.trim();
     const mentionsUnit = trimmed === '1' || trimmed === '2' || msg.includes('vieiralves') || msg.includes('são josé') || msg.includes('sao jose') || msg.includes('centro') || msg.includes('salvador');
     if (mentionsUnit) {
       return { nextNodeId, response: '' };
     }
-    
+
     const welcomeMessage = `Olá! Em qual unidade você gostaria de ser atendido(a)?
 1️⃣ Unidade Vieiralves 📍 Rua Rio Içá, 850 — Nossa Sra. das Graças
 2️⃣ Unidade São José 📍 Av. Autaz Mirim, 5773 — São José Operário
 
 Responda com 1 ou 2, ou digite o nome da unidade.`;
-    
+
     return {
       nextNodeId,
       response: welcomeMessage
@@ -245,7 +245,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     const lastBot = [...this.context.conversationHistory].reverse().find(h => h.role === 'bot');
     const isDuplicate = lastBot && String(lastBot.content || '').trim() === String(raw).trim();
     const normalized = this.normalizeText(this.context.message || '');
-    const intentPrice = ['valor','preco','preço','quanto','custa','orcamento','particular','pacote'].some(k => normalized.includes(k)) || !!this.findProcedureKeyword(normalized);
+    const intentPrice = ['valor', 'preco', 'preço', 'quanto', 'custa', 'orcamento', 'particular', 'pacote'].some(k => normalized.includes(k)) || !!this.findProcedureKeyword(normalized);
     const intentIns = normalized.includes('convenio') || normalized.includes('convênio') || normalized.includes('planos') || normalized.includes('plano') || normalized.includes('seguros') || normalized.includes('seguro');
     const intentLoc = normalized.includes('localizacao') || normalized.includes('localização') || normalized.includes('endereco') || normalized.includes('endereço') || normalized.includes('onde') || normalized.includes('como chegar');
     const intentBook = normalized.includes('agendar') || normalized.includes('marcar') || normalized.includes('consulta');
@@ -299,7 +299,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
       if (out.includes('${procedimento_x}') || out.includes('${valor_procedimento}') || out.includes('${duracao_procedimento}') || out.includes('${observacao_procedimento}')) {
         const { api } = await import('../lib/utils');
         const procs = await api.get('/api/appointments/procedures').then(r => r.data || []);
-        const candidates = ['acupuntura','fisioterapia','rpg','pilates','quiropraxia','ventosaterapia','liberacao miofascial','pilates solo','pilates aparelhos'];
+        const candidates = ['acupuntura', 'fisioterapia', 'rpg', 'pilates', 'quiropraxia', 'ventosaterapia', 'liberacao miofascial', 'pilates solo', 'pilates aparelhos'];
         const normalizedMsg = this.normalizeText(this.context.message || '');
         let found = this.findProcedureKeyword(normalizedMsg);
         if (!found) found = candidates.find(c => lower.includes(c));
@@ -329,31 +329,43 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
                 out += `\n\n🎁 Pacotes disponíveis:\n${info}`;
               }
             }
-          } catch {}
+          } catch { }
           out = out.replace('${procedimento_x}', proc.name || proc.code || 'Procedimento')
-                   .replace('${valor_procedimento}', `R$ ${Number(price).toFixed(2)}`)
-                   .replace('${duracao_procedimento}', `${proc.duration} minutos`)
-                   .replace('${observacao_procedimento}', proc.requiresEvaluation ? 'Requer avaliação prévia' : 'Não requer avaliação');
+            .replace('${valor_procedimento}', `R$ ${Number(price).toFixed(2)}`)
+            .replace('${duracao_procedimento}', `${proc.duration} minutos`)
+            .replace('${observacao_procedimento}', proc.requiresEvaluation ? 'Requer avaliação prévia' : 'Não requer avaliação');
         }
       }
 
       if (out.includes('${convenio_x}') || out.includes('${procedimento_1}') || out.includes('${procedimento_2}') || out.includes('${procedimento_3}')) {
         const { api } = await import('../lib/utils');
-        const ins = await api.get('/api/appointments/insurances').then(r => r.data || []);
+        const insRes = await api.get('/api/appointments/insurances');
+        const ins = insRes.data || [];
         const normalized = lower.normalize('NFD').replace(/[^a-z0-9\s]/g, '').replace(/[\u0300-\u036f]/g, '');
+
         const match = ins.find((i: any) => {
-          const names = [i.code, i.name, i.displayName].filter(Boolean).map((s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+          const names = [i.id, i.code, i.name, i.displayName].filter(Boolean).map((s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
           return names.some((n: string) => normalized.includes(n));
         }) || ins[0];
-        const convenioName = match?.displayName || match?.name || match?.code || 'Convênio';
+
+        const convenioName = match?.displayName || match?.name || match?.id || 'Convênio';
         out = out.replace('${convenio_x}', convenioName);
-        const list = Array.isArray(match?.procedures) ? match.procedures : [];
-        const procsAll = await api.get('/api/appointments/procedures').then(r => r.data || []);
-        const nameMap = new Map(procsAll.map((p: any) => [p.id || p.code, p.name]));
-        const top3 = list.slice(0,3).map((id: string) => nameMap.get(id) || id);
-        out = out.replace('${procedimento_1}', top3[0] || '')
-                 .replace('${procedimento_2}', top3[1] || '')
-                 .replace('${procedimento_3}', top3[2] || '');
+
+        let top3: string[] = [];
+        if (match && match.id) {
+          try {
+            const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+            const coveredRes = await api.get(`/api/clinic/clinics/${clinicCode}/insurances/${match.id}/procedures`);
+            const covered = Array.isArray(coveredRes.data) ? coveredRes.data : [];
+            top3 = covered.slice(0, 3).map((p: any) => p.procedure?.name || p.name || p.procedureCode || p.code);
+          } catch (e) {
+            console.error('Error fetching covered procedures', e);
+          }
+        }
+
+        out = out.replace('${procedimento_1}', top3[0] || 'Consultar')
+          .replace('${procedimento_2}', top3[1] || '')
+          .replace('${procedimento_3}', top3[2] || '');
       }
 
       if (out.includes('${unidade_nome}') || out.includes('${endereco}') || out.includes('${horario_atendimento}') || out.includes('${telefone}') || out.includes('${maps_url}')) {
@@ -362,25 +374,25 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         const locs = await api.get('/api/appointments/locations').then(r => r.data || []);
         const loc = locs.find((l: any) => (l.id || '').includes(clinicCode)) || locs[0];
         if (loc) {
-          const hours = loc.openingHours ? Object.entries(loc.openingHours).map(([d,h]: any) => `${d}: ${h}`).join(', ') : '';
+          const hours = loc.openingHours ? Object.entries(loc.openingHours).map(([d, h]: any) => `${d}: ${h}`).join(', ') : '';
           out = out.replace('${unidade_nome}', loc.name || clinicCode)
-                   .replace('${endereco}', loc.address || '')
-                   .replace('${horario_atendimento}', hours || '')
-                   .replace('${telefone}', loc.phone || '')
-                   .replace('${maps_url}', loc.mapUrl || '');
+            .replace('${endereco}', loc.address || '')
+            .replace('${horario_atendimento}', hours || '')
+            .replace('${telefone}', loc.phone || '')
+            .replace('${maps_url}', loc.mapUrl || '');
         }
       }
-    } catch {}
+    } catch { }
     return out;
   }
 
   private executeConditionNode(node: WorkflowNode): NodeExecutionResult {
     const condition = node.content.condition || '';
     const connections = this.connections.get(node.id) || [];
-    
+
     let nextNodeId: string | undefined;
     const lowerMessage = this.context.message.toLowerCase();
-    
+
     switch (condition) {
       case 'clinic_selection':
         const clinics = ['vieiralves', 'saojose', 'são josé', 'sao jose', 'salvador', 'centro'];
@@ -411,12 +423,12 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         responseMessage = node.content.finalMessage || 'Por favor, escolha uma de nossas unidades.';
         nextNodeId = connections.find(c => c.port === 'false')?.targetId;
         return { nextNodeId, response: responseMessage };
-        
+
       case 'service_selection':
         const trimmed = lowerMessage.trim();
         const normalizedSel = this.normalizeText(this.context.message);
-        const mentionsProcedure = ['acupuntura','fisioterapia','rpg','pilates','quiropraxia','ventosa','miofascial','liberacao miofascial','pilates solo','pilates aparelhos'].some(k => lowerMessage.includes(k)) || !!this.findProcedureKeyword(normalizedSel);
-        const matchedProc = ['acupuntura','fisioterapia','rpg','pilates','quiropraxia','ventosaterapia','liberacao miofascial','pilates solo','pilates aparelhos'].find(k => lowerMessage.includes(k)) || this.findProcedureKeyword(normalizedSel);
+        const mentionsProcedure = ['acupuntura', 'fisioterapia', 'rpg', 'pilates', 'quiropraxia', 'ventosa', 'miofascial', 'liberacao miofascial', 'pilates solo', 'pilates aparelhos'].some(k => lowerMessage.includes(k)) || !!this.findProcedureKeyword(normalizedSel);
+        const matchedProc = ['acupuntura', 'fisioterapia', 'rpg', 'pilates', 'quiropraxia', 'ventosaterapia', 'liberacao miofascial', 'pilates solo', 'pilates aparelhos'].find(k => lowerMessage.includes(k)) || this.findProcedureKeyword(normalizedSel);
         if (matchedProc) { this.context.userData.lastProcedure = matchedProc; }
         if (trimmed === '1' || lowerMessage.includes('valor') || lowerMessage.includes('preço') || lowerMessage.includes('quanto') || mentionsProcedure) {
           nextNodeId = connections.find(c => c.port === '1')?.targetId;
@@ -437,12 +449,12 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           nextNodeId = gptConn?.targetId || connections.find(c => c.port === '1')?.targetId || connections.find(c => c.port === 'main')?.targetId || connections[0]?.targetId;
         }
         break;
-        
+
       default:
         // Original condition evaluation for other cases
         const keywords = condition.split('|').map(k => k.trim().toLowerCase());
         const matches = keywords.some(keyword => lowerMessage.includes(keyword));
-        
+
         if (matches) {
           // Find connection with matching condition
           nextNodeId = connections.find(c => {
@@ -451,7 +463,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
             return connKeywords.some(keyword => lowerMessage.includes(keyword));
           })?.targetId;
         }
-        
+
         // If no specific match, prefer GPT if connected, otherwise first connection
         if (!nextNodeId && connections.length > 0) {
           const gptConn = connections.find(c => {
@@ -467,7 +479,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
 
   private async executeActionNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const action = node.content.action || '';
-    
+
     switch (action) {
       case 'search_patient_by_phone':
         // Simulate patient search
@@ -485,7 +497,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
 
     const connections = this.connections.get(node.id);
     const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
-    
+
     return {
       nextNodeId
     };
@@ -505,9 +517,9 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
 
     // Classificação imediata por palavras-chave para evitar atraso
     if (!nextNodeId) {
-      const priceSyn = ['valor','preco','quanto','custa','orcamento','particular','pacote'];
+      const priceSyn = ['valor', 'preco', 'quanto', 'custa', 'orcamento', 'particular', 'pacote'];
       const hasPriceIntent = priceSyn.some(s => normalized.includes(s));
-      const hasProcIntent = !!this.findProcedureKeyword(normalized) || ['fisioterapia','acupuntura','rpg','pilates','quiropraxia'].some(s => normalized.includes(s));
+      const hasProcIntent = !!this.findProcedureKeyword(normalized) || ['fisioterapia', 'acupuntura', 'rpg', 'pilates', 'quiropraxia'].some(s => normalized.includes(s));
       if (hasPriceIntent || hasProcIntent) {
         nextNodeId = connections.find(c => c.port === '1')?.targetId;
         const lp = this.findProcedureKeyword(normalized);
@@ -557,7 +569,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         const brief = String(parsed.brief || '').trim();
         const confidence = Number(parsed.confidence ?? 0.5);
         const threshold = Number(process.env.GPT_CONFIDENCE_THRESHOLD || 0.6);
-        if (['1','2','3','4','5'].includes(port)) {
+        if (['1', '2', '3', '4', '5'].includes(port)) {
           if (confidence >= threshold) {
             nextNodeId = connections.find(c => c.port === port)?.targetId || connections[0]?.targetId;
             response = response || brief || 'Entendi.';
@@ -567,29 +579,40 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
             nextNodeId = svcNode?.id || connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
           }
         }
-      } catch {}
+      } catch { }
     }
 
-    // Fallback final
+    // Fallback final - only send generic message if no specific intent was detected
     if (!nextNodeId) {
-      response = response || '📋 Posso te ajudar com valores, convênios, localização ou agendamento. Sobre o que você gostaria de saber?';
-      nextNodeId = connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
+      // If we already set response to empty because we detected an intent keyword, don't override it
+      if (response === '') {
+        // Intent was detected but somehow nextNodeId wasn't set - use port 1 as fallback
+        nextNodeId = connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
+      } else if (!response) {
+        // No intent detected at all - send generic help message
+        response = '📋 Posso te ajudar com valores, convênios, localização ou agendamento. Sobre o que você gostaria de saber?';
+        nextNodeId = connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
+      }
     }
 
-    this.addToHistory('bot', response);
+    // Only add non-empty responses to history
+    if (response) {
+      this.addToHistory('bot', response);
+    }
     return { nextNodeId, response };
+
   }
 
   private executeDataCollectionNode(node: WorkflowNode): NodeExecutionResult {
     const field = node.content.field || '';
     const prompt = node.content.prompt || `Por favor, informe seu ${field}:`;
-    
+
     // Store the field being collected
     this.context.userData.collectingField = field;
-    
+
     const connections = this.connections.get(node.id);
     const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
-    
+
     return {
       nextNodeId,
       response: prompt
@@ -599,7 +622,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
   private async executeCollectInfoNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const fields = node.content.fields || [];
     const message = node.content.message || 'Aguarde enquanto processo suas informações...';
-    
+
     // Check if we're in the middle of collecting information
     const currentField = this.context.userData.currentCollectField;
     const collectedData = this.context.userData.collectedData || {};
@@ -620,8 +643,8 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         this.context.userData.registrationComplete = registrationComplete;
         this.context.userData.registrationChecked = true;
       }
-    } catch {}
-    
+    } catch { }
+
     if (currentField) {
       let input = (this.context.message || '').trim();
       if (currentField === 'birth_date') {
@@ -637,9 +660,9 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
       }
       if (currentField === 'phone') {
         const lower = input.toLowerCase().trim();
-        if (['sim','s','yes','y'].includes(lower)) {
+        if (['sim', 's', 'yes', 'y'].includes(lower)) {
           input = String(this.context.phone || '').replace(/\D/g, '');
-        } else if (['nao','não','n','no'].includes(lower)) {
+        } else if (['nao', 'não', 'n', 'no'].includes(lower)) {
           return { nextNodeId: undefined, response: '📱 Informe o telefone com DDD (ex.: 92 9XXXX-XXXX).', shouldStop: true };
         } else {
           const digits = input.replace(/\D/g, '');
@@ -651,7 +674,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
       }
       if (currentField === 'preferred_shift') {
         const normalized = input.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const valid = ['manha','manhã','tarde','noite'];
+        const valid = ['manha', 'manhã', 'tarde', 'noite'];
         const ok = valid.includes(normalized);
         if (!ok) {
           return { nextNodeId: undefined, response: '⚠️ Informe um turno válido: Manhã, Tarde ou Noite.', shouldStop: true };
@@ -684,7 +707,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
                 shouldStop: true
               };
             }
-          } catch {}
+          } catch { }
         }
       }
 
@@ -698,11 +721,15 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
       collectedData[currentField] = input;
       this.context.userData.collectedData = collectedData;
 
+      // Update patient registration if we just collected name or insurance
       if (this.context.userData.isSchedulingIntent && !this.context.userData.registrationComplete) {
         const nameNow = (collectedData['name'] || this.context.userData.patientName || '').trim();
         const insNowRaw = (collectedData['insurance'] || this.context.userData.patientInsurance || '').trim();
-        const phoneNowRaw = (collectedData['phone'] || '').trim();
-        if (nameNow || insNowRaw || phoneNowRaw) {
+
+        // Only update patient if we have both name and insurance collected
+        const hasNameAndInsurance = nameNow && insNowRaw;
+
+        if (hasNameAndInsurance) {
           try {
             const { api } = await import('../lib/utils');
             const pidNow = this.context.userData._patientId;
@@ -710,58 +737,99 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
               const payload: any = { preferences: { registrationComplete: true } };
               if (nameNow) payload.name = nameNow;
               if (insNowRaw && insNowRaw.toLowerCase() !== 'particular') payload.insuranceCompany = insNowRaw;
-              if (phoneNowRaw) payload.phone = phoneNowRaw.replace(/\D/g, '');
               await api.put(`/api/patients/${pidNow}`, payload);
               this.context.userData.registrationComplete = true;
               this.context.userData.patientName = nameNow;
               this.context.userData.patientInsurance = insNowRaw;
+
+              // Fetch and display covered procedures after registration is complete
               let convDisplay = insNowRaw && insNowRaw.toLowerCase() !== 'particular' ? insNowRaw : 'Particular';
               let coveredList = '';
+
               if (convDisplay !== 'Particular') {
                 try {
                   const insRes = await api.get('/api/appointments/insurances');
-                  const insFound = (insRes.data || []).find((i: any) => {
+                  const ins = (insRes.data || []).find((i: any) => {
                     const ni = String(i.id || '').toLowerCase();
                     const nn = String(i.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     const nd = String(i.displayName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     const inNorm = insNowRaw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                     return inNorm === ni || inNorm === nn || inNorm === nd;
                   });
-                  const procsAll = await api.get('/api/appointments/procedures').then(r => r.data || []);
-                  const nameMap = new Map(procsAll.map((p: any) => [p.id || p.code, p.name]));
-                  const list = Array.isArray(insFound?.procedures) ? insFound!.procedures.slice(0, 3) : [];
-                  const names = list.map((id: string) => nameMap.get(id) || id).filter(Boolean);
-                  if (names.length > 0) {
-                    coveredList = names.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
-                    this.context.userData.coveredProcedures = names;
+
+                  if (ins && ins.id) {
+                    const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+                    const coveredRes = await api.get(`/api/clinic/clinics/${clinicCode}/insurances/${ins.id}/procedures`);
+                    const covered = Array.isArray(coveredRes.data) ? coveredRes.data : [];
+                    const namesAll = covered.map((p: any) => p.procedure?.name || p.name || p.procedureCode || p.code);
+
+                    if (namesAll.length > 0) {
+                      coveredList = namesAll.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
+                      this.context.userData.coveredProcedures = namesAll;
+
+                      // Add discount information if insurance has discount
+                      if (ins.discountPercentage && ins.discountPercentage > 0) {
+                        coveredList += `\n\n🎁 **Desconto Especial**: Com seu convênio ${convDisplay}, você tem ${ins.discountPercentage}% de desconto em procedimentos particulares!`;
+                      }
+                    }
                   }
-                } catch {}
+                } catch (e) {
+                  console.error('Error fetching covered procedures', e);
+                }
+              } else {
+                // For particular patients, fetch all clinic procedures
+                try {
+                  const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+                  const procsAll = await api.get('/api/appointments/procedures').then(r => r.data || []);
+                  const namesAll = procsAll.map((p: any) => p.name).filter(Boolean);
+                  if (namesAll.length > 0) {
+                    coveredList = namesAll.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
+                    this.context.userData.coveredProcedures = namesAll;
+                  }
+                } catch (e) {
+                  console.error('Error fetching procedures', e);
+                }
               }
+
+              // Show registration complete message with procedures list
               if (coveredList) {
-                this.context.userData.currentCollectField = 'procedure_type';
+                this.context.userData.currentCollectField = 'procedure_type'; // Go directly to procedure selection
                 this.context.userData.collectingField = 'procedure_type';
+                const confirmMsg = `Cadastro concluído, ${nameNow}! Identifiquei seu convênio ${convDisplay}.\n\n📋 Procedimentos disponíveis:\n${coveredList}\n\n📝 Qual procedimento você deseja? Você pode digitar o nome ou o número da lista.`;
+                return { nextNodeId: undefined, response: confirmMsg, shouldStop: true };
               }
-              const msgOut = coveredList ? `Cadastro concluído, ${nameNow}. Identifiquei seu convênio ${convDisplay}.\n\nProcedimentos cobertos conosco:\n${coveredList}\n\nDeseja agendar algum destes?` : `Cadastro concluído, ${nameNow}. Podemos seguir com seu agendamento.`;
-              return { nextNodeId: undefined, response: msgOut, shouldStop: true };
             }
-          } catch {}
+          } catch (e) {
+            console.error('Error updating patient during collection:', e);
+          }
         }
       }
     }
-    
-    const needsRegName = this.context.userData.isSchedulingIntent && !this.context.userData.registrationComplete && (!this.context.userData.patientName || /^Paciente\s+\d+/.test(String(this.context.userData.patientName || '')));
-    const needsRegInsurance = this.context.userData.isSchedulingIntent && !this.context.userData.registrationComplete && !this.context.userData.patientInsurance;
-    const regFields: string[] = [];
-    if (needsRegName && !collectedData['name']) regFields.push('name');
-    if (needsRegInsurance && !collectedData['insurance']) regFields.push('insurance');
-    const effectiveFields = [...regFields, 'birth_date', 'procedure_type', 'preferred_date', 'preferred_shift'];
-    const remainingFields = effectiveFields.filter(field => !collectedData[field]);
-    
+
+    // Determine which fields still need to be collected for scheduling
+    const needsRegName = this.context.userData.isSchedulingIntent && (!this.context.userData.patientName || /^Paciente\s+\d+/.test(String(this.context.userData.patientName || '')));
+    const needsRegInsurance = this.context.userData.isSchedulingIntent && !this.context.userData.patientInsurance;
+
+    // Build the complete list of required fields for appointment scheduling
+    const requiredFields: string[] = [];
+    if (needsRegName && !collectedData['name']) requiredFields.push('name');
+    if (needsRegInsurance && !collectedData['insurance']) requiredFields.push('insurance');
+
+    // Always collect these fields for appointment scheduling (procedure_type, birth_date, then scheduling fields)
+    const appointmentFields = ['procedure_type', 'birth_date', 'preferred_date', 'preferred_shift'];
+    for (const field of appointmentFields) {
+      if (!collectedData[field]) {
+        requiredFields.push(field);
+      }
+    }
+
+    const remainingFields = requiredFields;
+
     if (remainingFields.length > 0) {
       const nextField = remainingFields[0];
       this.context.userData.currentCollectField = nextField;
       this.context.userData.collectingField = nextField;
-      
+
       let prompt = '';
       switch (nextField) {
         case 'phone': {
@@ -778,9 +846,11 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         case 'birth_date':
           prompt = '📆 Qual é sua data de nascimento? (Ex: 15/08/1990)';
           break;
-        case 'procedure_type':
-          prompt = '📝 Qual procedimento você deseja? Você pode digitar o nome ou o número da lista enviada.';
+        case 'procedure_type': {
+          // Procedures list was already shown, just ask for selection
+          prompt = '📝 Por favor, digite o nome ou o número do procedimento desejado.';
           break;
+        }
         case 'preferred_date':
           prompt = '📅 Qual data preferida para sua consulta? (Ex: 15/12/2024)';
           break;
@@ -791,7 +861,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         default:
           prompt = `ℹ️ Por favor, informe seu ${nextField}:`;
       }
-      
+
       return {
         nextNodeId: undefined,
         response: prompt,
@@ -828,34 +898,21 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
                 const inNorm = (insuranceRaw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                 return inNorm === ni || inNorm === nn || inNorm === nd;
               });
-              const procsAll = await api.get('/api/appointments/procedures').then(r => r.data || []);
-              const nameMap = new Map(procsAll.map((p: any) => [p.id || p.code, p.name]));
-              const list = Array.isArray(ins?.procedures) ? ins!.procedures.slice(0, 3) : [];
-              const names = list.map((id: string) => nameMap.get(id) || id).filter(Boolean);
-              if (names.length > 0) {
-                coveredList = names.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
+
+              if (ins && ins.id) {
+                const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+                const coveredRes = await api.get(`/api/clinic/clinics/${clinicCode}/insurances/${ins.id}/procedures`);
+                const covered = Array.isArray(coveredRes.data) ? coveredRes.data : [];
+                const namesAll = covered.map((p: any) => p.procedure?.name || p.name || p.procedureCode || p.code);
+
+                if (namesAll.length > 0) {
+                  coveredList = namesAll.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
+                  this.context.userData.coveredProcedures = namesAll;
+                }
               }
-            } catch {}
-          }
-          if (convDisplay !== 'Particular') {
-            try {
-              const insRes2 = await api.get('/api/appointments/insurances');
-              const ins2 = (insRes2.data || []).find((i: any) => {
-                const ni = String(i.id || '').toLowerCase();
-                const nn = String(i.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const nd = String(i.displayName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const inNorm = (insuranceRaw || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return inNorm === ni || inNorm === nn || inNorm === nd;
-              });
-              const procsAll2 = await api.get('/api/appointments/procedures').then(r => r.data || []);
-              const nameMap2 = new Map(procsAll2.map((p: any) => [p.id || p.code, p.name]));
-              const listAll = Array.isArray(ins2?.procedures) ? ins2!.procedures : [];
-              const namesAll = listAll.map((id: string) => nameMap2.get(id) || id).filter(Boolean);
-              if (namesAll.length > 0) {
-                coveredList = namesAll.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
-                this.context.userData.coveredProcedures = namesAll;
-              }
-            } catch {}
+            } catch (e) {
+              console.error('Error fetching covered procedures in collect info', e);
+            }
           } else {
             try {
               const procsAll3 = await api.get('/api/appointments/procedures').then(r => r.data || []);
@@ -865,15 +922,15 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
                 coveredList = namesAll.map((n: string, idx: number) => `${idx + 1}. ${n}`).join('\n');
                 this.context.userData.coveredProcedures = namesAll;
               }
-            } catch {}
+            } catch { }
           }
+          // Store covered procedures but don't show them yet - they'll be shown when asking for procedure_type
           if (coveredList) {
-            this.context.userData.currentCollectField = 'procedure_type';
-            this.context.userData.collectingField = 'procedure_type';
+            // Don't set currentCollectField here, let the normal flow handle it
           }
-          responseOut = coveredList ? `Cadastro concluído, ${name}. Identifiquei seu convênio ${convDisplay}.\n\nProcedimentos disponíveis:\n${coveredList}\n\nDigite o número ou nome do procedimento.` : `Cadastro concluído, ${name}. Podemos seguir com seu agendamento.`;
+          responseOut = `Cadastro concluído, ${name}. Identifiquei seu convênio ${convDisplay}.`;
         }
-      } catch {}
+      } catch { }
       const summaryReady = collectedData['procedure_type'] && collectedData['preferred_date'] && collectedData['preferred_shift'];
       if (summaryReady) {
         const issues: string[] = []
@@ -928,34 +985,34 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     if (c.length !== 11) return false
     if (/^(\d)\1{10}$/.test(c)) return false
     let sum = 0
-    for (let i=1;i<=9;i++) sum += parseInt(c.substring(i-1,i))*(11-i)
-    let r = (sum*10)%11
-    if (r===10||r===11) r=0
-    if (r!==parseInt(c.substring(9,10))) return false
+    for (let i = 1; i <= 9; i++) sum += parseInt(c.substring(i - 1, i)) * (11 - i)
+    let r = (sum * 10) % 11
+    if (r === 10 || r === 11) r = 0
+    if (r !== parseInt(c.substring(9, 10))) return false
     sum = 0
-    for (let i=1;i<=10;i++) sum += parseInt(c.substring(i-1,i))*(12-i)
-    r = (sum*10)%11
-    if (r===10||r===11) r=0
-    return r===parseInt(c.substring(10,11))
+    for (let i = 1; i <= 10; i++) sum += parseInt(c.substring(i - 1, i)) * (12 - i)
+    r = (sum * 10) % 11
+    if (r === 10 || r === 11) r = 0
+    return r === parseInt(c.substring(10, 11))
   }
   private isValidBirthDate(iso: string): boolean {
     const d = new Date(iso)
     if (isNaN(d.getTime())) return false
     const now = new Date()
     if (d > now) return false
-    const age = Math.floor((now.getTime()-d.getTime())/(365.25*24*3600*1000))
+    const age = Math.floor((now.getTime() - d.getTime()) / (365.25 * 24 * 3600 * 1000))
     return age >= 10 && age <= 120
   }
 
   private async executeApiCallNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const endpoint = node.content.endpoint || '';
     const message = node.content.message || 'Processando informações...';
-    
+
     try {
       let response = '';
       const clinicCode = this.context.userData.selectedClinic;
       const userMessage = this.context.message.toLowerCase();
-      
+
       switch (endpoint) {
         case 'get_clinic_procedures':
           response = await this.getClinicProcedures(clinicCode, userMessage);
@@ -969,17 +1026,17 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         default:
           response = 'Informações não disponíveis no momento.';
       }
-      
-    const connections = this.connections.get(node.id);
-    const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
-    
-    const final = await this.interpolateMessage(response || message);
-    return { nextNodeId, response: final };
+
+      const connections = this.connections.get(node.id);
+      const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
+
+      const final = await this.interpolateMessage(response || message);
+      return { nextNodeId, response: final };
     } catch (error) {
       console.error('Erro ao executar API call:', error);
       const connections = this.connections.get(node.id);
       const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
-      
+
       return {
         nextNodeId,
         response: 'Desculpe, não consegui buscar as informações no momento. Por favor, tente novamente mais tarde.'
@@ -997,34 +1054,34 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     let procedureCode = foundProcedure || 'fisioterapia';
     if (procedureCode === 'fisioterapia') procedureCode = 'fisioterapia-ortopedica';
     if (procedureCode === 'pilates') procedureCode = 'pilates-solo';
-    
+
     try {
       const { api } = await import('../lib/utils');
       const proceduresRes = await api.get('/api/clinic/procedures?q=&page=1&limit=1000');
       const proceduresData = (proceduresRes.data && proceduresRes.data.procedures) || [];
-      
+
       if (!proceduresData || proceduresData.length === 0) {
         return `❌ Desculpe, não consegui encontrar informações sobre procedimentos para a unidade ${clinicCode}.`;
       }
-      
+
       // Find the specific procedure
-      const procedure = proceduresData.find((p: any) => 
+      const procedure = proceduresData.find((p: any) =>
         ((p.name || p.code || p.procedureCode || '').toLowerCase().includes(procedureCode.toLowerCase()))
       );
-      
+
       if (!procedure) {
         // Show all available procedures
-        const availableProcedures = proceduresData.map((p: any) => 
+        const availableProcedures = proceduresData.map((p: any) =>
           `• ${(p.name || p.procedureCode)}`
         ).join('\n');
-        
+
         return `Na unidade ${clinicCode}, temos os seguintes procedimentos disponíveis:
 
 ${availableProcedures}
 
 Por favor, escolha um procedimento da lista acima.`;
       }
-      
+
       let result = `Na unidade ${clinicCode}, informações para ${(procedure.name || procedure.procedureCode)}:\n`;
       if (procedure.basePrice) {
         result += `💰 Valor: R$ ${Number(procedure.basePrice).toFixed(2)}`;
@@ -1039,11 +1096,11 @@ Por favor, escolha um procedimento da lista acima.`;
           const lines = applicable.map((d: any) => `• ${d.name} — ${d.sessions} sessões, pacote R$ ${Number(d.packagePrice).toFixed(2)}`).join('\n');
           result += `\n\n🎁 Pacotes disponíveis:\n${lines}`;
         }
-      } catch {}
+      } catch { }
       result += '\n\nPosso verificar os convênios aceitos ou agendar um horário se quiser!';
-      
+
       return result;
-      
+
     } catch (error) {
       console.error('Erro ao buscar procedimentos da clínica:', error);
       return `❌ Desculpe, não consegui buscar os valores dos procedimentos no momento. Por favor, entre em contato diretamente com a unidade ${clinicCode}.`;
@@ -1053,9 +1110,9 @@ Por favor, escolha um procedimento da lista acima.`;
   private async getClinicInsurances(clinicCode: string, userMessage: string = ''): Promise<string> {
     const normalized = (userMessage || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const brands = [
-      'bradesco','sulamerica','unimed','amil','hapvida','mediservice','saude caixa','caixa','petrobras','geap','pro social',
-      'postal saude','conab','affeam','ambep','gama','life','notredame','oab','capesaude','casembrapa','clubsaude','cultural',
-      'evida','fogas','fusex','plan-assite','planassite','adepol','bem care','bemol','pro saude','pro-saude','vita'
+      'bradesco', 'sulamerica', 'unimed', 'amil', 'hapvida', 'mediservice', 'saude caixa', 'caixa', 'petrobras', 'geap', 'pro social',
+      'postal saude', 'conab', 'affeam', 'ambep', 'gama', 'life', 'notredame', 'oab', 'capesaude', 'casembrapa', 'clubsaude', 'cultural',
+      'evida', 'fogas', 'fusex', 'plan-assite', 'planassite', 'adepol', 'bem care', 'bemol', 'pro saude', 'pro-saude', 'vita'
     ];
     const mentionsBrand = brands.some(b => normalized.includes(b));
     if (mentionsBrand) {
@@ -1065,24 +1122,24 @@ Por favor, escolha um procedimento da lista acima.`;
       const { api } = await import('../lib/utils');
       const insurancesRes = await api.get(`/api/clinic/clinics/${clinicCode}/insurances`);
       const insurancesData = insurancesRes.data?.insurances || insurancesRes.data || [];
-      
+
       if (!insurancesData || insurancesData.length === 0) {
         return `❌ Desculpe, não consegui encontrar informações sobre convênios para a unidade ${clinicCode}.`;
       }
-      
+
       // Format the response with insurance information
       let result = `📋 **Convênios aceitos na unidade ${clinicCode}:**\n\n`;
       result += `✅ **Particular**\n`;
       result += `   • Pagamento direto na clínica\n`;
-      
+
       insurancesData.forEach((insurance: any) => {
         result += `✅ **${insurance.displayName || insurance.name || insurance.insuranceCode}**\n`;
       });
-      
+
       result += 'Se você tiver algum convênio específico, posso verificar os valores com cobertura!';
-      
+
       return result;
-      
+
     } catch (error) {
       console.error('Erro ao buscar convênios da clínica:', error);
       return `❌ Desculpe, não consegui buscar as informações de convênios no momento. Por favor, entre em contato diretamente com a unidade ${clinicCode}.`;
@@ -1094,16 +1151,16 @@ Por favor, escolha um procedimento da lista acima.`;
       const { api } = await import('../lib/utils');
       const locationsRes = await api.get('/api/appointments/locations');
       const clinicData = (locationsRes.data || []).find((l: any) => (l.id || '').includes(clinicCode));
-      
+
       if (!clinicData) {
         return `❌ Desculpe, não consegui encontrar informações sobre a unidade ${clinicCode}.`;
       }
-      
+
       // Format the response with clinic location information
       let result = `📍 **Localização da Unidade ${clinicData.name}:**\n\n`;
       result += `📌 **Endereço:** ${clinicData.address}\n`;
       result += `📞 **Telefone:** ${clinicData.phone}\n`;
-      
+
       // Add opening hours if available
       if (clinicData.openingHours) {
         result += '\n🕐 **Horário de funcionamento:**\n';
@@ -1111,7 +1168,7 @@ Por favor, escolha um procedimento da lista acima.`;
           result += `• ${day}: ${hours}\n`;
         });
       }
-      
+
       // Add specialties if available
       if (clinicData.specialties && Array.isArray(clinicData.specialties)) {
         result += '\n🏥 **Especialidades:**\n';
@@ -1119,7 +1176,7 @@ Por favor, escolha um procedimento da lista acima.`;
           result += `• ${specialty}\n`;
         });
       }
-      
+
       // Add accessibility features if available
       if (clinicData.accessibility && typeof clinicData.accessibility === 'object') {
         result += '\n♿ **Acessibilidade:**\n';
@@ -1129,20 +1186,20 @@ Por favor, escolha um procedimento da lista acima.`;
           }
         });
       }
-      
+
       // Add parking information
       if (clinicData.parkingAvailable) {
         result += '\n🚗 **Estacionamento disponível**\n';
       }
-      
+
       // Add coordinates/maps link if available
       const mapsUrl = clinicData.mapUrl || (clinicData.coordinates ? `https://maps.google.com/?q=${encodeURIComponent(clinicData.address)}` : '');
       if (mapsUrl) {
         result += `\n🗺️ **Como chegar:** ${mapsUrl}\n`;
       }
-      
+
       return result;
-      
+
     } catch (error) {
       console.error('Erro ao buscar informações da clínica:', error);
       return `❌ Desculpe, não consegui buscar as informações de localização no momento. Por favor, entre em contato diretamente com a unidade ${clinicCode}.`;
@@ -1151,7 +1208,7 @@ Por favor, escolha um procedimento da lista acima.`;
 
   private executeTransferHumanNode(node: WorkflowNode): NodeExecutionResult {
     const message = node.content.finalMessage || '🤝 Transferindo para atendimento humano...';
-    
+
     return {
       response: message,
       shouldStop: true
@@ -1161,10 +1218,10 @@ Por favor, escolha um procedimento da lista acima.`;
   private async executeDelayNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const delay = node.content.delay || 1;
     await new Promise(resolve => setTimeout(resolve, delay * 1000));
-    
+
     const connections = this.connections.get(node.id);
     const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
-    
+
     return {
       nextNodeId
     };
@@ -1172,7 +1229,7 @@ Por favor, escolha um procedimento da lista acima.`;
 
   private executeEndNode(node: WorkflowNode): NodeExecutionResult {
     const message = node.content.finalMessage || node.content.message || '✅ Obrigado por entrar em contato!';
-    
+
     return {
       response: message,
       shouldStop: true
@@ -1182,10 +1239,10 @@ Por favor, escolha um procedimento da lista acima.`;
   private async executeWebhookNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const url = node.content.url || '';
     const method = node.content.method || 'POST';
-    
+
     // Simulate webhook call
     console.log(`Calling webhook: ${method} ${url}`);
-    
+
     return {
       nextNodeId: this.getNextNode(node.id)
     };
@@ -1196,7 +1253,7 @@ Por favor, escolha um procedimento da lista acima.`;
     if (!connections || connections.length === 0) {
       return undefined;
     }
-    
+
     // Handle continue/end conversation flow
     if (currentNodeId === 'continue_conversation') {
       const lowerMessage = this.context.message.toLowerCase();
@@ -1208,7 +1265,7 @@ Por favor, escolha um procedimento da lista acima.`;
         return connections.find(c => c.condition === 'continue')?.targetId || connections[0].targetId;
       }
     }
-    
+
     // Return first connection for simplicity
     return connections[0].targetId;
   }
@@ -1233,7 +1290,7 @@ Por favor, escolha um procedimento da lista acima.`;
   setUserResponse(message: string) {
     this.context.message = message;
     this.addToHistory('user', message);
-    
+
     // If collecting data, store it
     if (this.context.userData.collectingField) {
       this.context.userData[this.context.userData.collectingField] = message;
@@ -1244,19 +1301,19 @@ Por favor, escolha um procedimento da lista acima.`;
   // Execute complete workflow
   async execute(): Promise<{ responses: string[]; context: WorkflowExecutionContext }> {
     const responses: string[] = [];
-    
+
     while (true) {
       const result = await this.executeNextNode();
-      
+
       if (result.response) {
         responses.push(result.response);
       }
-      
+
       if (result.shouldStop || !result.nextNodeId) {
         break;
       }
     }
-    
+
     return {
       responses,
       context: this.context

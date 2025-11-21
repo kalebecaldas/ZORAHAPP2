@@ -56,7 +56,7 @@ export function TestChat() {
         if (convPhone === phone) {
           getConversation()
         }
-      } catch {}
+      } catch { }
     }
     const onUpdated = (payload: any) => {
       try {
@@ -64,7 +64,7 @@ export function TestChat() {
         if (convPhone === phone) {
           getConversation()
         }
-      } catch {}
+      } catch { }
     }
     socket.on('new_message', onNew)
     socket.on('conversation_updated', onUpdated)
@@ -93,52 +93,45 @@ export function TestChat() {
 
   const simulatePatientMessage = async () => {
     if (!phone || !text) return
-    setSimulating(true)
-    try {
-      const sentAt = Date.now()
-      const payload = {
-        object: 'whatsapp_business_account',
-        entry: [
-          {
-            id: 'simulated',
-            changes: [
-              {
-                value: {
-                  messaging_product: 'whatsapp',
-                  metadata: {
-                    display_phone_number: phone,
-                    phone_number_id: 'simulated'
-                  },
-                  messages: [
-                    {
-                      from: phone,
-                      id: 'wamid.simulated.' + Date.now(),
-                      timestamp: String(Math.floor(Date.now() / 1000)),
-                      text: { body: text },
-                      type: 'text'
-                    }
-                  ]
+    const messageText = text
+    setText('') // Clear immediately
+
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          id: 'simulated',
+          changes: [
+            {
+              value: {
+                messaging_product: 'whatsapp',
+                metadata: {
+                  display_phone_number: phone,
+                  phone_number_id: 'simulated'
                 },
-                field: 'messages'
-              }
-            ]
-          }
-        ]
-      }
-      await api.post('/webhook', payload)
-      setText('')
-      // aguarda resposta do bot após enviar
-      await waitForBot((_msg) => {
-        // considera qualquer mensagem do BOT após o horário de envio
-        const last = messages.filter(m => m.from === 'BOT' && m.direction === 'SENT').pop()
-        if (!last) return false
-        const ts = new Date(last.timestamp).getTime()
-        return ts >= sentAt
-      }, 10000, 600)
-    } finally {
-      setSimulating(false)
+                messages: [
+                  {
+                    from: phone,
+                    id: 'wamid.simulated.' + Date.now(),
+                    timestamp: String(Math.floor(Date.now() / 1000)),
+                    text: { body: messageText },
+                    type: 'text'
+                  }
+                ]
+              },
+              field: 'messages'
+            }
+          ]
+        }
+      ]
     }
+
+    // Send without waiting
+    api.post('/webhook', payload).then(() => {
+      loadConversation()
+    })
   }
+
 
   const randomPhone = () => {
     // E.164 sem +, Brasil (55), DDD 92, celular 9 + 8 dígitos
@@ -177,8 +170,8 @@ export function TestChat() {
       ]
     }
     await api.post('/webhook', payload)
-    await new Promise((r) => setTimeout(r, 700))
     await loadConversation()
+
   }
 
   const lastBotMessage = useMemo(() => {
@@ -232,7 +225,7 @@ export function TestChat() {
       for (let i = 0; i < maxSteps && !done; i++) {
         await loadConversation()
         const msg = lastBotMessage
-        if (!msg) { await new Promise(r=>setTimeout(r,700)); continue }
+        if (!msg) { await new Promise(r => setTimeout(r, 700)); continue }
         if (/📱 Deseja usar este número do WhatsApp/.test(msg)) { log('Confirmando telefone do WhatsApp'); await sendWebhookText('sim'); continue }
         if (/✍️ Informe seu nome completo/.test(msg)) { log('Informando nome'); await sendWebhookText('Fulano Teste'); continue }
         if (/💳 Qual é seu convênio/.test(msg)) { log('Informando convênio'); await sendWebhookText('Bradesco'); continue }
@@ -241,7 +234,7 @@ export function TestChat() {
         if (/📅 Qual data preferida/.test(msg)) { log('Informando data preferida'); await sendWebhookText('2025-12-01'); continue }
         if (/🕐 Qual turno prefere/.test(msg)) { log('Informando turno'); await sendWebhookText('manhã'); continue }
         if (/✅ Intenção registrada/.test(msg) || /📝 Intenção de Agendamento/.test(msg)) { log('Intenção registrada / transferido'); done = true; break }
-        await new Promise(r=>setTimeout(r,700))
+        await new Promise(r => setTimeout(r, 700))
       }
       if (!done) throw new Error('Fluxo de agendamento não concluiu dentro do limite')
       toast.success('Teste completo com sucesso')
@@ -278,9 +271,8 @@ export function TestChat() {
               <ul className="space-y-3">
                 {messages.map((m) => (
                   <li key={m.id} className={`flex ${m.direction === 'RECEIVED' ? 'justify-start' : 'justify-end'}`}>
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${
-                      m.direction === 'RECEIVED' ? 'bg-gray-100 text-gray-900' : (m.from === 'BOT' ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white')
-                    }`}>
+                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${m.direction === 'RECEIVED' ? 'bg-gray-100 text-gray-900' : (m.from === 'BOT' ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white')
+                      }`}>
                       <div className="opacity-80 text-[11px] mb-1 flex items-center gap-1">
                         {m.direction === 'RECEIVED' ? <User className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
                         {m.from}
@@ -313,9 +305,10 @@ export function TestChat() {
               <button onClick={sendAgentMessage} disabled={sending} className="px-3 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 flex items-center gap-2">
                 <Zap className="h-4 w-4" /> {sending ? 'Enviando...' : 'Enviar como Agente'}
               </button>
-              <button onClick={simulatePatientMessage} disabled={simulating} className="px-3 py-2 rounded-md bg-emerald-600 text-white disabled:opacity-50 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> {simulating ? 'Simulando...' : 'Simular Paciente'}
+              <button onClick={simulatePatientMessage} className="px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" /> Enviar como Paciente
               </button>
+
             </div>
 
             <div className="space-y-2">

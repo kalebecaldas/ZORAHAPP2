@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Clock, 
-  User, 
-  Bot, 
-  MessageSquare, 
-  Phone, 
+import {
+  Search,
+  Filter,
+  Clock,
+  User,
+  Bot,
+  MessageSquare,
+  Phone,
   Calendar,
   MapPin,
   AlertCircle,
@@ -19,7 +19,8 @@ import {
   History,
   Tag,
   Star,
-  StarOff
+  StarOff,
+  Archive
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { motion, LayoutGroup } from 'framer-motion';
@@ -166,13 +167,13 @@ const formatTimeAgo = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-  
+
   if (diffInMinutes < 1) return 'Agora';
   if (diffInMinutes < 60) return `${diffInMinutes}min`;
-  
+
   const diffInHours = Math.floor(diffInMinutes / 60);
   if (diffInHours < 24) return `${diffInHours}h`;
-  
+
   const diffInDays = Math.floor(diffInHours / 24);
   return `${diffInDays}d`;
 };
@@ -215,17 +216,17 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
 
   const getSessionStatus = () => {
     if (!conversation.sessionExpiry) return null;
-    
+
     const expiry = new Date(conversation.sessionExpiry);
     const now = new Date();
     const diffInHours = (expiry.getTime() - now.getTime()) / (1000 * 60 * 60);
-    
+
     if (diffInHours <= 1) {
       return { color: 'text-red-600', label: 'Expira em 1h' };
     } else if (diffInHours <= 6) {
       return { color: 'text-orange-600', label: `Expira em ${Math.ceil(diffInHours)}h` };
     }
-    
+
     return null;
   };
 
@@ -255,7 +256,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
               )}
             </div>
           </div>
-          
+
           <div className="relative">
             <button
               onClick={() => setShowMenu(!showMenu)}
@@ -263,7 +264,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
             >
               <MoreVertical className="h-4 w-4" />
             </button>
-            
+
             {showMenu && (
               <div className="absolute right-0 top-10 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
                 <div className="py-1">
@@ -388,7 +389,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
           <div className="text-xs text-gray-500">
             Criado {formatTimeAgo(conversation.createdAt)}
           </div>
-          
+
           <div className="flex items-center space-x-2">
             {canAssign && !conversation.assignedToId && (
               <button
@@ -399,7 +400,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
                 <span>Assumir</span>
               </button>
             )}
-            
+
             {canTransfer && (
               <button
                 onClick={() => setShowTransferModal(true)}
@@ -409,7 +410,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
                 <span>Transferir</span>
               </button>
             )}
-            
+
             <button
               onClick={() => {
                 const target = conversation.patient?.phone || (conversation as any).phone || conversation.id
@@ -420,7 +421,7 @@ const ConversationCard: React.FC<ConversationCardProps> = ({
               <MessageSquare className="h-3 w-3" />
               <span>Visualizar</span>
             </button>
-            
+
           </div>
         </div>
       </div>
@@ -501,20 +502,20 @@ const ConversationList: React.FC<ConversationListProps> = ({
     assignedTo: 'all'
   });
   const [showFilters, setShowFilters] = useState(false);
-  const [activeQueue, setActiveQueue] = useState<'BOT_QUEUE' | 'PRINCIPAL' | 'MINHAS_CONVERSAS' | 'HISTORY'>('BOT_QUEUE');
+  const [activeQueue, setActiveQueue] = useState<'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSAS' | 'ENCERRADOS'>('BOT_QUEUE');
 
   const fetchConversations = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      
+
       if (filter.status !== 'all') params.append('status', filter.status);
       if (filter.priority !== 'all') params.append('priority', filter.priority);
       if (filter.search) params.append('search', filter.search);
       if (filter.assignedTo !== 'all') params.append('assignedTo', filter.assignedTo);
-      
+
       const response = await api.get(`/api/conversations?${params.toString()}`);
-      
+
       const mappedConversations = (response.data.conversations || []).map((conversation: any) => {
         const assignedUserObj = conversation.assignedTo || null;
         const assignedId = assignedUserObj?.id || conversation.assignedToId || undefined;
@@ -526,7 +527,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
           assignedTo: assignedUserObj || undefined
         } as Conversation;
       });
-      
+
       setConversations(mappedConversations);
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -552,37 +553,37 @@ const ConversationList: React.FC<ConversationListProps> = ({
         const exists = prev.some(c => c.id === updated.id);
         const next = exists
           ? prev.map(c => c.id === updated.id ? {
-              ...c,
-              status: updated.status,
-              assignedToId: updated.assignedToId,
-              assignedTo: updated.assignedTo,
-              lastMessage: updated.lastMessage ?? c.lastMessage,
-              lastTimestamp: updated.updatedAt ?? c.lastTimestamp,
-              patient: updated.patient ?? c.patient,
-              updatedAt: updated.updatedAt ?? c.updatedAt,
-            } : c)
+            ...c,
+            status: updated.status,
+            assignedToId: updated.assignedToId,
+            assignedTo: updated.assignedTo,
+            lastMessage: updated.lastMessage ?? c.lastMessage,
+            lastTimestamp: updated.updatedAt ?? c.lastTimestamp,
+            patient: updated.patient ?? c.patient,
+            updatedAt: updated.updatedAt ?? c.updatedAt,
+          } : c)
           : [{
-              id: updated.id,
-              phone: updated.phone,
-              status: updated.status,
-              assignedToId: updated.assignedToId,
-              assignedTo: updated.assignedTo,
-              patient: updated.patient,
-              lastMessage: updated.lastMessage,
-              lastTimestamp: updated.updatedAt || updated.lastTimestamp,
-              createdAt: updated.createdAt,
-              updatedAt: updated.updatedAt,
-              priority: updated.priority,
-              workflowId: updated.workflowId,
-              currentWorkflowNode: updated.currentWorkflowNode,
-              scheduledProcedures: updated.scheduledProcedures,
-              preferredLocation: updated.preferredLocation,
-              preferredDate: updated.preferredDate,
-              preferredTime: updated.preferredTime,
-              tags: updated.tags,
-              notes: updated.notes,
-              sessionExpiry: updated.sessionExpiry,
-            }, ...prev];
+            id: updated.id,
+            phone: updated.phone,
+            status: updated.status,
+            assignedToId: updated.assignedToId,
+            assignedTo: updated.assignedTo,
+            patient: updated.patient,
+            lastMessage: updated.lastMessage,
+            lastTimestamp: updated.updatedAt || updated.lastTimestamp,
+            createdAt: updated.createdAt,
+            updatedAt: updated.updatedAt,
+            priority: updated.priority,
+            workflowId: updated.workflowId,
+            currentWorkflowNode: updated.currentWorkflowNode,
+            scheduledProcedures: updated.scheduledProcedures,
+            preferredLocation: updated.preferredLocation,
+            preferredDate: updated.preferredDate,
+            preferredTime: updated.preferredTime,
+            tags: updated.tags,
+            notes: updated.notes,
+            sessionExpiry: updated.sessionExpiry,
+          }, ...prev];
         return next;
       });
     };
@@ -679,12 +680,19 @@ const ConversationList: React.FC<ConversationListProps> = ({
   const getConversationsByStatus = () => {
     const groups = {
       'BOT_QUEUE': conversations.filter(c => c.status === 'BOT_QUEUE'),
-      'PRINCIPAL': conversations.filter(c => c.status === 'PRINCIPAL' || c.status === 'EM_ATENDIMENTO'),
+      'PRINCIPAL': conversations.filter(c =>
+        c.status === 'PRINCIPAL' && !c.assignedToId
+      ),
+      'EM_ATENDIMENTO': conversations.filter(c =>
+        c.status === 'EM_ATENDIMENTO' &&
+        c.assignedToId &&
+        c.assignedToId !== currentUserId
+      ),
       'MINHAS_CONVERSAS': conversations.filter(c =>
         c.status === 'EM_ATENDIMENTO' &&
         (currentUserId ? c.assignedToId === currentUserId : true)
       ),
-      'HISTORY': conversations.filter(c => c.status === 'FECHADA')
+      'ENCERRADOS': conversations.filter(c => c.status === 'FECHADA')
     };
 
     return groups;
@@ -692,29 +700,29 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
   const getFilteredConversations = () => {
     return conversations.filter(conversation => {
-      const matchesSearch = !filter.search || 
+      const matchesSearch = !filter.search ||
         (conversation.patient && (
           conversation.patient.name.toLowerCase().includes(filter.search.toLowerCase()) ||
           conversation.patient.phone.includes(filter.search) ||
           (conversation.patient.email && conversation.patient.email.toLowerCase().includes(filter.search.toLowerCase()))
         ));
-      
-      // Filtragem por fila - EM_ATENDIMENTO mapeia para MINHAS_CONVERSAS
+
+      // Filtragem por fila
       let matchesQueue = false;
       if (activeQueue === 'MINHAS_CONVERSAS') {
         matchesQueue = conversation.status === 'EM_ATENDIMENTO' && (!currentUserId || conversation.assignedToId === currentUserId);
       } else if (activeQueue === 'PRINCIPAL') {
-        matchesQueue = conversation.status === 'PRINCIPAL' || conversation.status === 'EM_ATENDIMENTO';
+        matchesQueue = conversation.status === 'PRINCIPAL' && !conversation.assignedToId;
+      } else if (activeQueue === 'EM_ATENDIMENTO') {
+        matchesQueue = conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId && conversation.assignedToId !== currentUserId;
       } else if (activeQueue === 'BOT_QUEUE') {
         matchesQueue = conversation.status === 'BOT_QUEUE';
-      } else {
-        matchesQueue = activeQueue === 'HISTORY'
-          ? conversation.status === 'FECHADA'
-          : conversation.status === activeQueue;
+      } else if (activeQueue === 'ENCERRADOS') {
+        matchesQueue = conversation.status === 'FECHADA';
       }
-      
+
       const matchesPriority = filter.priority === 'all' || conversation.priority === filter.priority;
-      const matchesAssignment = filter.assignedTo === 'all' || 
+      const matchesAssignment = filter.assignedTo === 'all' ||
         (filter.assignedTo === 'unassigned' && !conversation.assignedToId) ||
         (filter.assignedTo === currentUserId && conversation.assignedToId === currentUserId);
 
@@ -724,25 +732,24 @@ const ConversationList: React.FC<ConversationListProps> = ({
 
   const conversationGroups = getConversationsByStatus();
 
-  const getQueueCount = (key: 'BOT_QUEUE' | 'PRINCIPAL' | 'MINHAS_CONVERSAS' | 'HISTORY') => {
-    if (key === 'PRINCIPAL') {
-      return conversations.filter(c => c.status === 'PRINCIPAL').length;
-    }
+  const getQueueCount = (key: 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSAS' | 'ENCERRADOS') => {
     return conversationGroups[key as keyof typeof conversationGroups]?.length || 0;
   };
 
   const queueLabels = {
     'BOT_QUEUE': 'Fila do Bot',
-    'PRINCIPAL': 'Fila Principal',
+    'PRINCIPAL': 'Aguardando',
+    'EM_ATENDIMENTO': 'Em Atendimento',
     'MINHAS_CONVERSAS': 'Minhas Conversas',
-    'HISTORY': 'Histórico'
+    'ENCERRADOS': 'Encerrados'
   };
 
   const queueDescriptions = {
     'BOT_QUEUE': 'Conversas em atendimento automatizado',
-    'PRINCIPAL': 'Conversas aguardando atendente humano',
+    'PRINCIPAL': 'Conversas aguardando atendimento',
+    'EM_ATENDIMENTO': 'Conversas sendo atendidas por outros',
     'MINHAS_CONVERSAS': 'Conversas que você está atendendo',
-    'HISTORY': 'Conversas com sessão expirada'
+    'ENCERRADOS': 'Conversas finalizadas'
   };
 
   if (loading) {
@@ -771,7 +778,7 @@ const ConversationList: React.FC<ConversationListProps> = ({
               <Filter className="h-4 w-4" />
             </button>
           </div>
-          
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -806,27 +813,39 @@ const ConversationList: React.FC<ConversationListProps> = ({
         <div className="p-2 border-b border-gray-200">
           <div className="grid grid-cols-2 gap-1">
             {[
-              { key: 'BOT_QUEUE', label: 'Bot', icon: Bot },
-              { key: 'PRINCIPAL', label: 'Principal', icon: Users },
-              { key: 'MINHAS_CONVERSAS', label: 'Minhas', icon: UserCheck },
-              { key: 'HISTORY', label: 'Histórico', icon: History }
-            ].map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setActiveQueue(key as any)}
-                className={`flex items-center justify-center space-x-1 px-2 py-2 text-xs rounded-lg transition-colors ${
-                  activeQueue === key
-                    ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <Icon className="h-3 w-3" />
-                <span>{label}</span>
-                <span className="bg-gray-200 text-gray-700 px-1 py-0.5 rounded-full text-xs">
-                  {getQueueCount(key as any)}
-                </span>
-              </button>
-            ))}
+              { key: 'BOT_QUEUE', label: 'Bot', icon: Bot, color: 'blue' },
+              { key: 'PRINCIPAL', label: 'Aguardando', icon: Clock, color: 'yellow' },
+              { key: 'EM_ATENDIMENTO', label: 'Em Atend.', icon: Users, color: 'purple' },
+              { key: 'MINHAS_CONVERSAS', label: 'Minhas', icon: UserCheck, color: 'green' },
+              { key: 'ENCERRADOS', label: 'Encerrados', icon: Archive, color: 'gray' }
+            ].map(({ key, label, icon: Icon, color }) => {
+              const getQueueColorClasses = (queueColor: string, isActive: boolean) => {
+                if (!isActive) return 'text-gray-600 hover:bg-gray-100';
+
+                const colorMap = {
+                  blue: 'bg-blue-100 text-blue-700 border border-blue-200',
+                  yellow: 'bg-yellow-100 text-yellow-700 border border-yellow-200',
+                  purple: 'bg-purple-100 text-purple-700 border border-purple-200',
+                  green: 'bg-green-100 text-green-700 border border-green-200',
+                  gray: 'bg-gray-100 text-gray-700 border border-gray-200',
+                };
+                return colorMap[queueColor as keyof typeof colorMap] || colorMap.blue;
+              };
+
+              return (
+                <button
+                  key={key}
+                  onClick={() => setActiveQueue(key as any)}
+                  className={`flex items-center justify-center space-x-1 px-2 py-2 text-xs rounded-lg transition-colors ${getQueueColorClasses(color, activeQueue === key)}`}
+                >
+                  <Icon className="h-3 w-3" />
+                  <span>{label}</span>
+                  <span className="bg-gray-200 text-gray-700 px-1 py-0.5 rounded-full text-xs">
+                    {getQueueCount(key as any)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -847,153 +866,10 @@ const ConversationList: React.FC<ConversationListProps> = ({
                       layout
                       layoutId={conversation.id}
                       onClick={() => onConversationSelect?.(conversation.phone)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                        (selectedConversationId === conversation.phone)
-                          ? 'bg-blue-50 border-blue-200 shadow-sm'
-                          : 'bg-white border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Phone className="h-4 w-4 text-white" />
-                            </div>
-                            <div className="min-w-0">
-                              <h3 className="font-medium text-gray-900 text-sm truncate">
-                                {conversation.patient ? conversation.patient.name : `Paciente ${conversation.phone}`}
-                              </h3>
-                              <p className="text-xs text-gray-600">
-                                {conversation.phone}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end space-y-1">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                              getPriorityConfig(conversation.priority).color
-                            }`}>
-                              {getPriorityConfig(conversation.priority).label}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {formatTimeAgo(conversation.createdAt)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {conversation.lastMessage && (
-                          <div className="mb-2">
-                            <p className="text-xs text-gray-700 line-clamp-2">
-                              {conversation.lastMessage}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                            getStatusConfig(conversation.status).color
-                          }`}>
-                            {getStatusConfig(conversation.status).label}
-                          </span>
-                          {(conversation.status === 'PRINCIPAL' || conversation.status === 'BOT_QUEUE') && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAssign(conversation.id);
-                              }}
-                              className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors"
-                            >
-                              Assumir
-                            </button>
-                          )}
-                        </div>
-                      </motion.div>
-                  ))}
-
-                  {getFilteredConversations().filter(c => c.status === 'EM_ATENDIMENTO').length > 0 && (
-                    <div className="flex items-center mt-4 mb-2">
-                      <div className="flex-1 border-t border-gray-200" />
-                      <span className="px-2 text-xs text-gray-500">Conversas assumidas</span>
-                      <div className="flex-1 border-t border-gray-200" />
-                    </div>
-                  )}
-
-                  {getFilteredConversations().filter(c => c.status === 'EM_ATENDIMENTO').map((conversation) => (
-                    <motion.div
-                      key={conversation.id}
-                      layout
-                      layoutId={conversation.id}
-                      onClick={() => onConversationSelect?.(conversation.phone)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                        (selectedConversationId === conversation.phone)
-                          ? 'bg-blue-50 border-blue-200 shadow-sm'
-                          : 'bg-white border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center space-x-2 min-w-0">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                              <Phone className="h-4 w-4 text-white" />
-                            </div>
-                            <div className="min-w-0">
-                              <h3 className="font-medium text-gray-900 text-sm truncate">
-                                {conversation.patient ? conversation.patient.name : `Paciente ${conversation.phone}`}
-                              </h3>
-                              <p className="text-xs text-gray-600">
-                                {conversation.phone}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end space-y-1">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                              getPriorityConfig(conversation.priority).color
-                            }`}>
-                              {getPriorityConfig(conversation.priority).label}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {formatTimeAgo(conversation.createdAt)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {conversation.lastMessage && (
-                          <div className="mb-2">
-                            <p className="text-xs text-gray-700 line-clamp-2">
-                              {conversation.lastMessage}
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-between">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                            getStatusConfig(conversation.status).color
-                          }`}>
-                            {getStatusConfig(conversation.status).label}
-                          </span>
-                          {conversation.assignedToId && conversation.assignedToId !== currentUserId && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRequest(conversation.id);
-                              }}
-                              className="text-xs bg-orange-600 text-white px-2 py-1 rounded hover:bg-orange-700 transition-colors"
-                            >
-                              Solicitar conversa
-                            </button>
-                          )}
-                        </div>
-                    </motion.div>
-                  ))}
-                </LayoutGroup>
-              ) : (
-                <>
-                  {getFilteredConversations().map((conversation) => (
-                    <div
-                      key={conversation.id}
-                      onClick={() => onConversationSelect?.(conversation.phone)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${
-                        (selectedConversationId === conversation.phone)
-                          ? 'bg-blue-50 border-blue-200 shadow-sm'
-                          : 'bg-white border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${(selectedConversationId === conversation.phone)
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center space-x-2 min-w-0">
@@ -1010,9 +886,8 @@ const ConversationList: React.FC<ConversationListProps> = ({
                           </div>
                         </div>
                         <div className="flex flex-col items-end space-y-1">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                            getPriorityConfig(conversation.priority).color
-                          }`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityConfig(conversation.priority).color
+                            }`}>
                             {getPriorityConfig(conversation.priority).label}
                           </span>
                           <span className="text-xs text-gray-500">
@@ -1030,9 +905,144 @@ const ConversationList: React.FC<ConversationListProps> = ({
                       )}
 
                       <div className="flex items-center justify-between">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          getStatusConfig(conversation.status).color
-                        }`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusConfig(conversation.status).color
+                          }`}>
+                          {getStatusConfig(conversation.status).label}
+                        </span>
+                        {(conversation.status === 'PRINCIPAL' || conversation.status === 'BOT_QUEUE') && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAssign(conversation.id);
+                            }}
+                            className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 transition-colors"
+                          >
+                            Assumir
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+
+                  {getFilteredConversations().filter(c => c.status === 'EM_ATENDIMENTO').length > 0 && (
+                    <div className="flex items-center mt-4 mb-2">
+                      <div className="flex-1 border-t border-gray-200" />
+                      <span className="px-2 text-xs text-gray-500">Conversas assumidas</span>
+                      <div className="flex-1 border-t border-gray-200" />
+                    </div>
+                  )}
+
+                  {getFilteredConversations().filter(c => c.status === 'EM_ATENDIMENTO').map((conversation) => (
+                    <motion.div
+                      key={conversation.id}
+                      layout
+                      layoutId={conversation.id}
+                      onClick={() => onConversationSelect?.(conversation.phone)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${(selectedConversationId === conversation.phone)
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Phone className="h-4 w-4 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-medium text-gray-900 text-sm truncate">
+                              {conversation.patient ? conversation.patient.name : `Paciente ${conversation.phone}`}
+                            </h3>
+                            <p className="text-xs text-gray-600">
+                              {conversation.phone}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end space-y-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityConfig(conversation.priority).color
+                            }`}>
+                            {getPriorityConfig(conversation.priority).label}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatTimeAgo(conversation.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {conversation.lastMessage && (
+                        <div className="mb-2">
+                          <p className="text-xs text-gray-700 line-clamp-2">
+                            {conversation.lastMessage}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusConfig(conversation.status).color
+                          }`}>
+                          {getStatusConfig(conversation.status).label}
+                        </span>
+                        {conversation.assignedToId && conversation.assignedToId !== currentUserId && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequest(conversation.id);
+                            }}
+                            className="text-xs bg-orange-600 text-white px-2 py-1 rounded hover:bg-orange-700 transition-colors"
+                          >
+                            Solicitar conversa
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </LayoutGroup>
+              ) : (
+                <>
+                  {getFilteredConversations().map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      onClick={() => onConversationSelect?.(conversation.phone)}
+                      className={`p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm ${(selectedConversationId === conversation.phone)
+                        ? 'bg-blue-50 border-blue-200 shadow-sm'
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <Phone className="h-4 w-4 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-medium text-gray-900 text-sm truncate">
+                              {conversation.patient ? conversation.patient.name : `Paciente ${conversation.phone}`}
+                            </h3>
+                            <p className="text-xs text-gray-600">
+                              {conversation.phone}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end space-y-1">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getPriorityConfig(conversation.priority).color
+                            }`}>
+                            {getPriorityConfig(conversation.priority).label}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatTimeAgo(conversation.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {conversation.lastMessage && (
+                        <div className="mb-2">
+                          <p className="text-xs text-gray-700 line-clamp-2">
+                            {conversation.lastMessage}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusConfig(conversation.status).color
+                          }`}>
                           {getStatusConfig(conversation.status).label}
                         </span>
                         {conversation.assignedToId === currentUserId && (
@@ -1073,12 +1083,12 @@ const ConversationList: React.FC<ConversationListProps> = ({
                   ))}
                 </>
               )}
-              
+
               {getFilteredConversations().length === 0 && (
                 <div className="text-center py-8">
                   <MessageSquare className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-600">
-                    {activeQueue === 'MINHAS_CONVERSAS' 
+                    {activeQueue === 'MINHAS_CONVERSAS'
                       ? 'Você não tem conversas atribuídas'
                       : 'Nenhuma conversa nesta fila'
                     }

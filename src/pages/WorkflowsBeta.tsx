@@ -86,7 +86,7 @@ export const WorkflowsBeta: React.FC = () => {
     }
 
     return (
-        <div className="flex-1">
+        <div className="flex-1 bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20">
             <WorkflowEditorBeta
                 workflow={workflow}
                 onSave={handleSave}

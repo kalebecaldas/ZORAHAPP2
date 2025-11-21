@@ -125,6 +125,7 @@ model InsuranceCompany {
   name      String
   displayName String
   discount  Boolean  @default(false)
+  discountPercentage Float? @default(0)
   isParticular Boolean @default(false)
   isActive  Boolean  @default(true)
   notes     String?
@@ -140,6 +141,7 @@ model Procedure {
   code        String   @unique
   name        String
   description String
+  importantInfo String?
   basePrice   Float
   requiresEvaluation Boolean @default(false)
   duration    Int
@@ -148,6 +150,7 @@ model Procedure {
   updatedAt   DateTime @updatedAt
 
   clinicProcedures ClinicInsuranceProcedure[]
+  offeredBy        ClinicProcedure[]         @relation("offeredBy")
 }
 
 model Clinic {
@@ -171,8 +174,9 @@ model Clinic {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinicInsurances ClinicInsurance[]
-  clinicProcedures ClinicInsuranceProcedure[]
+  clinicInsurances  ClinicInsurance[]
+  clinicProcedures  ClinicInsuranceProcedure[]
+  offeredProcedures ClinicProcedure[]          @relation("offeredProcedures")
 }
 
 model ClinicInsurance {
@@ -187,6 +191,24 @@ model ClinicInsurance {
   insurance InsuranceCompany @relation(fields: [insuranceCode], references: [code], onDelete: Cascade)
 
   @@unique([clinicId, insuranceCode])
+}
+
+model ClinicProcedure {
+  id            String   @id @default(cuid())
+  clinicId      String
+  procedureCode String
+  isActive      Boolean  @default(true)
+  notes         String?
+  defaultPrice  Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clinic    Clinic    @relation(name: "offeredProcedures", fields: [clinicId], references: [id], onDelete: Cascade)
+  procedure Procedure @relation(name: "offeredBy", fields: [procedureCode], references: [code], onDelete: Cascade)
+
+  @@unique([clinicId, procedureCode])
+  @@index([clinicId])
+  @@index([procedureCode])
 }
 
 model ClinicInsuranceProcedure {

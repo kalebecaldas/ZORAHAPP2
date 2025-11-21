@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { z } from 'zod'
-import { clinicDataService, type Procedure, type InsuranceCompany, type ClinicLocation } from '../data/clinicData.js'
+import { prismaClinicDataService } from './prismaClinicDataService.js'
+import { type Procedure, type InsuranceCompany, type ClinicLocation } from '../data/clinicData.js'
 
 const aiResponseSchema = z.object({
   intent: z.string().optional(),
@@ -77,8 +78,8 @@ export class IntelligentBotService {
   }
 
   async processMessage(
-    message: string, 
-    phone: string, 
+    message: string,
+    phone: string,
     conversationId: string,
     existingContext?: Partial<AIContext>
   ): Promise<AIResponse> {
@@ -98,10 +99,10 @@ export class IntelligentBotService {
 
     // Analyze message intent and extract entities
     const analysis = await this.analyzeMessage(message, context)
-    
+
     // Build context-aware prompt
-    const systemPrompt = this.buildIntelligentSystemPrompt(context, analysis)
-    
+    const systemPrompt = await this.buildIntelligentSystemPrompt(context, analysis)
+
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), this.timeout)
@@ -123,13 +124,13 @@ export class IntelligentBotService {
       clearTimeout(timeoutId)
 
       const response = completion.choices[0]?.message?.content || ''
-      
+
       // Parse response for structured data
       const parsedResponse = this.parseIntelligentAIResponse(response, analysis)
-      
+
       // Update context with new information
       this.applyAnalysisToContext(context, analysis, parsedResponse)
-      
+
       // Add assistant response to history
       context.history.push({
         role: 'assistant',
@@ -145,10 +146,10 @@ export class IntelligentBotService {
       })
     } catch (error) {
       console.error('Erro ao gerar resposta IA inteligente:', error)
-      
+
       // Fallback response based on context
       const fallbackResponse = this.generateFallbackResponse(context, analysis)
-      
+
       return {
         response: fallbackResponse,
         confidence: 0.4,
@@ -167,7 +168,7 @@ export class IntelligentBotService {
   }
 
   private async buildInitialContext(
-    phone: string, 
+    phone: string,
     existingContext?: Partial<AIContext>
   ): Promise<AIContext> {
     const baseContext: AIContext = {
@@ -180,9 +181,9 @@ export class IntelligentBotService {
         name: 'Clínica de Fisioterapia',
         address: 'Rua Vieiralves, 1230 - Manaus/AM',
         phone: '(92) 3234-5678',
-        procedures: clinicDataService.getProcedures(),
-        insuranceCompanies: clinicDataService.getInsuranceCompanies(),
-        locations: clinicDataService.getLocations()
+        procedures: await prismaClinicDataService.getProcedures() as any,
+        insuranceCompanies: await prismaClinicDataService.getInsuranceCompanies() as any,
+        locations: await prismaClinicDataService.getLocations() as any
       },
       currentIntent: existingContext?.currentIntent,
       sentimentTrend: existingContext?.sentimentTrend,
@@ -198,7 +199,7 @@ export class IntelligentBotService {
 
   private async analyzeMessage(message: string, context: AIContext): Promise<any> {
     const lowerMessage = message.toLowerCase()
-    
+
     // Extract entities and intents
     const analysis = {
       intent: await this.classifyIntent(message),
@@ -206,9 +207,9 @@ export class IntelligentBotService {
       schedulingIntent: this.detectSchedulingIntent(lowerMessage),
       pricingIntent: this.detectPricingIntent(lowerMessage),
       informationIntent: this.detectInformationIntent(lowerMessage),
-      procedureMentioned: this.detectProcedureMention(message),
-      insuranceMentioned: this.detectInsuranceMention(message),
-      locationMentioned: this.detectLocationMention(message),
+      procedureMentioned: await this.detectProcedureMention(message),
+      insuranceMentioned: await this.detectInsuranceMention(message),
+      locationMentioned: await this.detectLocationMention(message),
       greetingDetected: this.detectGreeting(lowerMessage),
       complaintDetected: this.detectComplaint(lowerMessage),
       urgencyDetected: this.detectUrgency(lowerMessage)
@@ -217,21 +218,21 @@ export class IntelligentBotService {
     return analysis
   }
 
-  private buildIntelligentSystemPrompt(context: AIContext, analysis: any): string {
-    const patientInfo = context.patient?.name 
+  private async buildIntelligentSystemPrompt(context: AIContext, analysis: any): Promise<string> {
+    const patientInfo = context.patient?.name
       ? `Paciente: ${context.patient.name} (${context.patient.phone})`
       : `Novo paciente: ${context.patient?.phone}`
-    
-    const insuranceInfo = context.patient?.insuranceCompany 
+
+    const insuranceInfo = context.patient?.insuranceCompany
       ? `Convênio: ${context.patient.insuranceCompany}`
       : 'Convênio: não informado'
 
     // Get relevant procedures and pricing
-    const relevantProcedures = this.getRelevantProcedures(analysis.procedureMentioned, context.patient?.insuranceCompany)
-    const pricingInfo = this.getPricingInformation(relevantProcedures, context.patient?.insuranceCompany)
+    const relevantProcedures = await this.getRelevantProcedures(analysis.procedureMentioned, context.patient?.insuranceCompany)
+    const pricingInfo = await this.getPricingInformation(relevantProcedures, context.patient?.insuranceCompany)
 
     // Get location information
-    const locationInfo = this.getLocationInformation(analysis.locationMentioned)
+    const locationInfo = await this.getLocationInformation(analysis.locationMentioned)
 
     // Determine conversation stage and appropriate response
     const stageGuidance = this.getStageGuidance(context.conversationStage, analysis)
@@ -291,62 +292,67 @@ AÇÃO: [continue|transfer_human|schedule_appointment|provide_info|collect_data]
 Contexto atual: ${context.conversationStage}`
   }
 
-  private getRelevantProcedures(procedureMentioned: string | null, insuranceCompany?: string): string {
+  private async getRelevantProcedures(procedureMentioned: string | null, insuranceCompany?: string): Promise<string> {
     if (procedureMentioned) {
-      const procedure = clinicDataService.getProcedureById(procedureMentioned)
+      const procedure = await prismaClinicDataService.getProcedureById(procedureMentioned)
       if (procedure) {
-        const priceInfo = clinicDataService.calculatePrice(procedureMentioned, insuranceCompany)
+        const priceInfo = await prismaClinicDataService.calculatePrice(procedureMentioned, insuranceCompany)
         return `${procedure.name}: ${procedure.description}\n` +
-               `Preço: R$ ${priceInfo?.patientPays || procedure.basePrice}\n` +
-               `Duração: ${procedure.duration} minutos\n` +
-               `Convênios aceitos: ${procedure.insuranceAccepted.join(', ')}`
+          `Preço: R$ ${priceInfo?.patientPays || procedure.basePrice}\n` +
+          `Duração: ${procedure.duration} minutos`
       }
     }
 
     // Return top 5 procedures
-    const topProcedures = clinicDataService.getProcedures().slice(0, 5)
-    return topProcedures.map(p => {
-      const priceInfo = clinicDataService.calculatePrice(p.id, insuranceCompany)
+    const allProcedures = await prismaClinicDataService.getProcedures()
+    const topProcedures = allProcedures.slice(0, 5)
+
+    const proceduresList = await Promise.all(topProcedures.map(async p => {
+      const priceInfo = await prismaClinicDataService.calculatePrice(p.id, insuranceCompany)
       return `${p.name}: R$ ${priceInfo?.patientPays || p.basePrice} (${p.duration}min)`
-    }).join('\n')
+    }))
+
+    return proceduresList.join('\n')
   }
 
-  private getPricingInformation(procedures: any, insuranceCompany?: string): string {
+  private async getPricingInformation(procedures: any, insuranceCompany?: string): Promise<string> {
     if (insuranceCompany) {
-      const insurance = clinicDataService.getInsuranceById(insuranceCompany)
+      const insurances = await prismaClinicDataService.getInsuranceCompanies()
+      const insurance = insurances.find(i => i.id === insuranceCompany)
       if (insurance) {
         return `💳 INFORMAÇÕES DO CONVÊNIO ${insurance.displayName}:\n` +
-               `Cobertura: ${insurance.coveragePercentage}%\n` +
-               `Coparticipação: R$ ${insurance.copayment}\n` +
-               `Pré-autorização: ${insurance.requiresPreAuthorization ? 'Sim' : 'Não'}`
+          `Cobertura: ${insurance.coveragePercentage}%\n` +
+          `Coparticipação: R$ ${insurance.copayment}\n` +
+          `Pré-autorização: ${insurance.requiresPreAuthorization ? 'Sim' : 'Não'}`
       }
     }
 
     return `💰 PREÇOS ESPECIAIS:\n` +
-           `• Pacote de 10 sessões: 10% de desconto + avaliação grátis\n` +
-           `• Pacote de 5 sessões: 5% de desconto\n` +
-           `• Primeira avaliação: R$ 100 (necessária para alguns procedimentos)`
+      `• Pacote de 10 sessões: 10% de desconto + avaliação grátis\n` +
+      `• Pacote de 5 sessões: 5% de desconto\n` +
+      `• Primeira avaliação: R$ 100 (necessária para alguns procedimentos)`
   }
 
-  private getLocationInformation(locationMentioned: string | null): string {
+  private async getLocationInformation(locationMentioned: string | null): Promise<string> {
+    const locations = await prismaClinicDataService.getLocations()
+
     if (locationMentioned) {
-      const location = clinicDataService.getLocationById(locationMentioned)
+      const location = locations.find(l => l.id === locationMentioned)
       if (location) {
         const hours = Object.entries(location.openingHours).map(([day, hours]) => `${day}: ${hours}`).join(', ')
         const mapLine = location.mapUrl ? `\n🗺️ Como chegar: ${location.mapUrl}` : ''
         return `${location.name}:\n` +
-               `📍 ${location.address}, ${location.neighborhood}\n` +
-               `📞 ${location.phone}\n` +
-               `🕐 ${hours}${mapLine}`
+          `📍 ${location.address}, ${location.neighborhood}\n` +
+          `📞 ${location.phone}\n` +
+          `🕐 ${hours}${mapLine}`
       }
     }
 
-    const locations = clinicDataService.getLocations()
     return locations.map(location => {
       const mapLine = location.mapUrl ? `\n🗺️ Como chegar: ${location.mapUrl}` : ''
       return `${location.name}:\n` +
-             `📍 ${location.address}, ${location.neighborhood}\n` +
-             `📞 ${location.phone}${mapLine}`
+        `📍 ${location.address}, ${location.neighborhood}\n` +
+        `📞 ${location.phone}${mapLine}`
     }).join('\n\n')
   }
 
@@ -354,28 +360,28 @@ Contexto atual: ${context.conversationStage}`
     switch (stage) {
       case 'greeting':
         return `🎯 ESTÁGIO: Saudação\n` +
-               `Objetivo: Identificar paciente e entender necessidade\n` +
-               `Próximos passos: Coletar telefone, identificar procedimento de interesse`
-      
+          `Objetivo: Identificar paciente e entender necessidade\n` +
+          `Próximos passos: Coletar telefone, identificar procedimento de interesse`
+
       case 'identification':
         return `🎯 ESTÁGIO: Identificação\n` +
-               `Objetivo: Confirmar identidade do paciente\n` +
-               `Próximos passos: Verificar cadastro, oferecer procedimentos baseados no convênio`
-      
+          `Objetivo: Confirmar identidade do paciente\n` +
+          `Próximos passos: Verificar cadastro, oferecer procedimentos baseados no convênio`
+
       case 'procedure_selection':
         return `🎯 ESTÁGIO: Seleção de Procedimento\n` +
-               `Objetivo: Ajuda paciente a escolher procedimento adequado\n` +
-               `Próximos passos: Fornecer informações sobre procedimentos, preços, agendar`
-      
+          `Objetivo: Ajuda paciente a escolher procedimento adequado\n` +
+          `Próximos passos: Fornecer informações sobre procedimentos, preços, agendar`
+
       case 'scheduling':
         return `🎯 ESTÁGIO: Agendamento\n` +
-               `Objetivo: Marcar consulta\n` +
-               `Próximos passos: Confirmar local, data, horário, procedimento`
-      
+          `Objetivo: Marcar consulta\n` +
+          `Próximos passos: Confirmar local, data, horário, procedimento`
+
       default:
         return `🎯 ESTÁGIO: Geral\n` +
-               `Objetivo: Ajudar paciente com sua necessidade\n` +
-               `Ação: Fornecer informação relevante ou oferecer agendamento`
+          `Objetivo: Ajudar paciente com sua necessidade\n` +
+          `Ação: Fornecer informação relevante ou oferecer agendamento`
     }
   }
 
@@ -434,11 +440,11 @@ Contexto atual: ${context.conversationStage}`
       })
 
       const response = completion.choices[0]?.message?.content?.trim().toLowerCase() || 'neutral'
-      
+
       if (['positive', 'negative', 'neutral'].includes(response)) {
         return response as any
       }
-      
+
       return 'neutral'
     } catch (error) {
       console.error('Erro ao analisar sentimento:', error)
@@ -470,45 +476,45 @@ Contexto atual: ${context.conversationStage}`
     return infoKeywords.some(keyword => message.includes(keyword))
   }
 
-  private detectProcedureMention(message: string): string | null {
-    const procedures = clinicDataService.getProcedures()
+  private async detectProcedureMention(message: string): Promise<string | null> {
+    const procedures = await prismaClinicDataService.getProcedures()
     const lowerMessage = message.toLowerCase()
-    
+
     for (const procedure of procedures) {
-      if (lowerMessage.includes(procedure.name.toLowerCase()) || 
-          procedure.name.toLowerCase().includes(lowerMessage)) {
+      if (lowerMessage.includes(procedure.name.toLowerCase()) ||
+        procedure.name.toLowerCase().includes(lowerMessage)) {
         return procedure.id
       }
     }
-    
+
     return null
   }
 
-  private detectInsuranceMention(message: string): string | null {
-    const insuranceCompanies = clinicDataService.getInsuranceCompanies()
+  private async detectInsuranceMention(message: string): Promise<string | null> {
+    const insuranceCompanies = await prismaClinicDataService.getInsuranceCompanies()
     const lowerMessage = message.toLowerCase()
-    
+
     for (const insurance of insuranceCompanies) {
-      if (lowerMessage.includes(insurance.name.toLowerCase()) || 
-          lowerMessage.includes(insurance.displayName.toLowerCase())) {
+      if (lowerMessage.includes(insurance.name.toLowerCase()) ||
+        lowerMessage.includes(insurance.displayName.toLowerCase())) {
         return insurance.id
       }
     }
-    
+
     return null
   }
 
-  private detectLocationMention(message: string): string | null {
-    const locations = clinicDataService.getLocations()
+  private async detectLocationMention(message: string): Promise<string | null> {
+    const locations = await prismaClinicDataService.getLocations()
     const lowerMessage = message.toLowerCase()
-    
+
     for (const location of locations) {
-      if (lowerMessage.includes(location.name.toLowerCase()) || 
-          lowerMessage.includes(location.neighborhood.toLowerCase())) {
+      if (lowerMessage.includes(location.name.toLowerCase()) ||
+        lowerMessage.includes(location.neighborhood.toLowerCase())) {
         return location.id
       }
     }
-    
+
     return null
   }
 
@@ -537,7 +543,7 @@ Contexto atual: ${context.conversationStage}`
     const intentMatch = response.match(/INTENÇÃO:\s*(.+)/i)
     const sentimentMatch = response.match(/SENTIMENTO:\s*(positive|negative|neutral)/i)
     const actionMatch = response.match(/AÇÃO:\s*(.+)/i)
-    
+
     // Remove tags from response
     const cleanResponse = response
       .replace(/INTENÇÃO:.*\n?/gi, '')

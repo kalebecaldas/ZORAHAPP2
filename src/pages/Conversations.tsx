@@ -38,6 +38,19 @@ const Conversations: React.FC = () => {
       setLoading(true);
       const response = await api.get(`/api/conversations/${phone}`);
       const c = response.data
+
+      // Map assignedTo properly
+      let assignedTo = undefined;
+      if (c.assignedTo) {
+        assignedTo = { id: c.assignedTo.id, name: c.assignedTo.name };
+      } else if (c.assignedToId) {
+        if (c.assignedToId === user?.id) {
+          assignedTo = { id: user.id, name: user.name || user.email || 'You' };
+        } else {
+          assignedTo = { id: c.assignedToId, name: 'Atendente' };
+        }
+      }
+
       const mapped: Conversation = {
         id: c.id,
         status: ((s => {
@@ -47,7 +60,7 @@ const Conversations: React.FC = () => {
           return s || 'PRINCIPAL'
         })(c.status)) as any,
         priority: 'LOW',
-        assignedTo: c.assignedTo ? { id: c.assignedTo.id, name: c.assignedTo.name } : undefined,
+        assignedTo,
         patient: {
           id: c.patient?.id || '',
           name: c.patient?.name || c.phone,
@@ -81,6 +94,21 @@ const Conversations: React.FC = () => {
 
     const onConversationUpdated = (updated: any) => {
       if (!updated || updated.phone !== phone) return;
+
+      // Map assignedTo properly, including when only assignedToId is provided
+      let assignedTo = undefined;
+      if (updated.assignedTo) {
+        assignedTo = { id: updated.assignedTo.id, name: updated.assignedTo.name };
+      } else if (updated.assignedToId) {
+        // If only ID is provided, check if it's the current user
+        if (updated.assignedToId === user?.id) {
+          assignedTo = { id: user.id, name: user.name || user.email || 'You' };
+        } else {
+          // For other users, we can't get the name, but we need to at least set the ID
+          assignedTo = { id: updated.assignedToId, name: 'Atendente' };
+        }
+      }
+
       setConversation(prev => prev ? {
         ...prev,
         status: ((s => {
@@ -89,7 +117,7 @@ const Conversations: React.FC = () => {
           if (s === 'FECHADA') return 'CLOSED'
           return s || 'PRINCIPAL'
         })(updated.status)) as any,
-        assignedTo: updated.assignedTo ? { id: updated.assignedTo.id, name: updated.assignedTo.name } : undefined,
+        assignedTo,
         patient: {
           id: updated.patient?.id || prev.patient.id,
           name: updated.patient?.name || prev.patient.name,
@@ -121,7 +149,7 @@ const Conversations: React.FC = () => {
 
     const mappedStatus = newStatus === 'BOT' ? 'BOT_QUEUE'
       : newStatus === 'HUMAN' ? 'EM_ATENDIMENTO'
-      : newStatus;
+        : newStatus;
 
     try {
       await api.patch(`/api/conversations/${conversation.id}/status`, { status: mappedStatus });
@@ -140,7 +168,7 @@ const Conversations: React.FC = () => {
         currentUserId={user?.id}
         onConversationSelect={(conversationId) => navigate(`/conversations/${conversationId}`)}
       />
-      
+
       {conversation ? (
         <MessageList
           conversationId={phone!}

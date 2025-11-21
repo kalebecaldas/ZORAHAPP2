@@ -4,7 +4,7 @@ import { useAuth } from "./hooks/useAuth";
 import Sidebar from "./components/Sidebar";
 import { Login } from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Conversations from "./pages/Conversations";
+import ConversationsNew from "./pages/ConversationsNew";
 import { Patients } from "./pages/Patients";
 import { WorkflowsBeta } from "./pages/WorkflowsBeta";
 import { Stats } from "./pages/Stats";
@@ -48,12 +48,12 @@ function AppRoutes() {
       } />
       <Route path="/conversations" element={
         <ProtectedRoute>
-          <Conversations />
+          <ConversationsNew />
         </ProtectedRoute>
       } />
       <Route path="/conversations/:phone" element={
         <ProtectedRoute>
-          <Conversations />
+          <ConversationsNew />
         </ProtectedRoute>
       } />
       <Route path="/patients" element={

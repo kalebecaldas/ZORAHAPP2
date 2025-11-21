@@ -10,7 +10,7 @@ import axios from 'axios'
 import { getRealtime } from '../realtime.js'
 import { upload } from '../services/fileValidation.js'
 import { WorkflowEngine, type WorkflowNode } from '../../src/services/workflowEngine.js'
-import { clinicDataService } from '../data/clinicData.js'
+import { prismaClinicDataService } from '../services/prismaClinicDataService.js'
 
 const router = Router()
 
@@ -46,7 +46,7 @@ function scheduleBotToHumanTransfer(conversationId: string, phone: string) {
   const timeout = setTimeout(async () => {
     try {
       console.log(`Bot timeout reached for conversation ${conversationId}, transferring to human queue`)
-      
+
       // Transfer conversation to principal queue
       await prisma.conversation.update({
         where: { id: conversationId },
@@ -198,10 +198,10 @@ router.get('/:phone', listAuth, async (req: Request, res: Response): Promise<voi
       where: { phone },
       include: {
         patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            cpf: true, 
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
             insuranceCompany: true,
             insuranceNumber: true,
             email: true,
@@ -253,10 +253,10 @@ router.get('/id/:id', listAuth, async (req: Request, res: Response): Promise<voi
       where: { id },
       include: {
         patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            cpf: true, 
+          select: {
+            id: true,
+            name: true,
+            cpf: true,
             insuranceCompany: true,
             insuranceNumber: true,
             email: true,
@@ -305,16 +305,16 @@ router.get('/id/:id', listAuth, async (req: Request, res: Response): Promise<voi
 // Conversation actions (take, transfer, close, return)
 const actionsAuth = process.env.NODE_ENV === 'development'
   ? ((req: Request, _res: Response, next: any) => {
-      if (!req.user) {
-        req.user = {
-          id: (req.body?.assignTo || process.env.DEV_USER_ID || 'dev-user'),
-          email: 'dev@local',
-          name: 'Dev User',
-          role: 'AGENT'
-        } as any
-      }
-      next()
-    })
+    if (!req.user) {
+      req.user = {
+        id: (req.body?.assignTo || process.env.DEV_USER_ID || 'dev-user'),
+        email: 'dev@local',
+        name: 'Dev User',
+        role: 'AGENT'
+      } as any
+    }
+    next()
+  })
   : authMiddleware
 
 router.post('/actions', actionsAuth, async (req: Request, res: Response): Promise<void> => {
@@ -409,7 +409,20 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         actionDescription = 'Conversa fechada'
         break
 
+      case 'reopen':
+        if (conversation.status !== 'FECHADA') {
+          res.status(400).json({ error: 'Apenas conversas encerradas podem ser reabertas' })
+          return
+        }
+        updateData = {
+          status: 'PRINCIPAL',
+          assignedToId: null
+        }
+        actionDescription = 'Conversa reaberta'
+        break
+
       case 'return':
+
         updateData = {
           status: 'PRINCIPAL',
           assignedToId: null
@@ -583,7 +596,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     // Send via WhatsApp
     try {
       await whatsappService.sendTextMessage(phone, text)
-      
+
       // Log successful send
       if (conversation.patientId) {
         await prisma.patientInteraction.create({
@@ -610,7 +623,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       res.json({ message, conversation, delivery: 'ok' })
     } catch (whatsappError) {
       console.error('Erro ao enviar via WhatsApp:', whatsappError)
-      
+
       if (conversation.patientId) {
         await prisma.patientInteraction.create({
           data: {
@@ -694,7 +707,7 @@ export async function processIncomingMessage(phone: string, text: string, messag
             }
           })
         }
-      } catch {}
+      } catch { }
     }
 
     // Create message
@@ -740,7 +753,7 @@ export async function processIncomingMessage(phone: string, text: string, messag
             }
           })
         }
-      } catch {}
+      } catch { }
       await advanceWorkflow(conversation, text)
     } else {
       const handled = await handleAppointmentFlow(conversation, patient, text)
@@ -754,12 +767,16 @@ export async function processIncomingMessage(phone: string, text: string, messag
     }
 
     // Emit real-time updates
-    const realtime = getRealtime()
-    realtime.io.to(`conv:${phone}`).emit('new_message', {
-      message,
-      conversation
-    })
-    realtime.io.emit('conversation_updated', conversation)
+    try {
+      const realtime = getRealtime()
+      realtime.io.to(`conv:${phone}`).emit('new_message', {
+        message,
+        conversation
+      })
+      realtime.io.emit('conversation_updated', conversation)
+    } catch (e) {
+      console.warn('Realtime update failed:', e)
+    }
 
   } catch (error) {
     console.error('Erro ao processar mensagem recebida:', error)
@@ -774,8 +791,8 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
     appointmentDrafts.set(conversation.id, draft)
   }
 
-    if ((lower.includes('agendar') || lower.includes('marcar')) && draft.state !== 'awaiting_schedule_details' && draft.state !== 'awaiting_name') {
-      if (!patient?.name) {
+  if ((lower.includes('agendar') || lower.includes('marcar')) && draft.state !== 'awaiting_schedule_details' && draft.state !== 'awaiting_name') {
+    if (!patient?.name) {
       draft.state = 'awaiting_name'
       await sendAIMessage(conversation, '✍️ Para agendar, informe seu nome completo:')
       return true
@@ -797,7 +814,7 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
       await sendAIMessage(conversation, result)
       return true
     } catch {
-      const list = clinicDataService.getInsuranceCompanies()
+      const list = await prismaClinicDataService.getInsuranceCompanies()
       let result = `📋 Convênios aceitos:\n\n`
       list.forEach((insurance: any) => {
         const name = insurance.displayName || insurance.name || insurance.id
@@ -827,7 +844,7 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
       const proc = await prisma.procedure.findUnique({ where: { code: 'acupuntura' } })
       if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
       if (!draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
-      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves','sao-jose'] } } })
+      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves', 'sao-jose'] } } })
       const parts: string[] = []
       for (const c of clinics) {
         const cp = await prismaAny.clinicProcedure.findFirst({ where: { clinicId: c.id, procedureCode: proc.code } })
@@ -840,11 +857,12 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
       await sendAIMessage(conversation, msg)
       return true
     } catch {
-      const proc = clinicDataService.getProcedures().find(p => p.id === 'acupuntura') as any
+      const procs = await prismaClinicDataService.getProcedures()
+      const proc = procs.find(p => p.id === 'acupuntura') as any
       if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
-      const clinics = clinicDataService.getLocations()
+      const clinics = await prismaClinicDataService.getLocations()
       const parts: string[] = []
-      for (const c of clinics.filter((x:any)=> ['vieiralves','sao-jose'].includes(x.id))) {
+      for (const c of clinics.filter((x: any) => ['vieiralves', 'sao-jose'].includes(x.id))) {
         const price = (proc.priceByLocation && proc.priceByLocation[c.id]) ? Number(proc.priceByLocation[c.id]) : Number(proc.basePrice || 0)
         parts.push(`• ${c.name}: R$ ${price.toFixed(2)}`)
       }
@@ -861,7 +879,7 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
       const proc = await prisma.procedure.findUnique({ where: { code: 'fisioterapia-ortopedica' } })
       if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
       if (!draft.procedures.find((x: any) => x.id === proc.code)) draft.procedures.push({ id: proc.code, name: proc.name })
-      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves','sao-jose'] } } })
+      const clinics = await prisma.clinic.findMany({ where: { code: { in: ['vieiralves', 'sao-jose'] } } })
       const parts: string[] = []
       for (const c of clinics) {
         const cp = await prismaAny.clinicProcedure.findFirst({ where: { clinicId: c.id, procedureCode: proc.code } })
@@ -874,11 +892,12 @@ async function handleAppointmentFlow(conversation: any, patient: any, text: stri
       await sendAIMessage(conversation, msg)
       return true
     } catch {
-      const proc = clinicDataService.getProcedures().find(p => p.id === 'fisioterapia-ortopedica') as any
+      const procs = await prismaClinicDataService.getProcedures()
+      const proc = procs.find(p => p.id === 'fisioterapia-ortopedica') as any
       if (!proc) { await sendAIMessage(conversation, 'Procedimento não cadastrado.'); return true }
-      const clinics = clinicDataService.getLocations()
+      const clinics = await prismaClinicDataService.getLocations()
       const parts: string[] = []
-      for (const c of clinics.filter((x:any)=> ['vieiralves','sao-jose'].includes(x.id))) {
+      for (const c of clinics.filter((x: any) => ['vieiralves', 'sao-jose'].includes(x.id))) {
         const price = (proc.priceByLocation && proc.priceByLocation[c.id]) ? Number(proc.priceByLocation[c.id]) : Number(proc.basePrice || 0)
         parts.push(`• ${c.name}: R$ ${price.toFixed(2)}`)
       }
@@ -1025,10 +1044,14 @@ async function sendAIMessage(conversation: any, text: string): Promise<void> {
     })
 
     // Emit update (even if WhatsApp fails)
-    const realtime = getRealtime()
-    realtime.io.to(`conv:${conversation.phone}`).emit('ai_message_sent', {
-      message: aiMessage
-    })
+    try {
+      const realtime = getRealtime()
+      realtime.io.to(`conv:${conversation.phone}`).emit('ai_message_sent', {
+        message: aiMessage
+      })
+    } catch (e) {
+      console.warn('Realtime update failed:', e)
+    }
 
     // Try to send via WhatsApp (don't fail if it doesn't work)
     try {
@@ -1095,7 +1118,7 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response):
     const { id } = req.params
     const { status } = req.body
 
-  if (!status || !['BOT_QUEUE', 'PRINCIPAL', 'EM_ATENDIMENTO', 'HUMAN', 'FECHADA', 'CLOSED'].includes(status)) {
+    if (!status || !['BOT_QUEUE', 'PRINCIPAL', 'EM_ATENDIMENTO', 'HUMAN', 'FECHADA', 'CLOSED'].includes(status)) {
       res.status(400).json({ error: 'Status inválido' })
       return
     }
@@ -1111,7 +1134,7 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response):
 
     const updatedConversation = await prisma.conversation.update({
       where: { id },
-      data: { 
+      data: {
         status,
         assignedToId: (status === 'EM_ATENDIMENTO' || status === 'HUMAN') ? req.user.id : null
       },
@@ -1129,7 +1152,7 @@ router.patch('/:id/status', authMiddleware, async (req: Request, res: Response):
           patientId: conversation.patientId,
           type: 'STATUS_CHANGED',
           description: `Status da conversa alterado de ${conversation.status} para ${status}`,
-          data: { 
+          data: {
             previousStatus: conversation.status,
             newStatus: status,
             changedBy: req.user.id,
@@ -1185,8 +1208,8 @@ router.post('/:id/files', authMiddleware, upload.array('files', 5), async (req: 
       uploadedBy: req.user.id,
       uploadedAt: new Date(),
       category: file.mimetype.startsWith('image/') ? 'IMAGE' :
-               file.mimetype === 'application/pdf' ? 'DOCUMENT' :
-               file.mimetype.startsWith('audio/') ? 'AUDIO' : 'OTHER'
+        file.mimetype === 'application/pdf' ? 'DOCUMENT' :
+          file.mimetype.startsWith('audio/') ? 'AUDIO' : 'OTHER'
     }))
 
     await prisma.auditLog.create({
@@ -1342,7 +1365,7 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
   if (!conv?.workflowId) return
   const wf = await prisma.workflow.findUnique({ where: { id: conv.workflowId } })
   if (!wf) return
-  
+
   const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
   const nodes = (Array.isArray(cfg?.nodes) ? cfg.nodes : []).map((node: any) => ({
     id: node.id,
@@ -1357,10 +1380,10 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
   // Create or get existing engine context
   let context: any = conv.workflowContext || {}
   let currentNodeId = conv.currentWorkflowNode || ''
-  
+
   console.log(`🔄 advanceWorkflow called for conversation ${conversation.id}`)
   console.log(`🔄 Conversation state - currentWorkflowNode: ${currentNodeId}, workflowContext:`, context)
-  
+
   // Create engine with current state and connections
   let connections: any[] = []
   if (Array.isArray(cfg?.connections) && cfg.connections.length > 0) {
@@ -1376,15 +1399,15 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
   }
   console.log(`🔄 Creating WorkflowEngine with ${nodes.length} nodes and ${connections.length} connections`)
   console.log(`🔄 First few connections:`, connections.slice(0, 3))
-  
+
   const engine = new WorkflowEngine(nodes, conv.workflowId, conv.phone, incomingText, connections)
   engine.setUserResponse(incomingText)
-  
+
   // Set existing context if available
   if (context.userData) {
     engine.getContext().userData = context.userData
   }
-  
+
   // Set current node if available
   if (currentNodeId) {
     console.log(`🔄 Setting current node in engine: ${currentNodeId}`)
@@ -1406,19 +1429,19 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
   console.log(`🔄 Executing workflow node: ${currentNodeId || 'start'}`)
   let result = await engine.executeNextNode()
   console.log(`🔄 Workflow execution result:`, result)
-  
+
   // Handle response from first node
   if (result.response) {
     console.log(`🔄 Sending workflow response: ${result.response}`)
     await sendAIMessage(conversation, result.response)
   }
-  
+
   // Continue executing nodes if we shouldn't stop and have a next node
   while (!result.shouldStop && result.nextNodeId) {
     console.log(`🔄 Continuing to next node: ${result.nextNodeId}`)
     result = await engine.executeNextNode()
     console.log(`🔄 Continued execution result:`, result)
-    
+
     // Handle response from continued execution
     if (result.response) {
       console.log(`🔄 Sending workflow response: ${result.response}`)
@@ -1429,20 +1452,21 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
   // Update conversation state
   const updatedContext = engine.getContext()
   console.log(`🔄 Updating conversation state - currentNodeId: ${updatedContext.currentNodeId}, userData:`, updatedContext.userData)
-  
+
   const ctxUserData: any = updatedContext.userData || {}
   if (ctxUserData.intentReady && !ctxUserData.intentLogged) {
     const intent = ctxUserData.intentSummary || {}
     try {
-      const clinic = clinicDataService.getLocationById(String(intent.clinic || ''))
-      const procedures = await clinicDataService.getProcedures()
+      const locations = await prismaClinicDataService.getLocations()
+      const clinic = locations.find(l => l.id === String(intent.clinic || ''))
+      const procedures = await prismaClinicDataService.getProcedures()
       const collected = (ctxUserData.collectedData || {}) as any
       let patientName = String(collected.name || '')
       if (!patientName && conv.patientId) {
         try {
           const pat2 = await prisma.patient.findUnique({ where: { id: conv.patientId } })
           patientName = String(pat2?.name || '')
-        } catch {}
+        } catch { }
       }
       const birthISO = (collected.birth_date || '') as string
       const birthLine = birthISO ? `\nNascimento: ${new Date(birthISO).toLocaleDateString('pt-BR')}` : ''
@@ -1459,7 +1483,7 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
       ctxUserData.intentLogged = true
       // Move conversation to principal queue for human follow-up
       await transferToHuman(conversation, 'Intenção de agendamento registrada')
-    } catch {}
+    } catch { }
   }
   await prisma.conversation.update({
     where: { id: conv.id },
@@ -1469,7 +1493,7 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
       awaitingInput: !!ctxUserData.collectingField
     }
   })
-  
+
   console.log(`🔄 Conversation state updated successfully`)
 
   // Handle transfer to human

@@ -8,6 +8,12 @@ const router = Router()
 const readAuth = process.env.NODE_ENV === 'development'
   ? ((req: Request, res: Response, next: any) => next())
   : authMiddleware
+const writeAuth = process.env.NODE_ENV === 'development'
+  ? ((req: Request, res: Response, next: any) => next())
+  : authMiddleware
+const adminRole = process.env.NODE_ENV === 'development'
+  ? ((req: Request, res: Response, next: any) => next())
+  : requireRole('ADMIN')
 const prismaAny = prisma as any
 export const availabilityStore: Record<string, Record<string, string>> = {}
 
@@ -16,7 +22,10 @@ const insuranceSchema = z.object({
   name: z.string().min(1),
   displayName: z.string().min(1),
   isActive: z.boolean().optional().default(true),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  discount: z.boolean().optional().default(false),
+  discountPercentage: z.number().min(0).max(100).optional().default(0),
+  isParticular: z.boolean().optional().default(false)
 })
 
 const procedureSchema = z.object({
@@ -188,7 +197,7 @@ router.get('/clinics', readAuth, async (req: Request, res: Response): Promise<vo
         take: Number(limit),
         orderBy: { name: 'asc' },
         include: {
-          clinicInsuranceProcedures: {
+          clinicProcedures: {
             include: { insurance: true }
           }
         }
@@ -198,12 +207,12 @@ router.get('/clinics', readAuth, async (req: Request, res: Response): Promise<vo
 
     const clinics = rawClinics.map((clinic: any) => {
       const insurancesMap = new Map()
-      clinic.clinicInsuranceProcedures.forEach((cip: any) => {
+      clinic.clinicProcedures.forEach((cip: any) => {
         if (cip.insurance && !insurancesMap.has(cip.insurance.code)) {
           insurancesMap.set(cip.insurance.code, cip.insurance)
         }
       })
-      const { clinicInsuranceProcedures, ...rest } = clinic
+      const { clinicProcedures, ...rest } = clinic
       return {
         ...rest,
         insurances: Array.from(insurancesMap.values())
@@ -319,7 +328,7 @@ router.get('/clinics/:code/insurances', readAuth, async (req: Request, res: Resp
   res.json({ insurances: list })
 })
 
-router.post('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
+router.post('/clinics/:code/insurances/:insuranceCode', writeAuth, adminRole, async (req: Request, res: Response): Promise<void> => {
   const clinic = await prismaAny.clinic.findUnique({ where: { code: req.params.code } })
   const insurance = await prismaAny.insuranceCompany.findUnique({ where: { code: req.params.insuranceCode } })
   if (!clinic || !insurance) {
@@ -328,12 +337,12 @@ router.post('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireR
   }
   try {
     const data = clinicInsuranceSchema.parse(req.body)
-    const created = await prismaAny.clinicInsurance.create({ 
-      data: { 
+    const created = await prismaAny.clinicInsurance.create({
+      data: {
         clinicId: clinic.id,
         insuranceCode: insurance.code,
         ...data
-      } 
+      }
     })
     res.status(201).json(created)
   } catch (error) {
@@ -342,8 +351,8 @@ router.post('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireR
 })
 
 router.put('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
-  const clinicInsurance = await prismaAny.clinicInsurance.findFirst({ 
-    where: { 
+  const clinicInsurance = await prismaAny.clinicInsurance.findFirst({
+    where: {
       clinic: { code: req.params.code },
       insuranceCode: req.params.insuranceCode
     }
@@ -354,7 +363,7 @@ router.put('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireRo
   }
   try {
     const data = clinicInsuranceSchema.parse(req.body)
-    const updated = await prismaAny.clinicInsurance.update({ 
+    const updated = await prismaAny.clinicInsurance.update({
       where: { id: clinicInsurance.id },
       data: { ...data }
     })
@@ -365,8 +374,8 @@ router.put('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireRo
 })
 
 router.delete('/clinics/:code/insurances/:insuranceCode', authMiddleware, requireRole('ADMIN'), async (req: Request, res: Response): Promise<void> => {
-  const clinicInsurance = await prismaAny.clinicInsurance.findFirst({ 
-    where: { 
+  const clinicInsurance = await prismaAny.clinicInsurance.findFirst({
+    where: {
       clinic: { code: req.params.code },
       insuranceCode: req.params.insuranceCode
     }
@@ -376,6 +385,115 @@ router.delete('/clinics/:code/insurances/:insuranceCode', authMiddleware, requir
     return
   }
   await prismaAny.clinicInsurance.delete({ where: { id: clinicInsurance.id } })
+  res.json({ success: true })
+})
+
+// Clinic Procedures Management (which procedures the clinic offers)
+router.get('/clinics/:code/offered-procedures', readAuth, async (req: Request, res: Response): Promise<void> => {
+  const clinic = await prismaAny.clinic.findUnique({
+    where: { code: req.params.code },
+    include: {
+      offeredProcedures: {
+        include: {
+          procedure: true
+        }
+      }
+    }
+  })
+
+  if (!clinic) {
+    res.status(404).json({ error: 'Clínica não encontrada' })
+    return
+  }
+
+  const procedures = clinic.offeredProcedures.map((cp: any) => ({
+    ...cp.procedure,
+    clinicProcedureId: cp.id,
+    defaultPrice: cp.defaultPrice,
+    notes: cp.notes,
+    isActive: cp.isActive
+  }))
+
+  res.json({ procedures })
+})
+
+router.post('/clinics/:code/offered-procedures/:procedureCode', writeAuth, adminRole, async (req: Request, res: Response): Promise<void> => {
+  const clinic = await prismaAny.clinic.findUnique({ where: { code: req.params.code } })
+  const procedure = await prismaAny.procedure.findUnique({ where: { code: req.params.procedureCode } })
+
+  if (!clinic || !procedure) {
+    res.status(404).json({ error: 'Clínica ou procedimento não encontrado' })
+    return
+  }
+
+  // Check if already exists
+  const existing = await prismaAny.clinicProcedure.findFirst({
+    where: {
+      clinicId: clinic.id,
+      procedureCode: procedure.code
+    }
+  })
+
+  if (existing) {
+    res.status(400).json({ error: 'Procedimento já oferecido por esta clínica' })
+    return
+  }
+
+  const { defaultPrice, notes } = req.body
+
+  const created = await prismaAny.clinicProcedure.create({
+    data: {
+      clinicId: clinic.id,
+      procedureCode: procedure.code,
+      defaultPrice: defaultPrice || procedure.basePrice,
+      notes: notes || null,
+      isActive: true
+    },
+    include: {
+      procedure: true
+    }
+  })
+
+  res.status(201).json(created)
+})
+
+router.delete('/clinics/:code/offered-procedures/:procedureCode', writeAuth, adminRole, async (req: Request, res: Response): Promise<void> => {
+  const clinic = await prismaAny.clinic.findUnique({ where: { code: req.params.code } })
+
+  if (!clinic) {
+    res.status(404).json({ error: 'Clínica não encontrada' })
+    return
+  }
+
+  const clinicProcedure = await prismaAny.clinicProcedure.findFirst({
+    where: {
+      clinicId: clinic.id,
+      procedureCode: req.params.procedureCode
+    }
+  })
+
+  if (!clinicProcedure) {
+    res.status(404).json({ error: 'Procedimento não encontrado para esta clínica' })
+    return
+  }
+
+  // Check if procedure is used in any insurance
+  const usedInInsurance = await prismaAny.clinicInsuranceProcedure.count({
+    where: {
+      clinicId: clinic.id,
+      procedureCode: req.params.procedureCode
+    }
+  })
+
+  if (usedInInsurance > 0) {
+    res.status(400).json({
+      error: 'Não é possível remover este procedimento pois está vinculado a convênios',
+      usedInInsurances: usedInInsurance
+    })
+    return
+  }
+
+  await prismaAny.clinicProcedure.delete({ where: { id: clinicProcedure.id } })
   res.json({ success: true })
 })
 
@@ -405,7 +523,7 @@ router.get('/clinics/:clinicCode/insurances/:insuranceCode/procedures', readAuth
   try {
     const procedures = await prisma.clinicInsuranceProcedure.findMany({
       where: {
-        clinicId: clinicCode,
+        clinic: { code: clinicCode },
         insuranceCode: insuranceCode
       },
       include: {
@@ -491,24 +609,28 @@ router.post('/seed', readAuth, async (_req: Request, res: Response): Promise<voi
     for (const p of procedures) {
       const exists = await prismaAny.procedure.findUnique({ where: { code: p.id } });
       if (exists) {
-        await prismaAny.procedure.update({ where: { code: p.id }, data: {
-          name: p.name,
-          description: p.description,
-          basePrice: p.basePrice,
-          requiresEvaluation: p.requiresEvaluation,
-          duration: p.duration,
-          categories: p.categories
-        } });
+        await prismaAny.procedure.update({
+          where: { code: p.id }, data: {
+            name: p.name,
+            description: p.description,
+            basePrice: p.basePrice,
+            requiresEvaluation: p.requiresEvaluation,
+            duration: p.duration,
+            categories: p.categories
+          }
+        });
       } else {
-        await prismaAny.procedure.create({ data: {
-          code: p.id,
-          name: p.name,
-          description: p.description,
-          basePrice: p.basePrice,
-          requiresEvaluation: p.requiresEvaluation,
-          duration: p.duration,
-          categories: p.categories
-        } });
+        await prismaAny.procedure.create({
+          data: {
+            code: p.id,
+            name: p.name,
+            description: p.description,
+            basePrice: p.basePrice,
+            requiresEvaluation: p.requiresEvaluation,
+            duration: p.duration,
+            categories: p.categories
+          }
+        });
         procCount++;
       }
     }
@@ -517,20 +639,24 @@ router.post('/seed', readAuth, async (_req: Request, res: Response): Promise<voi
     for (const i of insurances) {
       const exists = await prismaAny.insuranceCompany.findUnique({ where: { code: i.id } });
       if (exists) {
-        await prismaAny.insuranceCompany.update({ where: { code: i.id }, data: {
-          name: i.name,
-          displayName: i.displayName,
-          discount: !!i.discount,
-          notes: i.notes || ''
-        } });
+        await prismaAny.insuranceCompany.update({
+          where: { code: i.id }, data: {
+            name: i.name,
+            displayName: i.displayName,
+            discount: !!i.discount,
+            notes: i.notes || ''
+          }
+        });
       } else {
-        await prismaAny.insuranceCompany.create({ data: {
-          code: i.id,
-          name: i.name,
-          displayName: i.displayName,
-          discount: !!i.discount,
-          notes: i.notes || ''
-        } });
+        await prismaAny.insuranceCompany.create({
+          data: {
+            code: i.id,
+            name: i.name,
+            displayName: i.displayName,
+            discount: !!i.discount,
+            notes: i.notes || ''
+          }
+        });
         insCount++;
       }
     }
@@ -570,8 +696,8 @@ router.post('/seed', readAuth, async (_req: Request, res: Response): Promise<voi
     }
 
     // Link common insurances to all clinics by default (development convenience)
-    const allIns = await prismaAny.insuranceCompany.findMany({ });
-    const allClinics = await prismaAny.clinic.findMany({ });
+    const allIns = await prismaAny.insuranceCompany.findMany({});
+    const allClinics = await prismaAny.clinic.findMany({});
     for (const clinic of allClinics) {
       for (const ic of allIns) {
         const existsLink = await prismaAny.clinicInsurance.findFirst({ where: { clinicId: clinic.id, insuranceCode: ic.code } });
@@ -736,7 +862,7 @@ router.post('/import/infor-text', readAuth, async (_req: Request, res: Response)
         }
       }
     }
-    const ensureCode = (name: string) => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'')
+    const ensureCode = (name: string) => name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
     const allClinics = await prismaAny.clinic.findMany({})
     const vCode = 'particular-vieiralves'
     const sjCode = 'particular-sao-jose'
@@ -746,8 +872,8 @@ router.post('/import/infor-text', readAuth, async (_req: Request, res: Response)
     if (!await prismaAny.insuranceCompany.findUnique({ where: { code: sjCode } })) {
       await prismaAny.insuranceCompany.create({ data: { code: sjCode, name: 'Convênio Particular São José', displayName: 'Convênio Particular São José', isActive: true } })
     }
-    const vieiralves = allClinics.find((c:any)=> c.code==='vieiralves')
-    const saoJose = allClinics.find((c:any)=> c.code==='sao-jose')
+    const vieiralves = allClinics.find((c: any) => c.code === 'vieiralves')
+    const saoJose = allClinics.find((c: any) => c.code === 'sao-jose')
     if (vieiralves) {
       const link = await prismaAny.clinicInsurance.findFirst({ where: { clinicId: vieiralves.id, insuranceCode: vCode } })
       if (!link) await prismaAny.clinicInsurance.create({ data: { clinicId: vieiralves.id, insuranceCode: vCode, isActive: true } })
@@ -792,7 +918,7 @@ router.post('/import/infor-text', readAuth, async (_req: Request, res: Response)
       }
       // Create coverage procedure records with price 0
       for (const pn of b.procedures) {
-        const key = pn.replace(/[)]/g,'').trim().toUpperCase()
+        const key = pn.replace(/[)]/g, '').trim().toUpperCase()
         const procCode = mapNames[key]
         if (!procCode) continue
         for (const clinic of allClinics) {
