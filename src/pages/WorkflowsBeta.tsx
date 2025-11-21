@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '../lib/utils'
@@ -10,33 +10,99 @@ export const WorkflowsBeta: React.FC = () => {
     const [workflow, setWorkflow] = useState<BackendWorkflow>({
         name: 'Workflow Beta',
         description: 'Editor Beta responsivo inspirado em n8n/Miro',
-        nodes: [
-            { id: 'start', type: 'START', content: { text: 'Bem-vindo' }, position: { x: 80, y: 60 }, connections: ['menu'] },
-            { id: 'menu', type: 'MESSAGE', content: { text: '1 Valores | 2 Convênios | 3 Localização | 4 Agendar | 5 Humano' }, position: { x: 340, y: 60 }, connections: [{ targetId: 'select', port: 'main' }] },
-            {
-                id: 'select', type: 'CONDITION', content: { condition: '1|2|3|4|5' }, position: { x: 600, y: 60 }, connections: [
-                    { targetId: 'list_procedures', port: '1' },
-                    { targetId: 'list_insurances', port: '2' },
-                    { targetId: 'location', port: '3' },
-                    { targetId: 'collect', port: '4' },
-                    { targetId: 'handoff', port: '5' }
-                ]
-            },
-            { id: 'list_procedures', type: 'API_CALL', content: { endpoint: 'get_clinic_procedures', message: 'Buscando procedimentos...' }, position: { x: 860, y: 0 }, connections: [{ targetId: 'continue', port: 'main' }] },
-            { id: 'list_insurances', type: 'API_CALL', content: { endpoint: 'get_clinic_insurances', message: 'Buscando convênios...' }, position: { x: 860, y: 120 }, connections: [{ targetId: 'continue', port: 'main' }] },
-            { id: 'location', type: 'API_CALL', content: { endpoint: 'get_clinic_location', message: 'Buscando localização...' }, position: { x: 860, y: 240 }, connections: [{ targetId: 'continue', port: 'main' }] },
-            {
-                id: 'continue', type: 'CONDITION', content: { condition: 'continue|end' }, position: { x: 1120, y: 120 }, connections: [
-                    { targetId: 'menu', port: 'continue' },
-                    { targetId: 'end', port: 'end' }
-                ]
-            },
-            { id: 'collect', type: 'COLLECT_INFO', content: { fields: ['name', 'cpf', 'birth_date', 'phone', 'email', 'address', 'insurance', 'insurance_number', 'preferences', 'procedure_type', 'preferred_date', 'preferred_shift'], message: 'Coletando informações...' }, position: { x: 860, y: 360 }, connections: [{ targetId: 'end', port: 'main' }] },
-            { id: 'handoff', type: 'TRANSFER_HUMAN', content: { finalMessage: 'Transferindo para atendente' }, position: { x: 860, y: 480 }, connections: [{ targetId: 'end', port: 'main' }] },
-            { id: 'end', type: 'END', content: { finalMessage: 'Obrigado!' }, position: { x: 1280, y: 360 }, connections: [] }
-        ] as BackendNode[],
+        nodes: [],
         isActive: false
     })
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        loadActiveWorkflow()
+    }, [])
+
+    const loadActiveWorkflow = async () => {
+        try {
+            setLoading(true)
+            // Get active workflow from database
+            const response = await api.get('/api/workflows?active=true')
+            const workflows = response.data?.workflows || []
+            
+            if (workflows.length > 0) {
+                const activeWorkflow = workflows[0]
+                const config = typeof activeWorkflow.config === 'string' 
+                    ? JSON.parse(activeWorkflow.config) 
+                    : activeWorkflow.config || {}
+                
+                // Convert backend format to editor format
+                const nodes = (config.nodes || []).map((n: any) => ({
+                    id: n.id,
+                    type: n.type,
+                    content: n.data || n.content || {},
+                    position: n.position || { x: 0, y: 0 },
+                    connections: []
+                }))
+                
+                // Convert edges from backend format to editor format
+                const backendEdges = config.edges || []
+                const convertedEdges = backendEdges.map((e: any) => ({
+                    id: e.id || `${e.source}_${e.target}`,
+                    source: e.source,
+                    target: e.target,
+                    data: {
+                        port: e.data?.port || e.port || 'main',
+                        condition: e.data?.condition || e.condition
+                    },
+                    type: e.type || 'smoothstep',
+                    animated: e.animated || false
+                }))
+                
+                setWorkflow({
+                    id: activeWorkflow.id,
+                    name: activeWorkflow.name,
+                    description: activeWorkflow.description || '',
+                    nodes: nodes as BackendNode[],
+                    edges: convertedEdges,
+                    isActive: activeWorkflow.isActive
+                })
+            } else {
+                // Fallback to example workflow if none found
+                setWorkflow({
+                    name: 'Workflow Beta',
+                    description: 'Editor Beta responsivo inspirado em n8n/Miro',
+                    nodes: [
+                        { id: 'start', type: 'START', content: { text: 'Bem-vindo' }, position: { x: 80, y: 60 }, connections: ['menu'] },
+                        { id: 'menu', type: 'MESSAGE', content: { text: '1 Valores | 2 Convênios | 3 Localização | 4 Agendar | 5 Humano' }, position: { x: 340, y: 60 }, connections: [{ targetId: 'select', port: 'main' }] },
+                        {
+                            id: 'select', type: 'CONDITION', content: { condition: '1|2|3|4|5' }, position: { x: 600, y: 60 }, connections: [
+                                { targetId: 'list_procedures', port: '1' },
+                                { targetId: 'list_insurances', port: '2' },
+                                { targetId: 'location', port: '3' },
+                                { targetId: 'collect', port: '4' },
+                                { targetId: 'handoff', port: '5' }
+                            ]
+                        },
+                        { id: 'list_procedures', type: 'API_CALL', content: { endpoint: 'get_clinic_procedures', message: 'Buscando procedimentos...' }, position: { x: 860, y: 0 }, connections: [{ targetId: 'continue', port: 'main' }] },
+                        { id: 'list_insurances', type: 'API_CALL', content: { endpoint: 'get_clinic_insurances', message: 'Buscando convênios...' }, position: { x: 860, y: 120 }, connections: [{ targetId: 'continue', port: 'main' }] },
+                        { id: 'location', type: 'API_CALL', content: { endpoint: 'get_clinic_location', message: 'Buscando localização...' }, position: { x: 860, y: 240 }, connections: [{ targetId: 'continue', port: 'main' }] },
+                        {
+                            id: 'continue', type: 'CONDITION', content: { condition: 'continue|end' }, position: { x: 1120, y: 120 }, connections: [
+                                { targetId: 'menu', port: 'continue' },
+                                { targetId: 'end', port: 'end' }
+                            ]
+                        },
+                        { id: 'collect', type: 'COLLECT_INFO', content: { fields: ['name', 'cpf', 'birth_date', 'phone', 'email', 'address', 'insurance', 'insurance_number', 'preferences', 'procedure_type', 'preferred_date', 'preferred_shift'], message: 'Coletando informações...' }, position: { x: 860, y: 360 }, connections: [{ targetId: 'end', port: 'main' }] },
+                        { id: 'handoff', type: 'TRANSFER_HUMAN', content: { finalMessage: 'Transferindo para atendente' }, position: { x: 860, y: 480 }, connections: [{ targetId: 'end', port: 'main' }] },
+                        { id: 'end', type: 'END', content: { finalMessage: 'Obrigado!' }, position: { x: 1280, y: 360 }, connections: [] }
+                    ] as BackendNode[],
+                    isActive: false
+                })
+            }
+        } catch (error) {
+            console.error('Error loading workflow:', error)
+            toast.error('Erro ao carregar workflow')
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const handleSave = async (wfData: BackendWorkflow) => {
         try {
@@ -83,6 +149,14 @@ export const WorkflowsBeta: React.FC = () => {
         } catch {
             toast.error('Falha ao salvar')
         }
+    }
+
+    if (loading) {
+        return (
+            <div className="flex-1 bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/20 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        )
     }
 
     return (

@@ -1,4 +1,7 @@
 import OpenAI from 'openai'
+import { TemplateService } from './templateService.js'
+import type { TemplateContext } from '../types/templates.js'
+
 export interface WorkflowNode {
   id: string;
   type: 'START' | 'MESSAGE' | 'CONDITION' | 'ACTION' | 'GPT_RESPONSE' | 'DATA_COLLECTION' | 'TRANSFER_HUMAN' | 'DELAY' | 'END' | 'WEBHOOK' | 'API_CALL' | 'COLLECT_INFO';
@@ -158,6 +161,16 @@ export class WorkflowEngine {
           this.context.currentNodeId = result.nextNodeId;
         }
         break;
+      case 'GPT_RESPONSE':
+        // GPT_RESPONSE nodes should continue if they have a next node
+        // This allows the flow to continue after intent classification
+        if (result.nextNodeId) {
+          this.context.currentNodeId = result.nextNodeId;
+          result.shouldStop = false; // Continue to next node
+        } else {
+          result.shouldStop = true; // Stop if no next node
+        }
+        break;
       case 'END':
       case 'TRANSFER_HUMAN':
         // These nodes should definitely stop
@@ -167,6 +180,9 @@ export class WorkflowEngine {
         // Other nodes can continue if they have a next node
         if (result.nextNodeId) {
           this.context.currentNodeId = result.nextNodeId;
+          result.shouldStop = false; // Continue to next node
+        } else {
+          result.shouldStop = true; // Stop if no next node
         }
         break;
     }
@@ -182,7 +198,7 @@ export class WorkflowEngine {
       case 'MESSAGE':
         return await this.executeMessageNode(node);
       case 'CONDITION':
-        return this.executeConditionNode(node);
+        return await this.executeConditionNode(node);
       case 'ACTION':
         return this.executeActionNode(node);
       case 'GPT_RESPONSE':
@@ -239,9 +255,6 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
 
   private async executeMessageNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     let raw = (node as any).data?.message || node.content.text || node.content.message || '';
-    if (node.id === 'gpt_welcome') {
-      raw = 'Você pode perguntar sobre consultas, nossos procedimentos ou convênios. Se quiser agendar, diga que quer agendar.';
-    }
     const lastBot = [...this.context.conversationHistory].reverse().find(h => h.role === 'bot');
     const isDuplicate = lastBot && String(lastBot.content || '').trim() === String(raw).trim();
     const normalized = this.normalizeText(this.context.message || '');
@@ -250,7 +263,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     const intentLoc = normalized.includes('localizacao') || normalized.includes('localização') || normalized.includes('endereco') || normalized.includes('endereço') || normalized.includes('onde') || normalized.includes('como chegar');
     const intentBook = normalized.includes('agendar') || normalized.includes('marcar') || normalized.includes('consulta');
     const intentHuman = normalized.includes('atendente') || normalized.includes('humano') || normalized.includes('falar');
-    const shouldSkip = ((node.id === 'service_menu' || node.id === 'gpt_welcome') || (node.type === 'MESSAGE' && intentBook)) && (intentPrice || intentIns || intentLoc || intentBook || intentHuman);
+    const shouldSkip = (node.id === 'service_menu' || (node.type === 'MESSAGE' && intentBook)) && (intentPrice || intentIns || intentLoc || intentBook || intentHuman);
     const response = (isDuplicate || shouldSkip) ? '' : await this.interpolateMessage(raw);
     if (response) this.addToHistory('bot', response);
     const connections = this.connections.get(node.id);
@@ -386,7 +399,7 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     return out;
   }
 
-  private executeConditionNode(node: WorkflowNode): NodeExecutionResult {
+  private async executeConditionNode(node: WorkflowNode): Promise<NodeExecutionResult> {
     const condition = node.content.condition || '';
     const connections = this.connections.get(node.id) || [];
 
@@ -405,7 +418,8 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           lowerMessage.includes('salvador')
         ) {
           this.context.userData.selectedClinic = 'vieiralves';
-          responseMessage = '✅ Você escolheu a Unidade Vieiralves! Como posso ajudar você?';
+          const template = await TemplateService.getInterpolatedTemplate('welcome_unit_vieiralves', {});
+          responseMessage = template || '✅ Você escolheu a Unidade Vieiralves!\n\nVocê pode perguntar sobre consultas, nossos procedimentos ou convênios. Se quiser agendar, diga que quer agendar.';
           nextNodeId = connections.find(c => c.port === 'true')?.targetId;
           return { nextNodeId, response: responseMessage };
         }
@@ -416,7 +430,8 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           lowerMessage.includes('centro')
         ) {
           this.context.userData.selectedClinic = 'sao-jose';
-          responseMessage = '✅ Você escolheu a Unidade São José! Como posso ajudar você?';
+          const template = await TemplateService.getInterpolatedTemplate('welcome_unit_saojose', {});
+          responseMessage = template || '✅ Você escolheu a Unidade São José!\n\nVocê pode perguntar sobre consultas, nossos procedimentos ou convênios. Se quiser agendar, diga que quer agendar.';
           nextNodeId = connections.find(c => c.port === 'true')?.targetId;
           return { nextNodeId, response: responseMessage };
         }
@@ -515,8 +530,13 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     const model = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
     const timeout = Number(process.env.OPENAI_TIMEOUT) || 20000;
 
+    // Check if this is just a clinic selection (user said "1" or "2" or similar)
+    // In this case, don't send any response as the welcome message was already sent
+    const isJustClinicSelection = normalized.trim() === '1' || normalized.trim() === '2' || 
+      (normalized.length <= 3 && ['1', '2', 'um', 'dois'].includes(normalized.trim()));
+    
     // Classificação imediata por palavras-chave para evitar atraso
-    if (!nextNodeId) {
+    if (!nextNodeId && !isJustClinicSelection) {
       const priceSyn = ['valor', 'preco', 'quanto', 'custa', 'orcamento', 'particular', 'pacote'];
       const hasPriceIntent = priceSyn.some(s => normalized.includes(s));
       const hasProcIntent = !!this.findProcedureKeyword(normalized) || ['fisioterapia', 'acupuntura', 'rpg', 'pilates', 'quiropraxia'].some(s => normalized.includes(s));
@@ -540,16 +560,20 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         response = 'Ok. Vou te passar a localização e horários.';
       } else if (normalized.includes('agendar') || normalized.includes('marcar') || normalized.includes('consulta')) {
         this.context.userData.isSchedulingIntent = true;
-        nextNodeId = connections.find(c => c.port === '4')?.targetId;
-        response = 'Vamos agendar sua consulta. Vou coletar algumas informações.';
+        const port4Conn = connections.find(c => c.port === '4');
+        nextNodeId = port4Conn?.targetId;
+        console.log(`🔧 GPT_RESPONSE - Detected scheduling intent, port 4 connection:`, port4Conn, `nextNodeId:`, nextNodeId);
+        const schedulingTemplate = await TemplateService.getInterpolatedTemplate('scheduling_start', {});
+        response = schedulingTemplate || 'Vamos agendar sua consulta. Vou coletar algumas informações.';
+        console.log(`🔧 GPT_RESPONSE - Scheduling response:`, response);
       } else if (normalized.includes('atendente') || normalized.includes('humano') || normalized.includes('falar')) {
         nextNodeId = connections.find(c => c.port === '5')?.targetId;
         response = '🤝 Vou transferir você para um atendente humano.';
       }
     }
 
-    // Se não houver match rápido, usar GPT para classificar
-    if (!nextNodeId && apiKey) {
+    // Se não houver match rápido, usar GPT para classificar (mas não se foi só seleção de clínica)
+    if (!nextNodeId && apiKey && !isJustClinicSelection) {
       try {
         const client = new OpenAI({ apiKey });
         const prompt = `${systemPrompt}\n\nClassifique a intenção do usuário em uma das opções: 1) valores de procedimentos, 2) convênios, 3) localização/horários, 4) agendamento, 5) falar com atendente.\nInclua um campo de confiança entre 0 e 1.\n\nRetorne um JSON no formato {\"intent_port\":\"<1|2|3|4|5>\",\"brief\":\"<mensagem curta>\",\"confidence\":<0..1>}.\n\nPergunta: \"${userMessage}\"`;
@@ -583,22 +607,33 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     }
 
     // Fallback final - only send generic message if no specific intent was detected
-    if (!nextNodeId) {
+    // But skip if this was just a clinic selection (welcome message already sent)
+    if (!nextNodeId && !isJustClinicSelection) {
       // If we already set response to empty because we detected an intent keyword, don't override it
       if (response === '') {
         // Intent was detected but somehow nextNodeId wasn't set - use port 1 as fallback
         nextNodeId = connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
       } else if (!response) {
-        // No intent detected at all - send generic help message
-        response = '📋 Posso te ajudar com valores, convênios, localização ou agendamento. Sobre o que você gostaria de saber?';
-        nextNodeId = connections.find(c => c.port === '1')?.targetId || connections[0]?.targetId;
+        // No intent detected at all - don't send a message, just wait for user input
+        // The welcome message was already sent by clinic_selection
+        response = '';
+        // Don't set nextNodeId to avoid continuing execution unnecessarily
+        // The user should respond with their intent
       }
+    } else if (isJustClinicSelection) {
+      // Just clinic selection - don't send any response, welcome message already sent
+      response = '';
+      // Don't continue to next node, wait for user to specify their intent
+      nextNodeId = undefined;
     }
 
     // Only add non-empty responses to history
     if (response) {
       this.addToHistory('bot', response);
     }
+    
+    console.log(`🔧 GPT_RESPONSE - Final result - nextNodeId: ${nextNodeId}, response length: ${response?.length || 0}, hasResponse: ${!!response}`);
+    
     return { nextNodeId, response };
 
   }
@@ -687,12 +722,17 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
             const { api } = await import('../lib/utils');
             const insRes = await api.get('/api/appointments/insurances');
             const list = insRes.data || [];
-            const match = list.find((i: any) => {
-              const ni = String(i.id || '').toLowerCase();
-              const nn = String(i.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              const nd = String(i.displayName || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-              return normalized === ni || normalized === nn || normalized === nd;
-            });
+            
+            // Use fuzzy matching to find closest insurance
+            const match = this.findClosestInsurance(input, list);
+            
+            if (match) {
+              // Store the corrected insurance name
+              input = match.displayName || match.name;
+              this.context.userData.insuranceMatch = match;
+              collectedData[currentField] = input;
+            }
+            
             const procId = this.context.userData._procedureId || '';
             const covers = !procId || (match && Array.isArray(match.procedures) && match.procedures.includes(procId));
             if (!match || !covers) {
@@ -708,6 +748,163 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
               };
             }
           } catch { }
+        }
+      }
+
+      // Allow skipping email
+      if (currentField === 'email') {
+        const normalized = input.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normalized.includes('nao') || normalized.includes('não') || normalized === 'n') {
+          collectedData[currentField] = '';
+          this.context.userData.collectedData = collectedData;
+        }
+      }
+
+      if (currentField === 'personal_data_confirmation') {
+        const choice = input.trim();
+        if (choice === '0') {
+          // Confirm personal data and SAVE to system
+          const collectedData = this.context.userData.collectedData || {};
+          const nm = String(collectedData['name'] || '').trim();
+          const em = String(collectedData['email'] || '').trim();
+          const bd = String(collectedData['birth_date'] || '').trim();
+          const ins = String(collectedData['insurance'] || 'Particular').trim();
+          
+          // Save patient data to system
+          try {
+            const { api } = await import('../lib/utils');
+            const pid = this.context.userData._patientId;
+            if (pid) {
+              const payload: any = {
+                name: nm,
+                preferences: { registrationComplete: true }
+              };
+              if (bd) payload.birthDate = bd;
+              if (em) payload.email = em;
+              if (ins && ins.toLowerCase() !== 'particular') payload.insuranceCompany = ins;
+              
+              await api.put(`/api/patients/${pid}`, payload);
+              this.context.userData.registrationComplete = true;
+              this.context.userData.patientName = nm;
+              this.context.userData.patientInsurance = ins;
+              
+              // Fetch covered procedures for the insurance
+              if (ins && ins.toLowerCase() !== 'particular') {
+                try {
+                  const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+                  const insRes = await api.get('/api/appointments/insurances');
+                  const insList = insRes.data || [];
+                  const matchedIns = this.findClosestInsurance(ins, insList);
+                  
+                  if (matchedIns) {
+                    const cipsRes = await api.get(`/api/clinic/clinics/${clinicCode}/insurances/${matchedIns.code}/procedures`);
+                    const cips = Array.isArray(cipsRes.data) ? cipsRes.data : (cipsRes.data?.procedures || []);
+                    const covered = cips.filter((cip: any) => cip.isActive !== false);
+                    const namesAll = covered.map((p: any) => p.procedure?.name || p.name || p.procedureCode || p.code);
+                    
+                    if (namesAll.length > 0) {
+                      this.context.userData.coveredProcedures = namesAll;
+                    }
+                  }
+                } catch (e) {
+                  console.error('Error fetching procedures after confirmation', e);
+                }
+              } else {
+                // For particular patients, fetch all clinic procedures
+                try {
+                  const clinicCode = this.context.userData.selectedClinic || 'vieiralves';
+                  const procsAll = await api.get('/api/appointments/procedures').then(r => r.data || []);
+                  const namesAll = procsAll.map((p: any) => p.name).filter(Boolean);
+                  if (namesAll.length > 0) {
+                    this.context.userData.coveredProcedures = namesAll;
+                  }
+                } catch (e) {
+                  console.error('Error fetching procedures for particular', e);
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error saving patient data', e);
+          }
+          
+          // Mark personal data as confirmed
+          this.context.userData.personalDataConfirmed = true;
+          delete this.context.userData.currentCollectField;
+          delete this.context.userData.collectingField;
+          
+          // Continue to collect procedure, date, and shift
+          return { nextNodeId: undefined, response: '', shouldStop: false };
+        } else if (choice === '1') {
+          // Change name
+          this.context.userData.currentCollectField = 'name';
+          this.context.userData.collectingField = 'name';
+          delete collectedData['name'];
+          this.context.userData.collectedData = collectedData;
+          const nameTemplate = await TemplateService.getInterpolatedTemplate('scheduling_name', {});
+          return { nextNodeId: undefined, response: nameTemplate || '✍️ Informe seu nome completo:', shouldStop: true };
+        } else if (choice === '2') {
+          // Change birth date
+          this.context.userData.currentCollectField = 'birth_date';
+          this.context.userData.collectingField = 'birth_date';
+          delete collectedData['birth_date'];
+          this.context.userData.collectedData = collectedData;
+          const birthTemplate = await TemplateService.getInterpolatedTemplate('scheduling_birthdate', {});
+          return { nextNodeId: undefined, response: birthTemplate || '📆 Qual é sua data de nascimento? (Ex: 15/08/1990)', shouldStop: true };
+        } else if (choice === '3') {
+          // Change email
+          this.context.userData.currentCollectField = 'email';
+          this.context.userData.collectingField = 'email';
+          delete collectedData['email'];
+          this.context.userData.collectedData = collectedData;
+          const emailTemplate = await TemplateService.getInterpolatedTemplate('scheduling_email', {});
+          return { nextNodeId: undefined, response: emailTemplate || '📧 Informe seu email:', shouldStop: true };
+        } else if (choice === '4') {
+          // Change insurance
+          this.context.userData.currentCollectField = 'insurance';
+          this.context.userData.collectingField = 'insurance';
+          delete collectedData['insurance'];
+          this.context.userData.collectedData = collectedData;
+          const insuranceTemplate = await TemplateService.getInterpolatedTemplate('scheduling_insurance', {});
+          return { nextNodeId: undefined, response: insuranceTemplate || '💳 Qual é seu convênio? (digite "particular" se não tiver)', shouldStop: true };
+        } else {
+          return { nextNodeId: undefined, response: '⚠️ Opção inválida. Digite o número do campo (1-4) ou 0 para confirmar.', shouldStop: true };
+        }
+      }
+
+      if (currentField === 'data_confirmation') {
+        const choice = input.trim();
+        if (choice === '0') {
+          // Confirm final appointment data
+          this.context.userData.dataConfirmed = true;
+          delete this.context.userData.currentCollectField;
+          delete this.context.userData.collectingField;
+          return { nextNodeId: undefined, response: '', shouldStop: false };
+        } else if (choice === '1') {
+          // Change name
+          this.context.userData.currentCollectField = 'name';
+          this.context.userData.collectingField = 'name';
+          const nameTemplate = await TemplateService.getInterpolatedTemplate('scheduling_name', {});
+          return { nextNodeId: undefined, response: nameTemplate || '✍️ Informe seu nome completo:', shouldStop: true };
+        } else if (choice === '2') {
+          // Change birth date
+          this.context.userData.currentCollectField = 'birth_date';
+          this.context.userData.collectingField = 'birth_date';
+          const birthTemplate = await TemplateService.getInterpolatedTemplate('scheduling_birthdate', {});
+          return { nextNodeId: undefined, response: birthTemplate || '📆 Qual é sua data de nascimento? (Ex: 15/08/1990)', shouldStop: true };
+        } else if (choice === '3') {
+          // Change email
+          this.context.userData.currentCollectField = 'email';
+          this.context.userData.collectingField = 'email';
+          const emailTemplate = await TemplateService.getInterpolatedTemplate('scheduling_email', {});
+          return { nextNodeId: undefined, response: emailTemplate || '📧 Informe seu email:', shouldStop: true };
+        } else if (choice === '4') {
+          // Change insurance
+          this.context.userData.currentCollectField = 'insurance';
+          this.context.userData.collectingField = 'insurance';
+          const insuranceTemplate = await TemplateService.getInterpolatedTemplate('scheduling_insurance', {});
+          return { nextNodeId: undefined, response: insuranceTemplate || '💳 Qual é seu convênio? (digite "particular" se não tiver)', shouldStop: true };
+        } else {
+          return { nextNodeId: undefined, response: '⚠️ Opção inválida. Digite o número do campo (1-4) ou 0 para confirmar.', shouldStop: true };
         }
       }
 
@@ -791,12 +988,15 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
                 }
               }
 
-              // Show registration complete message with procedures list
+              // Store procedures list for later, but continue collecting remaining fields
               if (coveredList) {
-                this.context.userData.currentCollectField = 'procedure_type'; // Go directly to procedure selection
-                this.context.userData.collectingField = 'procedure_type';
-                const confirmMsg = `Cadastro concluído, ${nameNow}! Identifiquei seu convênio ${convDisplay}.\n\n📋 Procedimentos disponíveis:\n${coveredList}\n\n📝 Qual procedimento você deseja? Você pode digitar o nome ou o número da lista.`;
-                return { nextNodeId: undefined, response: confirmMsg, shouldStop: true };
+                // Store the procedures list to show when asking for procedure_type
+                this.context.userData.coveredProcedures = coveredList.split('\n').map((line: string) => {
+                  const match = line.match(/^\d+\.\s+(.+)$/);
+                  return match ? match[1].trim() : line.trim();
+                }).filter(Boolean);
+                // Don't return here - let the code continue to determine next field
+                // The confirmation message will be set in responseOut below
               }
             }
           } catch (e) {
@@ -815,11 +1015,31 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     if (needsRegName && !collectedData['name']) requiredFields.push('name');
     if (needsRegInsurance && !collectedData['insurance']) requiredFields.push('insurance');
 
-    // Always collect these fields for appointment scheduling (procedure_type, birth_date, then scheduling fields)
-    const appointmentFields = ['procedure_type', 'birth_date', 'preferred_date', 'preferred_shift'];
-    for (const field of appointmentFields) {
-      if (!collectedData[field]) {
-        requiredFields.push(field);
+    // First collect personal data (birth_date, email), then show confirmation
+    // After confirmation, collect appointment details (procedure_type, preferred_date, preferred_shift)
+    const personalDataFields = ['birth_date', 'email'];
+    const appointmentDetailsFields = ['procedure_type', 'preferred_date', 'preferred_shift'];
+    
+    // Check if personal data is complete (for first confirmation)
+    const personalDataComplete = collectedData['name'] && collectedData['insurance'] && 
+                                 collectedData['birth_date'] && collectedData['email'] !== undefined;
+    
+    if (!personalDataComplete) {
+      // Still collecting personal data
+      for (const field of personalDataFields) {
+        if (!collectedData[field] && field !== 'email' || (field === 'email' && collectedData[field] === undefined)) {
+          requiredFields.push(field);
+        }
+      }
+    } else if (!this.context.userData.personalDataConfirmed) {
+      // Personal data complete but not confirmed yet - show confirmation
+      // Don't add more fields, will show confirmation below
+    } else {
+      // Personal data confirmed, now collect appointment details
+      for (const field of appointmentDetailsFields) {
+        if (!collectedData[field]) {
+          requiredFields.push(field);
+        }
       }
     }
 
@@ -837,25 +1057,46 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           prompt = `📱 Deseja usar este número do WhatsApp (${phoneDisplay})? Digite "sim" para confirmar ou informe outro telefone com DDD (ex.: 92 9XXXX-XXXX).`;
           break;
         }
-        case 'name':
-          prompt = '✍️ Informe seu nome completo:';
-          break;
-        case 'insurance':
-          prompt = '💳 Qual é seu convênio? (digite "particular" se não tiver)';
-          break;
-        case 'birth_date':
-          prompt = '📆 Qual é sua data de nascimento? (Ex: 15/08/1990)';
-          break;
-        case 'procedure_type': {
-          // Procedures list was already shown, just ask for selection
-          prompt = '📝 Por favor, digite o nome ou o número do procedimento desejado.';
+        case 'name': {
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_name', {});
+          prompt = template || '✍️ Informe seu nome completo:';
           break;
         }
-        case 'preferred_date':
-          prompt = '📅 Qual data preferida para sua consulta? (Ex: 15/12/2024)';
+        case 'insurance': {
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_insurance', {});
+          prompt = template || '💳 Qual é seu convênio? (digite "particular" se não tiver)';
           break;
+        }
+        case 'birth_date': {
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_birthdate', {});
+          prompt = template || '📆 Qual é sua data de nascimento? (Ex: 15/08/1990)';
+          break;
+        }
+        case 'email': {
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_email', {});
+          prompt = template || '📧 Informe seu email (ou digite "não tenho" para pular):';
+          break;
+        }
+        case 'procedure_type': {
+          // Show procedures list if available
+          const coveredProcs = this.context.userData.coveredProcedures || [];
+          let proceduresMsg = '';
+          if (Array.isArray(coveredProcs) && coveredProcs.length > 0) {
+            proceduresMsg = '\n\n📋 Procedimentos disponíveis:\n' + 
+              coveredProcs.map((proc: string, idx: number) => `${idx + 1}. ${proc}`).join('\n') + '\n';
+          }
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_procedure', {});
+          prompt = (template || '📝 Qual procedimento você deseja? Você pode digitar o nome ou o número da lista.') + proceduresMsg;
+          break;
+        }
+        case 'preferred_date': {
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_date', {});
+          prompt = template || '📅 Qual data preferida para sua consulta? (Ex: 15/12/2024)';
+          break;
+        }
         case 'preferred_shift': {
-          prompt = '🕐 Qual turno prefere? (Manhã, Tarde ou Noite)';
+          const template = await TemplateService.getInterpolatedTemplate('scheduling_shift', {});
+          prompt = template || '🕐 Qual turno prefere? (Manhã, Tarde ou Noite)';
           break;
         }
         default:
@@ -926,35 +1167,110 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           }
           // Store covered procedures but don't show them yet - they'll be shown when asking for procedure_type
           if (coveredList) {
-            // Don't set currentCollectField here, let the normal flow handle it
+            // Store procedures list for later use
+            this.context.userData.coveredProcedures = coveredList.split('\n').map((line: string) => {
+              const match = line.match(/^\d+\.\s+(.+)$/);
+              return match ? match[1].trim() : line.trim();
+            }).filter(Boolean);
           }
           responseOut = `Cadastro concluído, ${name}. Identifiquei seu convênio ${convDisplay}.`;
         }
       } catch { }
+      
+      // Check if personal data is complete (name, insurance, birth_date, email)
+      const personalDataComplete = collectedData['name'] && collectedData['insurance'] && 
+                                   collectedData['birth_date'] && collectedData['email'] !== undefined;
+      
+      // Show personal data confirmation first (before asking for procedure)
+      if (personalDataComplete && !this.context.userData.personalDataConfirmed) {
+        const nm = String(collectedData['name'] || '').trim();
+        const em = String(collectedData['email'] || '').trim();
+        const bd = String(collectedData['birth_date'] || '').trim();
+        const ins = String(collectedData['insurance'] || 'Particular').trim();
+        
+        // Format birth date for display
+        let bdDisplay = bd;
+        if (bd && bd.includes('-')) {
+          const [y, m, d] = bd.split('-');
+          bdDisplay = `${d}/${m}/${y}`;
+        }
+        
+        // Show confirmation message
+        this.context.userData.currentCollectField = 'personal_data_confirmation';
+        this.context.userData.collectingField = 'personal_data_confirmation';
+        const confirmContext: TemplateContext = {
+          nome: nm,
+          data_nascimento: bdDisplay,
+          email: em || undefined,
+          convenio: ins
+        };
+        const confirmationTemplate = await TemplateService.getInterpolatedTemplate('scheduling_confirm', confirmContext);
+        const confirmationMsg = confirmationTemplate || `📋 *Confirme seus dados pessoais:*\n\n1. Nome: ${nm}\n2. Data de Nascimento: ${bdDisplay}\n3. Email: ${em || 'Não informado'}\n4. Convênio: ${ins}\n\n*Deseja alterar algum dado?*\n\nDigite o número do campo que deseja alterar (1-4) ou digite *0* para confirmar e prosseguir.`;
+        return { nextNodeId: undefined, response: confirmationMsg, shouldStop: true };
+      }
+      
       const summaryReady = collectedData['procedure_type'] && collectedData['preferred_date'] && collectedData['preferred_shift'];
       if (summaryReady) {
-        const issues: string[] = []
-        const nm = String(collectedData['name'] || '').trim()
-        const em = String(collectedData['email'] || '').trim()
-        const cpf = String(collectedData['cpf'] || '').trim()
-        const bd = String(collectedData['birth_date'] || '').trim()
-        if (!nm || !this.isLikelyName(nm)) issues.push('Nome inválido')
-        if (em && !this.isValidEmail(em)) issues.push('Email inválido')
-        if (cpf && !this.isValidCPF(cpf)) issues.push('CPF inválido')
-        if (bd && !this.isValidBirthDate(bd)) issues.push('Nascimento inválido')
-        if (issues.length > 0) {
-          const nextField = !nm || !this.isLikelyName(nm) ? 'name' : (em && !this.isValidEmail(em) ? 'email' : (cpf && !this.isValidCPF(cpf) ? 'cpf' : 'birth_date'))
-          this.context.userData.currentCollectField = nextField
-          this.context.userData.collectingField = nextField
-          let msg = '⚠️ Dados inconsistentes: ' + issues.join(', ') + '. '
-          switch (nextField) {
-            case 'name': msg += 'Informe seu nome completo.'; break
-            case 'email': msg += 'Informe um email válido.'; break
-            case 'cpf': msg += 'Informe um CPF válido.'; break
-            case 'birth_date': msg += 'Informe sua data de nascimento no formato DD/MM/AAAA.'; break
+        // Check if already confirmed
+        if (!this.context.userData.dataConfirmed) {
+          const issues: string[] = []
+          const nm = String(collectedData['name'] || '').trim()
+          const em = String(collectedData['email'] || '').trim()
+          const cpf = String(collectedData['cpf'] || '').trim()
+          const bd = String(collectedData['birth_date'] || '').trim()
+          if (!nm || !this.isLikelyName(nm)) issues.push('Nome inválido')
+          if (em && !this.isValidEmail(em)) issues.push('Email inválido')
+          if (cpf && !this.isValidCPF(cpf)) issues.push('CPF inválido')
+          if (bd && !this.isValidBirthDate(bd)) issues.push('Nascimento inválido')
+          if (issues.length > 0) {
+            const nextField = !nm || !this.isLikelyName(nm) ? 'name' : (em && !this.isValidEmail(em) ? 'email' : (cpf && !this.isValidCPF(cpf) ? 'cpf' : 'birth_date'))
+            this.context.userData.currentCollectField = nextField
+            this.context.userData.collectingField = nextField
+            let msg = '⚠️ Dados inconsistentes: ' + issues.join(', ') + '. '
+            switch (nextField) {
+              case 'name': msg += 'Informe seu nome completo.'; break
+              case 'email': msg += 'Informe um email válido.'; break
+              case 'cpf': msg += 'Informe um CPF válido.'; break
+              case 'birth_date': msg += 'Informe sua data de nascimento no formato DD/MM/AAAA.'; break
+            }
+            return { nextNodeId: undefined, response: msg, shouldStop: true }
           }
-          return { nextNodeId: undefined, response: msg, shouldStop: true }
+          
+          // Show final confirmation with procedure, date and shift
+          this.context.userData.currentCollectField = 'data_confirmation';
+          this.context.userData.collectingField = 'data_confirmation';
+          
+          // Format dates for display
+          let bdDisplay = bd;
+          if (bd && bd.includes('-')) {
+            const [y, m, d] = bd.split('-');
+            bdDisplay = `${d}/${m}/${y}`;
+          }
+          
+          let dateDisplay = String(collectedData['preferred_date'] || '');
+          if (dateDisplay && dateDisplay.includes('-')) {
+            const [y, m, d] = dateDisplay.split('-');
+            dateDisplay = `${d}/${m}/${y}`;
+          }
+          
+          const procName = String(collectedData['procedure_type'] || '');
+          const shiftName = String(collectedData['preferred_shift'] || '');
+          
+          const confirmContext: TemplateContext = {
+            nome: nm,
+            data_nascimento: bdDisplay,
+            email: em || undefined,
+            convenio: collectedData['insurance'] || 'Particular',
+            procedimento: procName,
+            data_preferida: dateDisplay,
+            turno: shiftName
+          };
+          const confirmationTemplate = await TemplateService.getInterpolatedTemplate('scheduling_confirm_final', confirmContext);
+          const confirmationMsg = confirmationTemplate || `📋 *Confirme seu agendamento:*\n\n*Dados Pessoais:*\n1. Nome: ${nm}\n2. Data de Nascimento: ${bdDisplay}\n3. Email: ${em || 'Não informado'}\n4. Convênio: ${collectedData['insurance'] || 'Particular'}\n\n*Agendamento:*\n5. Procedimento: ${procName}\n6. Data: ${dateDisplay}\n7. Turno: ${shiftName}\n\n*Deseja alterar algum dado?*\n\nDigite o número do campo que deseja alterar ou digite *0* para confirmar e finalizar.`;
+          return { nextNodeId: undefined, response: confirmationMsg, shouldStop: true };
         }
+        
+        // All confirmed - save final intent
         const clinicCode = this.context.userData.selectedClinic || '';
         const intent = {
           clinic: clinicCode,
@@ -965,9 +1281,30 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         };
         this.context.userData.intentReady = true;
         this.context.userData.intentSummary = intent;
-        responseOut = `✅ Intenção registrada: ${intent.procedure} em ${intent.date} (${intent.shift}). Vou encaminhar para nossa equipe.`;
+        
+        // Format dates for display
+        let dateDisplay = String(collectedData['preferred_date'] || '');
+        if (dateDisplay && dateDisplay.includes('-')) {
+          const [y, m, d] = dateDisplay.split('-');
+          dateDisplay = `${d}/${m}/${y}`;
+        }
+        
+        const successContext: TemplateContext = {
+          procedimento: intent.procedure,
+          data_preferida: dateDisplay,
+          turno: intent.shift
+        };
+        const successTemplate = await TemplateService.getInterpolatedTemplate('scheduling_success', successContext);
+        responseOut = successTemplate || `✅ Agendamento confirmado!\n\n📋 *Resumo do agendamento:*\n\nProcedimento: ${intent.procedure}\nData: ${dateDisplay}\nTurno: ${intent.shift}\n\nVou encaminhar para nossa equipe entrar em contato para confirmar o horário.`;
+        // All fields collected and confirmed - can delete currentCollectField now
+        delete this.context.userData.currentCollectField;
+        delete this.context.userData.collectingField;
       }
-      return { nextNodeId: undefined, response: responseOut, shouldStop: true };
+      
+      // If we still have fields to collect, don't stop - continue collecting
+      // Check if currentCollectField is set (meaning we're still collecting)
+      const stillCollecting = !!this.context.userData.currentCollectField;
+      return { nextNodeId: undefined, response: responseOut, shouldStop: !stillCollecting };
     }
   }
 
@@ -1002,6 +1339,69 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     if (d > now) return false
     const age = Math.floor((now.getTime() - d.getTime()) / (365.25 * 24 * 3600 * 1000))
     return age >= 10 && age <= 120
+  }
+
+  private levenshteinDistance(a: string, b: string): number {
+    const matrix: number[][] = [];
+    
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    
+    return matrix[b.length][a.length];
+  }
+
+  private findClosestInsurance(input: string, insurances: any[]): any | null {
+    const normalizedInput = this.normalizeText(input);
+    
+    // Exact match first
+    const exact = insurances.find(ins => 
+      this.normalizeText(ins.name) === normalizedInput ||
+      this.normalizeText(ins.displayName) === normalizedInput ||
+      this.normalizeText(ins.code) === normalizedInput
+    );
+    
+    if (exact) return exact;
+    
+    // Fuzzy match with distance threshold
+    let closest = null;
+    let minDistance = Infinity;
+    
+    for (const ins of insurances) {
+      const distances = [
+        this.levenshteinDistance(normalizedInput, this.normalizeText(ins.name)),
+        this.levenshteinDistance(normalizedInput, this.normalizeText(ins.displayName)),
+        this.levenshteinDistance(normalizedInput, this.normalizeText(ins.code))
+      ];
+      
+      const distance = Math.min(...distances);
+      
+      // Allow up to 3 character differences for fuzzy matching
+      if (distance < minDistance && distance <= 3) {
+        minDistance = distance;
+        closest = ins;
+      }
+    }
+    
+    return closest;
   }
 
   private async executeApiCallNode(node: WorkflowNode): Promise<NodeExecutionResult> {

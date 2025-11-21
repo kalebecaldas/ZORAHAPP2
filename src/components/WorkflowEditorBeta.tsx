@@ -46,7 +46,7 @@ const nodeTypes = {
 const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, onSave, onCancel }) => {
     const reactFlowWrapper = useRef<HTMLDivElement>(null)
     const [nodes, setNodes, onNodesChange] = useNodesState(nodesToReactFlow(workflow.nodes))
-    const [edges, setEdges, onEdgesChange] = useEdgesState(edgesToReactFlow(workflow.nodes))
+    const [edges, setEdges, onEdgesChange] = useEdgesState(edgesToReactFlow(workflow.nodes, workflow.edges))
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
     const [selectedNode, setSelectedNode] = useState<Node | null>(null)
 

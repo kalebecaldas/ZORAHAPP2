@@ -31,6 +31,7 @@ import messagesRoutes from './routes/messages.js'
 import aliasRoutes from './routes/aliases.js'
 import testRoutes from './routes/test.js'
 import appointmentsRoutes from './routes/appointments.js'
+import templatesRoutes from './routes/templates.js'
 import { authMiddleware } from './utils/auth.js'
 
 // for esm mode
@@ -105,6 +106,7 @@ app.use('/api/cobertura', apiLimiter, coverageRoutes)
 app.use('/api/permissions', apiLimiter, permissionsRoutes)
 app.use('/api/clinic', apiLimiter, clinicRoutes)
 app.use('/api/messages', apiLimiter, messagesRoutes)
+app.use('/api/templates', apiLimiter, templatesRoutes)
 app.use('/api', apiLimiter, aliasRoutes)
 
 // Debug auth endpoint

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
+import { TemplateManager } from '../components/TemplateManager';
 
 interface SettingsData {
   clinicName: string;
@@ -186,7 +187,7 @@ const Settings: React.FC = () => {
   const [clinicTotalPages, setClinicTotalPages] = useState(1);
   const [clinicSearch, setClinicSearch] = useState('');
   const [addClinicProcedureCode, setAddClinicProcedureCode] = useState('');
-  const [activeTab, setActiveTab] = useState<'geral' | 'chatbot' | 'clinicas' | 'convenioProc'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'chatbot' | 'clinicas' | 'convenioProc' | 'templates'>('geral');
   const [insuranceModalOpen, setInsuranceModalOpen] = useState(false);
   const [insuranceModal, setInsuranceModal] = useState<any | null>(null);
   const [insuranceModalProcedures, setInsuranceModalProcedures] = useState<any[]>([]);
@@ -1001,7 +1002,8 @@ const Settings: React.FC = () => {
               { key: 'geral', label: 'Geral' },
               { key: 'chatbot', label: 'Chat+Bot' },
               { key: 'clinicas', label: 'Clínicas' },
-              { key: 'convenioProc', label: 'Convênios e Procedimentos' }
+              { key: 'convenioProc', label: 'Convênios e Procedimentos' },
+              { key: 'templates', label: 'Templates do Bot' }
             ].map((t: any) => (
               <button key={t.key} onClick={() => setActiveTab(t.key)} className={`px-4 py-2 rounded-md border ${activeTab === t.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-800'}`}>{t.label}</button>
             ))}
@@ -2633,6 +2635,12 @@ const Settings: React.FC = () => {
           </motion.div>
         </div>
       )}</AnimatePresence>
+
+        {activeTab === 'templates' && (
+          <div className="bg-white rounded-lg shadow-sm border p-6">
+            <TemplateManager />
+          </div>
+        )}
 
     </div >
   );

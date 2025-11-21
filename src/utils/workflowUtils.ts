@@ -80,9 +80,31 @@ export const getConditionPorts = (cond?: string): Port[] => {
 // Conversão Backend -> React Flow
 export const nodesToReactFlow = (nodes: BackendNode[]): Node[] => {
   return nodes.map(node => {
-    const ports = node.type === 'CONDITION'
-      ? (node.content?.ports || getConditionPorts(node.content?.condition))
-      : (node.content?.ports || getDefaultPorts())
+    // Determinar ports baseado no tipo e conteúdo do nó
+    let ports: Port[] = []
+    
+    if (node.type === 'CONDITION') {
+      const condition = node.content?.condition || ''
+      if (condition === 'clinic_selection') {
+        ports = getConditionPorts('clinic_selection')
+      } else if (condition === 'service_selection') {
+        ports = getConditionPorts('service_selection')
+      } else {
+        ports = getConditionPorts(condition)
+      }
+    } else if (node.type === 'GPT_RESPONSE') {
+      // GPT_RESPONSE precisa de ports 1-5 para as diferentes intenções
+      ports = [
+        { id: 'input', label: 'Entrada', type: 'input', position: 'top' },
+        { id: '1', label: '1', type: 'output', position: 'bottom' },
+        { id: '2', label: '2', type: 'output', position: 'bottom' },
+        { id: '3', label: '3', type: 'output', position: 'bottom' },
+        { id: '4', label: '4', type: 'output', position: 'bottom' },
+        { id: '5', label: '5', type: 'output', position: 'bottom' }
+      ]
+    } else {
+      ports = getDefaultPorts()
+    }
 
     return {
       id: node.id,
@@ -98,9 +120,33 @@ export const nodesToReactFlow = (nodes: BackendNode[]): Node[] => {
   })
 }
 
-export const edgesToReactFlow = (nodes: BackendNode[]): Edge[] => {
+export const edgesToReactFlow = (nodes: BackendNode[], backendEdges?: any[]): Edge[] => {
   const edges: Edge[] = []
 
+  // Se temos edges do backend, usar elas diretamente
+  if (backendEdges && backendEdges.length > 0) {
+    return backendEdges.map((edge, idx) => {
+      let port = edge.data?.port || edge.port || 'main'
+      
+      // Mapear "output" para "main" (padrão dos nós)
+      if (port === 'output') {
+        port = 'main'
+      }
+      
+      return {
+        id: edge.id || `e_${edge.source}_${edge.target}_${idx}`,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: port,
+        targetHandle: 'input',
+        label: edge.data?.condition || edge.condition,
+        type: edge.type || 'smoothstep',
+        animated: edge.animated || false,
+      }
+    })
+  }
+
+  // Fallback: gerar edges a partir de node.connections
   nodes.forEach(node => {
     if (!node.connections) return
 
