@@ -7,21 +7,33 @@ const ALLOWED_FILE_TYPES: Record<string, { ext: string; maxSize: number; categor
   // Documents
   'application/pdf': { ext: '.pdf', maxSize: 10 * 1024 * 1024, category: 'document' }, // 10MB
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { ext: '.docx', maxSize: 5 * 1024 * 1024, category: 'document' }, // 5MB
+  'application/msword': { ext: '.doc', maxSize: 5 * 1024 * 1024, category: 'document' }, // 5MB
   
   // Images
-  'image/jpeg': { ext: '.jpg', maxSize: 5 * 1024 * 1024, category: 'image' }, // 5MB
-  'image/jpg': { ext: '.jpg', maxSize: 5 * 1024 * 1024, category: 'image' }, // 5MB
-  'image/png': { ext: '.png', maxSize: 5 * 1024 * 1024, category: 'image' }, // 5MB
+  'image/jpeg': { ext: '.jpg', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/jpg': { ext: '.jpg', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/png': { ext: '.png', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/x-png': { ext: '.png', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/pjpeg': { ext: '.jpg', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/x-jpeg': { ext: '.jpg', maxSize: 20 * 1024 * 1024, category: 'image' }, // 20MB
+  'image/webp': { ext: '.webp', maxSize: 10 * 1024 * 1024, category: 'image' }, // 10MB
+  'image/gif': { ext: '.gif', maxSize: 10 * 1024 * 1024, category: 'image' }, // 10MB
   
   // Audio
   'audio/mpeg': { ext: '.mp3', maxSize: 10 * 1024 * 1024, category: 'audio' }, // 10MB
   'audio/wav': { ext: '.wav', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
   'audio/x-wav': { ext: '.wav', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
+  'audio/webm': { ext: '.webm', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
+  'audio/ogg': { ext: '.ogg', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB (Ogg Opus)
+  'audio/aac': { ext: '.aac', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
+  'audio/mp4': { ext: '.mp4', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
+  'audio/x-m4a': { ext: '.m4a', maxSize: 20 * 1024 * 1024, category: 'audio' }, // 20MB
+  'audio/amr': { ext: '.amr', maxSize: 10 * 1024 * 1024, category: 'audio' }, // 10MB
 };
 
 const ALLOWED_MIME_TYPES = Object.keys(ALLOWED_FILE_TYPES);
 const MAX_FILES_PER_REQUEST = 5;
-const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total per request
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total per request
 
 // Configure multer for memory storage (we'll process files in memory)
 const storage = multer.memoryStorage();
@@ -35,13 +47,12 @@ const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCa
       return cb(new Error(`File type ${file.mimetype} is not allowed. Allowed types: PDF, DOCX, JPEG, PNG, MP3, WAV`));
     }
 
-    // Check file extension
+    // Extension check (soft): allow mismatch but log warning
     const fileExt = path.extname(file.originalname).toLowerCase();
     const expectedExt = ALLOWED_FILE_TYPES[file.mimetype as keyof typeof ALLOWED_FILE_TYPES].ext;
-    
     if (fileExt !== expectedExt) {
-      logger.warn(LogCategory.FILE_UPLOAD, `File extension mismatch: expected ${expectedExt}, got ${fileExt} for file ${file.originalname}`);
-      return cb(new Error(`File extension ${fileExt} does not match MIME type ${file.mimetype}`));
+      logger.warn(LogCategory.FILE_UPLOAD, `Soft extension mismatch: expected ${expectedExt}, got ${fileExt} for file ${file.originalname}`);
+      // continue without failing
     }
 
     // Additional security check - validate file signature (magic numbers)
@@ -73,6 +84,10 @@ function validateFileSignature(buffer: Buffer, mimeType: string): boolean {
         // DOCX files are ZIP archives, check for ZIP signature
         return buffer[0] === 0x50 && buffer[1] === 0x4B; // PK
       
+      case 'application/msword':
+        // DOC files are OLE Compound File (D0 CF 11 E0 A1 B1 1A E1)
+        return buffer[0] === 0xD0 && buffer[1] === 0xCF && buffer[2] === 0x11 && buffer[3] === 0xE0;
+      
       case 'image/jpeg':
       case 'image/jpg':
         return buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF; // JPEG
@@ -80,6 +95,16 @@ function validateFileSignature(buffer: Buffer, mimeType: string): boolean {
       case 'image/png':
         return buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47; // PNG
       
+      case 'image/webp':
+        // WEBP: RIFF header then "WEBP" signature at bytes 8-11
+        return buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+               buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50; // RIFF .... WEBP
+
+      case 'image/gif':
+        // GIF87a or GIF89a
+        return buffer[0] === 0x47 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x38 &&
+               (buffer[4] === 0x37 || buffer[4] === 0x39) && buffer[5] === 0x61;
+
       case 'audio/mpeg':
         // MP3 can have multiple signatures, check for ID3 or MPEG sync
         return (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0) || // MPEG sync
@@ -89,6 +114,26 @@ function validateFileSignature(buffer: Buffer, mimeType: string): boolean {
       case 'audio/x-wav':
         return buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 && // RIFF
                buffer[8] === 0x57 && buffer[9] === 0x41 && buffer[10] === 0x56 && buffer[11] === 0x45; // WAVE
+      
+      case 'audio/webm':
+        // WebM/Matroska container starts with EBML header 1A 45 DF A3
+        return buffer[0] === 0x1A && buffer[1] === 0x45 && buffer[2] === 0xDF && buffer[3] === 0xA3;
+
+      case 'audio/ogg':
+        // OggS header
+        return buffer[0] === 0x4F && buffer[1] === 0x67 && buffer[2] === 0x67 && buffer[3] === 0x53;
+
+      case 'audio/aac':
+        // ADTS syncword 0xFFF
+        return buffer[0] === 0xFF && (buffer[1] & 0xF0) === 0xF0;
+
+      case 'audio/mp4':
+        // MP4/ISO BMFF: 'ftyp' at bytes 4-7
+        return buffer[4] === 0x66 && buffer[5] === 0x74 && buffer[6] === 0x79 && buffer[7] === 0x70;
+
+      case 'audio/amr':
+        // AMR header '#!AMR' followed by newline
+        return buffer[0] === 0x23 && buffer[1] === 0x21 && buffer[2] === 0x41 && buffer[3] === 0x4D && buffer[4] === 0x52;
       
       default:
         return false;

@@ -63,6 +63,16 @@ model Conversation {
   workflowContext Json?
   awaitingInput  Boolean   @default(false)
   
+  // Session management fields
+  sessionStartTime  DateTime? 
+  sessionExpiryTime DateTime?
+  sessionStatus     String    @default("active")  // 'active', 'warning', 'expired', 'closed'
+  lastUserActivity  DateTime?
+  
+  // Multi-channel support
+  channel           String    @default("whatsapp")  // 'whatsapp', 'instagram', 'messenger'
+  channelMetadata   Json?
+  
   assignedTo User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages   Message[]
@@ -73,6 +83,9 @@ model Message {
   conversationId String
   phoneNumber    String
   messageText    String
+  messageType    String    @default("TEXT") // TEXT, IMAGE, DOCUMENT, AUDIO, VIDEO
+  mediaUrl       String?   // URL da mídia (para imagens, documentos, áudio, vídeo)
+  metadata       Json?     // Metadados adicionais (filename, mimetype, caption, etc)
   direction      String
   from           String
   timestamp      DateTime  @default(now())

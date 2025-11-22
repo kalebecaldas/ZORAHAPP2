@@ -9,10 +9,12 @@ import {
   Trash2,
   Filter,
   Download,
-  Upload
+  Upload,
+  History
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
+import ConversationHistoryModal from '../components/ConversationHistoryModal';
 
 interface Patient {
   id: string;
@@ -37,6 +39,8 @@ const Patients: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedPatientForHistory, setSelectedPatientForHistory] = useState<Patient | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -284,14 +288,26 @@ const Patients: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
+                          onClick={() => {
+                            setSelectedPatientForHistory(patient);
+                            setShowHistoryModal(true);
+                          }}
+                          className="text-purple-600 hover:text-purple-900"
+                          title="Ver histórico"
+                        >
+                          <History className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => handleEdit(patient)}
                           className="text-blue-600 hover:text-blue-900"
+                          title="Editar"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(patient.id)}
                           className="text-red-600 hover:text-red-900"
+                          title="Excluir"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -398,6 +414,19 @@ const Patients: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* History Modal */}
+      {showHistoryModal && selectedPatientForHistory && (
+        <ConversationHistoryModal
+          patientId={selectedPatientForHistory.id}
+          patientPhone={selectedPatientForHistory.phone}
+          patientName={selectedPatientForHistory.name}
+          onClose={() => {
+            setShowHistoryModal(false);
+            setSelectedPatientForHistory(null);
+          }}
+        />
       )}
     </div>
   );

@@ -40,6 +40,7 @@ interface Message {
   timestamp: string;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
   metadata?: any;
+  mediaUrl?: string;
 }
 
 interface Patient {
@@ -137,11 +138,19 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         conversationId: response.data.id || conversationId,
         sender: (m.from === 'USER' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
         messageText: m.messageText,
-        messageType: 'TEXT',
+        messageType: m.messageType || 'TEXT',
+        mediaUrl: m.mediaUrl,
+        metadata: m.metadata,
         direction: m.direction,
         timestamp: m.timestamp,
         status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
       }))
+      console.log('🔍 Mensagens carregadas:', msgs.slice(-3).map(m => ({
+        type: m.messageType,
+        text: m.messageText?.substring(0, 20),
+        hasUrl: !!m.mediaUrl,
+        url: m.mediaUrl
+      })))
       setMessages(msgs)
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -156,31 +165,62 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
     fetchMessages();
 
     if (socket) {
+      // Join both conversation ID and phone rooms for compatibility
       socket.emit('join_conversation', conversationId);
+      const conversationPhone = (conversation as any)?.phone || (conversation as any)?.patient?.phone;
+      if (conversationPhone) {
+        socket.emit('join_conversation', conversationPhone);
+      }
+      console.log(`🔌 MessageList: Joined rooms for conv:${conversationId} and phone:${conversationPhone}`);
 
       const appendFromPayload = (payload: any) => {
         const m = payload?.message || payload
-        if (!m) return
-        if (m.conversationId || m.phoneNumber === conversationId) {
+        if (!m || !m.id) return
+        const matchesConversation = m.conversationId === conversationId ||
+          m.phoneNumber === conversationId ||
+          payload?.phone === conversationPhone ||
+          payload?.conversation?.id === conversationId
+
+        if (matchesConversation) {
+          console.log('📨 MessageList: Adding new message to list:', m);
           const mapped: Message = {
             id: m.id,
             conversationId: m.conversationId || conversationId,
             sender: (m.from === 'USER' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
             messageText: m.messageText,
-            messageType: 'TEXT',
+            messageType: m.messageType || 'TEXT',
             direction: m.direction,
-            timestamp: m.timestamp,
+            timestamp: m.timestamp || new Date().toISOString(),
             status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
+            metadata: m.metadata,
+            mediaUrl: m.mediaUrl
           }
-          setMessages(prev => prev.some(x => x.id === mapped.id) ? prev : [...prev, mapped])
+          setMessages(prev => {
+            if (prev.some(x => x.id === mapped.id)) {
+              console.log('⚠️ MessageList: Message already exists, skipping');
+              return prev;
+            }
+            console.log('✅ MessageList: Adding new message instantly');
+            // Adicionar no final da lista para manter ordem cronológica
+            return [...prev, mapped];
+          })
         }
       }
 
-      const onNewMessage = (payload: any) => appendFromPayload(payload)
-      const onMessageSent = (payload: any) => appendFromPayload(payload)
-      const onAIMessageSent = (payload: any) => appendFromPayload(payload)
+      const onNewMessage = (payload: any) => {
+        console.log('📨 MessageList: new_message event received:', payload);
+        appendFromPayload(payload);
+      }
+      const onMessageSent = (payload: any) => {
+        console.log('📨 MessageList: message_sent event received:', payload);
+        appendFromPayload(payload);
+      }
+      const onAIMessageSent = (payload: any) => {
+        console.log('📨 MessageList: ai_message_sent event received:', payload);
+        appendFromPayload(payload);
+      }
       const onUserTyping = (data: { phone: string; isTyping: boolean }) => {
-        if (data.phone === conversationId) setIsTyping(data.isTyping)
+        if (data.phone === conversationId || data.phone === conversationPhone) setIsTyping(data.isTyping)
       }
 
       socket.on('new_message', onNewMessage)
@@ -222,6 +262,9 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
 
       return () => {
         socket.emit('leave_conversation', conversationId)
+        if (conversationPhone) {
+          socket.emit('leave_conversation', conversationPhone)
+        }
         socket.off('new_message', onNewMessage)
         socket.off('message_sent', onMessageSent)
         socket.off('ai_message_sent', onAIMessageSent)
@@ -346,7 +389,11 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         const formData = new FormData();
         pendingFiles.forEach(file => formData.append('files', file));
 
-        const response = await api.post(`/api/conversations/${conversationId}/files`, formData, {
+        // Use conversation.id explicitly for the endpoint
+        const targetId = conversation?.id || conversationId;
+        console.log('📤 Uploading files to conversation:', targetId);
+
+        const response = await api.post(`/api/conversations/${targetId}/files`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -363,7 +410,10 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         const formData = new FormData();
         formData.append('files', audioBlob, 'audio_message.webm');
 
-        await api.post(`/api/conversations/${conversationId}/files`, formData, {
+        // Use conversation.id explicitly for the endpoint
+        const targetId = conversation?.id || conversationId;
+
+        await api.post(`/api/conversations/${targetId}/files`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
 
@@ -659,24 +709,40 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                 ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
                 : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
                 }`}>
-                <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
+                {/* Show text only if it exists and is not a media-only message */}
+                {message.messageText && !message.messageText.startsWith('[IMAGE]') && !message.messageText.startsWith('[AUDIO]') && !message.messageText.startsWith('[DOCUMENT]') && (
+                  <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
+                )}
 
-                {/* File attachments */}
-                {/* File attachments & Media */}
+                {/* File att attachments & Media */}
                 {message.messageType === 'AUDIO' && (
                   <div className="mt-2 min-w-[200px]">
-                    <audio controls src={message.metadata?.url || message.messageText} className="w-full h-8" />
+                    {message.mediaUrl ? (
+                      <audio controls src={message.mediaUrl} className="w-full h-8" />
+                    ) : (
+                      <p className="text-xs italic opacity-75">🎤 Áudio não disponível</p>
+                    )}
                   </div>
                 )}
 
+                {(() => {
+                  if (message.messageType === 'IMAGE') {
+                    console.log('🖼️ Renderizando IMAGE:', { id: message.id.substring(0, 10), hasUrl: !!message.mediaUrl, url: message.mediaUrl })
+                  }
+                  return null;
+                })()}
                 {message.messageType === 'IMAGE' && (
                   <div className="mt-2">
-                    <img
-                      src={message.metadata?.url || message.messageText}
-                      alt="Imagem"
-                      className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                      onClick={() => window.open(message.metadata?.url || message.messageText, '_blank')}
-                    />
+                    {message.mediaUrl ? (
+                      <img
+                        src={message.mediaUrl}
+                        alt="Imagem"
+                        className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => window.open(message.mediaUrl!, '_blank')}
+                      />
+                    ) : (
+                      <p className="text-xs italic opacity-75">📷 Imagem não disponível</p>
+                    )}
                   </div>
                 )}
 

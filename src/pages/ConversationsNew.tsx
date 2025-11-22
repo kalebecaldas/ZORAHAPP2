@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Phone, User, Bot, Clock, Users, UserCheck, Archive,
     Send, Paperclip, Mic, StopCircle, X, Image as ImageIcon,
-    File, Trash2, Video, MoreVertical, PhoneCall, AlertCircle
+    File, Trash2, Video, MoreVertical, PhoneCall, AlertCircle,
+    Shield, CheckCircle2, History, FileText
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
 import { toast } from 'sonner';
+import ConversationHistoryModal from '../components/ConversationHistoryModal';
 
 // Types
 interface Message {
@@ -17,6 +19,7 @@ interface Message {
     sender: 'BOT' | 'PATIENT' | 'AGENT';
     messageText: string;
     messageType: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO';
+    mediaUrl?: string | null;
     direction: 'SENT' | 'RECEIVED';
     timestamp: string;
     status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
@@ -35,6 +38,11 @@ interface Conversation {
     lastTimestamp?: string;
     createdAt: string;
     updatedAt: string;
+    sessionStartTime?: string | null;
+    sessionExpiryTime?: string | null;
+    sessionStatus?: string;
+    lastUserActivity?: string | null;
+    channel?: string;
 }
 
 type QueueType = 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSAS' | 'ENCERRADOS';
@@ -49,7 +57,8 @@ const ConversationsPage: React.FC = () => {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
-    const [activeQueue, setActiveQueue] = useState<QueueType>('BOT_QUEUE');
+    // Começar sempre com "Minhas Conversas" por padrão
+    const [activeQueue, setActiveQueue] = useState<QueueType>('MINHAS_CONVERSAS');
     const [newMessage, setNewMessage] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -61,6 +70,8 @@ const ConversationsPage: React.FC = () => {
     const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [audioMime, setAudioMime] = useState<string>('');
+    const [audioExt, setAudioExt] = useState<string>('webm');
 
     // File states
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -70,11 +81,19 @@ const ConversationsPage: React.FC = () => {
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [availableAgents, setAvailableAgents] = useState<any[]>([]);
     const [transferTarget, setTransferTarget] = useState<string>('');
+    
+    // Session state
+    const [sessionInfo, setSessionInfo] = useState<any>(null);
+    
+    // History modal
+    const [showHistoryModal, setShowHistoryModal] = useState(false);
 
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const [autoSendAfterStop, setAutoSendAfterStop] = useState(false);
+    const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
     // Permission check
     const canWrite = !!(
@@ -83,6 +102,15 @@ const ConversationsPage: React.FC = () => {
         selectedConversation.assignedTo.id === user.id &&
         selectedConversation.status === 'EM_ATENDIMENTO'
     );
+
+    // Memoizar condições para evitar re-renderizações desnecessárias e melhorar performance
+    const showMicButton = useMemo(() => {
+        return !newMessage.trim() && !isRecording && !audioBlob && pendingFiles.length === 0;
+    }, [newMessage, isRecording, audioBlob, pendingFiles.length]);
+
+    const canSend = useMemo(() => {
+        return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
+    }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
 
     // Queue configurations
     const queueConfigs = {
@@ -124,6 +152,7 @@ const ConversationsPage: React.FC = () => {
                 sender: (m.from === 'USER' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
                 messageText: m.messageText,
                 messageType: m.messageType || 'TEXT',
+                mediaUrl: m.mediaUrl,
                 direction: m.direction,
                 timestamp: m.timestamp,
                 status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
@@ -131,15 +160,28 @@ const ConversationsPage: React.FC = () => {
             }));
             setMessages(msgs);
 
-            // Update selected conversation data
+            // Update selected conversation data with complete response
             const conv = response.data;
-            setSelectedConversation({
-                ...selectedConversation!,
-                status: conv.status,
-                assignedToId: conv.assignedToId,
-                assignedTo: conv.assignedTo,
-                patient: conv.patient
-            });
+            if (conv) {
+                setSelectedConversation({
+                    id: conv.id,
+                    phone: conv.phone,
+                    status: conv.status,
+                    lastMessage: conv.lastMessage,
+                    lastTimestamp: conv.lastTimestamp,
+                    patient: conv.patient,
+                    assignedTo: conv.assignedTo,
+                    assignedToId: conv.assignedToId,
+                    priority: conv.priority || 'MEDIUM',
+                    createdAt: conv.createdAt,
+                    updatedAt: conv.updatedAt,
+                    sessionStartTime: conv.sessionStartTime,
+                    sessionExpiryTime: conv.sessionExpiryTime,
+                    sessionStatus: conv.sessionStatus,
+                    lastUserActivity: conv.lastUserActivity,
+                    channel: conv.channel || 'whatsapp'
+                });
+            }
         } catch (error) {
             console.error('Error fetching messages:', error);
         }
@@ -281,48 +323,101 @@ const ConversationsPage: React.FC = () => {
         }
     };
 
+    // Fetch session information
+    const fetchSessionInfo = async (conversationId: string) => {
+        try {
+            const response = await api.get(`/api/conversations/${conversationId}/session`);
+            const session = response.data.session;
+            
+            // Ensure timeRemainingFormatted is calculated if missing
+            if (!session.timeRemainingFormatted && session.timeRemaining) {
+                const formatMs = (ms: number): string => {
+                    const hours = Math.floor(ms / (1000 * 60 * 60));
+                    const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+                    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                };
+                session.timeRemainingFormatted = formatMs(session.timeRemaining);
+            }
+            
+            setSessionInfo(session);
+        } catch (error) {
+            console.error('Error fetching session info:', error);
+            setSessionInfo(null);
+        }
+    };
 
 
-    // Send message
+
+
+    // Send message with optimistic update
     const sendMessage = async () => {
         if ((!newMessage.trim() && pendingFiles.length === 0 && !audioBlob) || sending) return;
+
+        const messageText = newMessage.trim();
+        const tempId = `temp-${Date.now()}-${Math.random()}`;
+        const now = new Date().toISOString();
+
+        // OPTIMISTIC UPDATE: Adicionar mensagem imediatamente ao estado
+        if (messageText) {
+            const optimisticMessage: Message = {
+                id: tempId,
+                conversationId: selectedConversation!.id,
+                sender: 'AGENT',
+                messageText: messageText,
+                messageType: 'TEXT',
+                direction: 'SENT',
+                timestamp: now,
+                status: 'PENDING', // Será atualizado quando receber confirmação
+            };
+            
+            setMessages(prev => [...prev, optimisticMessage]);
+            setNewMessage(''); // Limpar campo imediatamente
+        }
 
         setSending(true);
         try {
             // Send text
-            if (newMessage.trim()) {
+            if (messageText) {
                 await api.post('/api/conversations/send', {
                     phone: selectedConversation!.phone,
-                    text: newMessage,
+                    text: messageText,
                     from: 'AGENT'
                 });
-                setNewMessage('');
+                // Não precisa fazer fetchMessages - o evento Socket.IO vai atualizar
             }
 
             // Send files
             if (pendingFiles.length > 0) {
                 const formData = new FormData();
                 pendingFiles.forEach(file => formData.append('files', file));
-                await api.post(`/api/conversations/${selectedConversation!.phone}/files`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                await api.post(`/api/conversations/${selectedConversation!.id}/files`, formData);
                 setPendingFiles([]);
             }
 
             // Send audio
             if (audioBlob) {
                 const formData = new FormData();
-                formData.append('files', audioBlob, 'audio_message.webm');
-                await api.post(`/api/conversations/${selectedConversation!.phone}/files`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
+                formData.append('files', audioBlob, `audio_message.${audioExt}`);
+                await api.post(`/api/conversations/${selectedConversation!.id}/files`, formData);
                 setAudioBlob(null);
                 setAudioUrl(null);
             }
 
-            fetchMessages(selectedConversation!.phone);
+            // Atualizar status da mensagem otimista para SENT quando receber confirmação
+            // O evento Socket.IO vai substituir a mensagem temporária pela real
         } catch (error) {
             console.error('Error sending message:', error);
+            
+            // Remover mensagem otimista em caso de erro
+            if (messageText) {
+                setMessages(prev => prev.filter(m => m.id !== tempId));
+            }
+            
+            // Restaurar texto no campo
+            if (messageText) {
+                setNewMessage(messageText);
+            }
+            
             toast.error('Erro ao enviar mensagem');
         } finally {
             setSending(false);
@@ -333,7 +428,9 @@ const ConversationsPage: React.FC = () => {
     const startRecording = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
+            const ogg = 'audio/ogg;codecs=opus';
+            const supportsOgg = (window as any).MediaRecorder && (MediaRecorder as any).isTypeSupported && MediaRecorder.isTypeSupported(ogg);
+            const recorder = supportsOgg ? new MediaRecorder(stream, { mimeType: ogg }) : new MediaRecorder(stream);
             const chunks: Blob[] = [];
 
             recorder.ondataavailable = (e) => {
@@ -341,11 +438,23 @@ const ConversationsPage: React.FC = () => {
             };
 
             recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
+                const baseMime = (recorder.mimeType || '').split(';')[0] || 'audio/webm';
+                const ext = baseMime === 'audio/ogg' ? 'ogg' : 'webm';
+                const blob = new Blob(chunks, { type: baseMime });
                 const url = URL.createObjectURL(blob);
                 setAudioBlob(blob);
                 setAudioUrl(url);
+                setAudioMime(baseMime);
+                setAudioExt(ext);
                 stream.getTracks().forEach(track => track.stop());
+                if (autoSendAfterStop) {
+                    setAutoSendAfterStop(false);
+                    setTimeout(() => {
+                        if (canWrite) {
+                            sendMessage();
+                        }
+                    }, 50);
+                }
             };
 
             recorder.start();
@@ -406,6 +515,16 @@ const ConversationsPage: React.FC = () => {
         }
     }, [phone, conversations]);
 
+    // Fetch session info when conversation is selected
+    useEffect(() => {
+        if (selectedConversation?.id) {
+            fetchSessionInfo(selectedConversation.id);
+        } else {
+            setSessionInfo(null);
+        }
+    }, [selectedConversation?.id]);
+
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
@@ -413,37 +532,130 @@ const ConversationsPage: React.FC = () => {
     useEffect(() => {
         if (!socket || !selectedConversation) return;
 
+        // Join both phone and conversation ID rooms for compatibility
         socket.emit('join_conversation', selectedConversation.phone);
+        socket.emit('join_conversation', selectedConversation.id);
+        console.log(`🔌 Joined rooms: conv:${selectedConversation.phone} and conv:${selectedConversation.id}`);
 
         const onNewMessage = (payload: any) => {
-            if (payload?.phone === selectedConversation.phone || payload?.message?.conversationId === selectedConversation.id) {
-                fetchMessages(selectedConversation.phone);
+            console.log('📨 Message event received:', payload);
+            const phoneMatch = payload?.phone === selectedConversation.phone;
+            const idMatch = payload?.message?.conversationId === selectedConversation.id || payload?.conversation?.id === selectedConversation.id;
+            
+            if (phoneMatch || idMatch) {
+                const messageData = payload?.message || payload;
+                if (messageData && messageData.id) {
+                    if (processedMessageIdsRef.current.has(messageData.id)) {
+                        return;
+                    }
+                    processedMessageIdsRef.current.add(messageData.id);
+                    if (processedMessageIdsRef.current.size > 200) {
+                        const it = processedMessageIdsRef.current.values();
+                        const first = it.next().value;
+                        processedMessageIdsRef.current.delete(first);
+                    }
+                    // Adicionar mensagem diretamente ao estado (mais rápido!)
+                    const newMessage: Message = {
+                        id: messageData.id,
+                        conversationId: messageData.conversationId || selectedConversation.id,
+                        sender: (messageData.from === 'USER' ? 'PATIENT' : (messageData.from === 'BOT' ? 'BOT' : 'AGENT')),
+                        messageText: messageData.messageText,
+                        messageType: messageData.messageType || 'TEXT',
+                        mediaUrl: messageData.mediaUrl,
+                        direction: messageData.direction,
+                        timestamp: messageData.timestamp || new Date().toISOString(),
+                        status: messageData.direction === 'SENT' ? 'SENT' : 'PENDING',
+                        metadata: messageData.metadata
+                    };
+                    
+                    // Verificar se a mensagem já existe ou substituir mensagem otimista
+                    setMessages(prev => {
+                        // Verificar duplicatas PRIMEIRO
+                        if (prev.some(m => m.id === newMessage.id)) {
+                            console.log('⚠️ Mensagem já existe, ignorando duplicata:', newMessage.id);
+                            return prev; // Não fazer nada se já existe
+                        }
+                        
+                        // Remover mensagens temporárias (optimistic updates) com mesmo texto
+                        const filtered = prev.filter(m => {
+                            // Se for mensagem temporária e o texto corresponder, remover
+                            if (m.id.startsWith('temp-') && m.messageText === newMessage.messageText && m.sender === 'AGENT') {
+                                console.log('🔄 Substituindo mensagem otimista pela real:', m.id, '->', newMessage.id);
+                                return false;
+                            }
+                            return true;
+                        });
+                        
+                        // Adicionar a mensagem real
+                        console.log('✅ Adicionando mensagem ao estado:', newMessage.id);
+                        return [...filtered, newMessage];
+                    });
+                    
+                    // Atualizar última mensagem da conversa
+                    if (payload?.conversation) {
+                        setSelectedConversation(prev => prev ? {
+                            ...prev,
+                            lastMessage: messageData.messageText,
+                            lastTimestamp: messageData.timestamp
+                        } : prev);
+                    }
+                } else {
+                    // Fallback: se não tiver dados completos, fazer fetch
+                    console.log('⚠️ Payload incompleto, fazendo fetch...');
+                    fetchMessages(selectedConversation.phone);
+                }
             }
         };
 
         const onConversationUpdated = (updated: any) => {
+            console.log('🔄 Conversation updated event received:', updated);
             if (updated?.phone === selectedConversation.phone || updated?.id === selectedConversation.id) {
-                fetchMessages(selectedConversation.phone);
-                fetchConversations();
+                // Avoid loops: refresh only if lastTimestamp changed
+                const changed = !!updated?.lastTimestamp && updated.lastTimestamp !== selectedConversation.lastTimestamp;
+                if (changed) {
+                    console.log('✅ Conversation update matches (changed), refreshing...');
+                    fetchMessages(selectedConversation.phone);
+                    fetchConversations();
+                } else {
+                    console.log('⏭️ Conversation update ignored (no timestamp change)');
+                }
             }
         };
 
-        socket.on('new_message', onNewMessage);
-        socket.on('message_sent', onNewMessage);
+        // Escutar eventos separadamente:
+        // - message_sent: mensagens enviadas pelo agente (evita duplicatas com optimistic update)
+        // - new_message: mensagens recebidas do paciente/bot
+        const onMessageSent = (payload: any) => {
+            // Apenas processar se for mensagem enviada pelo agente
+            if (payload?.message?.from === 'AGENT' || payload?.message?.direction === 'SENT') {
+                onNewMessage(payload);
+            }
+        };
+        
+        const onNewMessageReceived = (payload: any) => {
+            // Apenas processar se for mensagem recebida (não enviada)
+            if (payload?.message?.from === 'USER' || payload?.message?.from === 'BOT' || payload?.message?.direction === 'RECEIVED') {
+                onNewMessage(payload);
+            }
+        };
+
+        socket.on('message_sent', onMessageSent);
+        socket.on('new_message', onNewMessageReceived);
         socket.on('conversation_updated', onConversationUpdated);
         socket.on('queue_updated', onConversationUpdated);
 
         return () => {
             socket.emit('leave_conversation', selectedConversation.phone);
-            socket.off('new_message', onNewMessage);
-            socket.off('message_sent', onNewMessage);
+            socket.emit('leave_conversation', selectedConversation.id);
+            socket.off('message_sent', onMessageSent);
+            socket.off('new_message', onNewMessageReceived);
             socket.off('conversation_updated', onConversationUpdated);
             socket.off('queue_updated', onConversationUpdated);
         };
     }, [socket, selectedConversation]);
 
     return (
-        <div className="flex h-screen bg-gray-50">
+        <div className="flex h-screen bg-gray-50 overflow-x-hidden">
             {/* Custom Scrollbar Styles */}
             <style>{`
         .custom-scrollbar::-webkit-scrollbar {
@@ -459,6 +671,8 @@ const ConversationsPage: React.FC = () => {
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #94a3b8;
         }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         @keyframes pulse-slow {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
@@ -509,7 +723,7 @@ const ConversationsPage: React.FC = () => {
                                     <Icon className="h-3.5 w-3.5 flex-shrink-0" />
                                     {isActive && <span className="whitespace-nowrap">{config.label}</span>}
                                     <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${isActive ? 'bg-white/60' : 'bg-gray-200'
-                                        }`}>
+                                        } ${queue === 'PRINCIPAL' && count > 0 ? 'bg-red-500 text-white animate-pulse' : ''}`}>
                                         {count}
                                     </span>
                                 </button>
@@ -543,10 +757,28 @@ const ConversationsPage: React.FC = () => {
                                             <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
                                                 <User className="h-5 w-5 text-gray-500" />
                                             </div>
-                                            <div>
-                                                <h3 className="font-medium text-gray-900 text-sm">
-                                                    {conversation.patient?.name || conversation.phone}
-                                                </h3>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <h3 className="font-medium text-gray-900 text-sm">
+                                                        {conversation.patient?.name || conversation.phone}
+                                                    </h3>
+                                                    {/* Channel icon */}
+                                                    {conversation.channel === 'whatsapp' && (
+                                                        <svg className="w-3.5 h-3.5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                                        </svg>
+                                                    )}
+                                                    {conversation.channel === 'instagram' && (
+                                                        <svg className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                                                        </svg>
+                                                    )}
+                                                    {conversation.channel === 'messenger' && (
+                                                        <svg className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
+                                                        </svg>
+                                                    )}
+                                                </div>
                                                 <p className="text-xs text-gray-500">{conversation.phone}</p>
                                             </div>
                                         </div>
@@ -621,7 +853,65 @@ const ConversationsPage: React.FC = () => {
                                     <h2 className="font-semibold text-gray-900">
                                         {selectedConversation.patient?.name || selectedConversation.phone}
                                     </h2>
-                                    <p className="text-sm text-gray-500">{selectedConversation.phone}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm text-gray-500">{selectedConversation.phone}</p>
+                                        {/* Channel icon - small and next to phone */}
+                                        {selectedConversation.channel === 'whatsapp' && (
+                                            <svg className="w-3.5 h-3.5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                            </svg>
+                                        )}
+                                        {selectedConversation.channel === 'instagram' && (
+                                            <svg className="w-3.5 h-3.5 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                                            </svg>
+                                        )}
+                                        {selectedConversation.channel === 'messenger' && (
+                                            <svg className="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
+                                            </svg>
+                                        )}
+                                        {/* Session status tag */}
+                                        {sessionInfo && (() => {
+                                            const formatTime = (ms: number | null | undefined): string => {
+                                                if (!ms || ms <= 0) return 'Expirada';
+                                                const hours = Math.floor(ms / (1000 * 60 * 60));
+                                                const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+                                                return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                                            };
+                                            
+                                            const timeFormatted = sessionInfo.timeRemainingFormatted || 
+                                                (sessionInfo.timeRemaining ? formatTime(sessionInfo.timeRemaining) : null);
+                                            
+                                            if (!timeFormatted && !sessionInfo.canSendMessage) {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                                                        ⏰ Expirada
+                                                    </span>
+                                                );
+                                            }
+                                            
+                                            if (!timeFormatted) {
+                                                return null; // Não mostrar se não houver tempo
+                                            }
+                                            
+                                            const isWarning = sessionInfo.status === 'warning' || 
+                                                (sessionInfo.timeRemaining && sessionInfo.timeRemaining < 3600000);
+                                            const isExpired = sessionInfo.status === 'expired' || !sessionInfo.canSendMessage;
+                                            
+                                            return (
+                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                                                    isExpired ? 'bg-red-50 text-red-700 border border-red-200' :
+                                                    isWarning ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
+                                                    'bg-green-50 text-green-700 border border-green-200'
+                                                }`}>
+                                                    {isExpired ? '⏰ Expirada' :
+                                                     isWarning ? `⚠️ ${timeFormatted}` :
+                                                     `✅ ${timeFormatted}`}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                 </div>
                             </div>
 
@@ -643,6 +933,41 @@ const ConversationsPage: React.FC = () => {
                                                 : selectedConversation.status === 'PRINCIPAL' ? 'Aguardando'
                                                     : selectedConversation.status === 'FECHADA' ? 'Encerrado' : 'Aguardando'}
                                 </span>
+
+                                {/* History button - always clickable */}
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        console.log('🔍 History button clicked!', {
+                                            hasConversation: !!selectedConversation,
+                                            conversationId: selectedConversation?.id,
+                                            phone: selectedConversation?.phone,
+                                            patientId: selectedConversation?.patient?.id,
+                                            currentModalState: showHistoryModal
+                                        });
+                                        if (selectedConversation) {
+                                            setShowHistoryModal(true);
+                                            console.log('✅ Modal state set to true');
+                                        } else {
+                                            console.log('❌ No conversation selected');
+                                        }
+                                    }}
+                                    disabled={!selectedConversation}
+                                    className={`p-2 rounded-lg transition-colors group ${
+                                        selectedConversation 
+                                            ? 'hover:bg-purple-50 cursor-pointer' 
+                                            : 'opacity-50 cursor-not-allowed'
+                                    }`}
+                                    title={selectedConversation ? "Ver histórico de conversas" : "Selecione uma conversa"}
+                                >
+                                    <History className={`h-5 w-5 ${
+                                        selectedConversation 
+                                            ? 'text-purple-600 group-hover:text-purple-700' 
+                                            : 'text-gray-400'
+                                    }`} />
+                                </button>
 
                                 {/* Transfer button - only if user has write access */}
                                 {canWrite && (
@@ -676,7 +1001,7 @@ const ConversationsPage: React.FC = () => {
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-3 bg-gray-50 custom-scrollbar">
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-3 bg-gray-50 custom-scrollbar">
                         {messages.map((message) => {
                             const isAgent = message.sender === 'AGENT';
                             const isBot = message.sender === 'BOT';
@@ -684,24 +1009,47 @@ const ConversationsPage: React.FC = () => {
 
                             return (
                                 <div key={message.id} className={`flex ${isAgent || isBot ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-md px-4 py-2 rounded-2xl shadow-sm ${isAgent || isBot
+                                    <div className={`max-w-md px-4 py-2 rounded-2xl shadow-sm relative group ${isAgent || isBot
                                         ? 'bg-blue-600 text-white rounded-br-sm'
                                         : 'bg-white text-gray-900 border border-gray-200 rounded-bl-sm'
                                         }`}>
+                                        {/* delete icon removed by request */}
                                         {message.messageType === 'TEXT' && (
                                             <p className="text-sm whitespace-pre-wrap">{message.messageText}</p>
                                         )}
 
-                                        {message.messageType === 'IMAGE' && (
-                                            <img
-                                                src={message.metadata?.url || message.messageText}
-                                                alt="Imagem"
-                                                className="max-w-full rounded-lg"
-                                            />
+                                        {message.messageType === 'IMAGE' && message.mediaUrl && (
+                                            <div className="space-y-2">
+                                                <img
+                                                    src={message.mediaUrl}
+                                                    alt="Imagem"
+                                                    className="max-w-full max-h-96 rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                                    onClick={() => window.open(message.mediaUrl!, '_blank')}
+                                                />
+                                                {message.messageText && message.messageText !== 'Imagem recebida' && message.messageText !== 'Imagem enviada' && (
+                                                    <p className="text-sm whitespace-pre-wrap">{message.messageText}</p>
+                                                )}
+                                            </div>
                                         )}
 
-                                        {message.messageType === 'AUDIO' && (
-                                            <audio controls src={message.metadata?.url || message.messageText} className="max-w-full" />
+                                        {message.messageType === 'AUDIO' && message.mediaUrl && (
+                                            <div className="space-y-2">
+                                                <audio controls src={message.mediaUrl} className="max-w-full" />
+                                            </div>
+                                        )}
+
+                                        {message.messageType === 'DOCUMENT' && message.mediaUrl && (
+                                            <div className="space-y-2">
+                                                <a
+                                                    href={message.mediaUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center gap-2 text-sm hover:underline"
+                                                >
+                                                    <FileText className="h-4 w-4" />
+                                                    {message.metadata?.filename || message.messageText || 'Documento'}
+                                                </a>
+                                            </div>
                                         )}
 
                                         <p className={`text-xs mt-1 ${isAgent || isBot ? 'text-white/70' : 'text-gray-500'}`}>
@@ -735,7 +1083,7 @@ const ConversationsPage: React.FC = () => {
 
                         {/* Previews */}
                         {(pendingFiles.length > 0 || audioBlob) && (
-                            <div className="mb-3 flex gap-2 overflow-x-auto pb-2">
+                            <div className="mb-3 flex gap-2 overflow-x-auto no-scrollbar pb-2">
                                 {pendingFiles.map((file, i) => (
                                     <div key={i} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 w-20 flex-shrink-0">
                                         <button
@@ -769,10 +1117,15 @@ const ConversationsPage: React.FC = () => {
                                 ref={fileInputRef}
                                 type="file"
                                 multiple
-                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.mp3,.wav"
+                                accept="image/*,audio/*,.pdf,.doc,.docx"
                                 onChange={(e) => {
+                                    console.log('📁 Arquivos selecionados:', e.target.files?.length);
                                     if (e.target.files) {
-                                        setPendingFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                        const list = Array.from(e.target.files!);
+                                        setPendingFiles(prev => [...prev, ...list]);
+                                        if (canWrite && list.length > 0 && !sending) {
+                                            setTimeout(() => sendMessage(), 10);
+                                        }
                                         e.target.value = '';
                                     }
                                 }}
@@ -781,35 +1134,48 @@ const ConversationsPage: React.FC = () => {
                             />
 
                             <button
-                                onClick={() => fileInputRef.current?.click()}
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    console.log('📎 Clique no botão de anexar', { canWrite, fileInputRef: !!fileInputRef.current });
+                                    fileInputRef.current?.click();
+                                }}
                                 disabled={!canWrite}
                                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                                title={!canWrite ? 'Assuma a conversa para enviar arquivos' : 'Anexar arquivo'}
                             >
                                 <Paperclip className="h-5 w-5 text-gray-600" />
                             </button>
 
                             <div className="flex-1 relative">
                                 {isRecording ? (
-                                    <div className="absolute inset-0 bg-red-50 rounded-lg flex items-center justify-between px-4 border border-red-200">
-                                        <div className="flex items-center gap-2 text-red-600 animate-pulse">
-                                            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
-                                            <span className="text-sm font-medium">{formatTime(recordingTime)}</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={cancelRecording} className="p-1 hover:bg-red-100 rounded">
-                                                <Trash2 className="h-5 w-5" />
+                                    <div className="flex items-center justify-center py-2">
+                                        <div className="flex flex-col items-center">
+                                            <button onClick={stopRecording} className="p-2 rounded-full bg-red-600 text-white animate-pulse" title="Parar gravação">
+                                                <Mic className="h-5 w-5" />
                                             </button>
-                                            <button onClick={stopRecording} className="p-1 hover:bg-red-100 rounded">
-                                                <StopCircle className="h-5 w-5" />
-                                            </button>
+                                            <span className="mt-1 text-xs text-red-600 font-medium">{formatTime(recordingTime)}</span>
                                         </div>
                                     </div>
                                 ) : (
                                     <input
                                         type="text"
                                         value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                                        onChange={(e) => {
+                                            // Atualização direta sem debounce para resposta instantânea
+                                            setNewMessage(e.target.value);
+                                        }}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey && (canSend || isRecording)) {
+                                                if (isRecording) {
+                                                    setAutoSendAfterStop(true);
+                                                    stopRecording();
+                                                    return;
+                                                }
+                                                sendMessage();
+                                            }
+                                        }}
                                         placeholder="Digite sua mensagem..."
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         disabled={!canWrite}
@@ -817,7 +1183,7 @@ const ConversationsPage: React.FC = () => {
                                 )}
                             </div>
 
-                            {!newMessage.trim() && !isRecording && !audioBlob && pendingFiles.length === 0 ? (
+                            {showMicButton ? (
                                 <button
                                     onClick={startRecording}
                                     disabled={!canWrite}
@@ -827,8 +1193,15 @@ const ConversationsPage: React.FC = () => {
                                 </button>
                             ) : (
                                 <button
-                                    onClick={sendMessage}
-                                    disabled={(!newMessage.trim() && pendingFiles.length === 0 && !audioBlob) || sending || !canWrite}
+                                    onClick={() => {
+                                        if (isRecording) {
+                                            setAutoSendAfterStop(true);
+                                            stopRecording();
+                                            return;
+                                        }
+                                        sendMessage();
+                                    }}
+                                    disabled={!(canSend || isRecording)}
                                     className="bg-blue-500 text-white p-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
                                 >
                                     <Send className="h-5 w-5" />
@@ -964,6 +1337,28 @@ const ConversationsPage: React.FC = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* History Modal */}
+            {showHistoryModal && selectedConversation && (
+                <>
+                    {console.log('🎯 Rendering History Modal:', {
+                        showHistoryModal,
+                        conversationId: selectedConversation.id,
+                        phone: selectedConversation.phone,
+                        patientId: selectedConversation.patient?.id
+                    })}
+                    <ConversationHistoryModal
+                        key={`history-modal-${selectedConversation.id}`}
+                        patientId={selectedConversation.patient?.id}
+                        patientPhone={selectedConversation.phone}
+                        patientName={selectedConversation.patient?.name || `Paciente ${selectedConversation.phone.slice(-4)}`}
+                        onClose={() => {
+                            console.log('🔒 Closing modal');
+                            setShowHistoryModal(false);
+                        }}
+                    />
+                </>
             )}
         </div>
 

@@ -1,4 +1,6 @@
 import { Router, type Request, type Response } from 'express'
+import path from 'path'
+import fs from 'fs'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
 const prismaAny = prisma as any
@@ -8,9 +10,11 @@ import { AIService } from '../services/ai.js'
 import type { AIContext } from '../services/ai.js'
 import axios from 'axios'
 import { getRealtime } from '../realtime.js'
-import { upload } from '../services/fileValidation.js'
+import { upload, FileValidationService } from '../services/fileValidation.js'
+import { transcodeToMp3, transcodeToOggOpus, transcodeToAacM4a } from '../utils/audioTranscode.js'
 import { WorkflowEngine, type WorkflowNode } from '../../src/services/workflowEngine.js'
 import { prismaClinicDataService } from '../services/prismaClinicDataService.js'
+import { sessionManager } from '../services/conversationSession.js'
 
 const router = Router()
 
@@ -220,6 +224,9 @@ router.get('/:phone', listAuth, async (req: Request, res: Response): Promise<voi
           select: {
             id: true,
             messageText: true,
+            messageType: true,
+            mediaUrl: true,
+            metadata: true,
             direction: true,
             from: true,
             timestamp: true,
@@ -275,6 +282,9 @@ router.get('/id/:id', listAuth, async (req: Request, res: Response): Promise<voi
           select: {
             id: true,
             messageText: true,
+            messageType: true,
+            mediaUrl: true,
+            metadata: true,
             direction: true,
             from: true,
             timestamp: true,
@@ -537,7 +547,7 @@ router.post('/:id/request', authMiddleware, async (req: Request, res: Response):
   }
 })
 
-// Send message
+// Send message (OTIMIZADO: envia para WhatsApp e banco em paralelo)
 router.post('/send', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
     const { phone, text, from = 'AGENT', mediaUrl, mediaType } = req.body
@@ -547,7 +557,23 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       return
     }
 
-    // Find or create conversation
+    // OTIMIZAÇÃO CRÍTICA: Enviar WhatsApp PRIMEIRO (mais importante para latência)
+    const startTime = Date.now()
+    let whatsappSent = false
+    let whatsappError: any = null
+
+    // Enviar WhatsApp IMEDIATAMENTE (não esperar banco)
+    try {
+      await whatsappService.sendTextMessage(phone, text)
+      whatsappSent = true
+      const whatsappTime = Date.now() - startTime
+      console.log(`⚡ [FAST] WhatsApp enviado em ${whatsappTime}ms`)
+    } catch (error) {
+      whatsappError = error
+      console.error('❌ Erro ao enviar via WhatsApp:', error)
+    }
+
+    // Enquanto isso, fazer operações de banco (podem ser feitas depois)
     let conversation = await prisma.conversation.findFirst({
       where: { phone }
     })
@@ -564,7 +590,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       })
     }
 
-    // Create message
+    // Criar mensagem no banco (rápido)
     const message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
@@ -576,71 +602,66 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       }
     })
 
-    // Update conversation
-    conversation = await prisma.conversation.update({
+    // Atualizar conversa (sem include pesado)
+    const updatedConversation = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
         lastMessage: text,
         lastTimestamp: new Date()
-      },
-      include: {
-        patient: {
-          select: { id: true, name: true, cpf: true, insuranceCompany: true }
-        },
-        assignedTo: {
-          select: { id: true, name: true, email: true }
-        }
       }
     })
 
-    // Send via WhatsApp
+    // Log de interação de forma assíncrona (não bloqueia resposta)
+    if (updatedConversation.patientId) {
+      prisma.patientInteraction.create({
+        data: {
+          patientId: updatedConversation.patientId,
+          type: whatsappSent ? 'MESSAGE_SENT' : 'MESSAGE_FAILED',
+          description: whatsappSent ? 'Mensagem enviada via WhatsApp' : 'Falha ao enviar mensagem via WhatsApp',
+          data: {
+            messageId: message.id,
+            sentBy: req.user.id,
+            sentByName: req.user.name,
+            ...(whatsappError ? { error: whatsappError instanceof Error ? whatsappError.message : 'Erro desconhecido' } : {})
+          }
+        }
+      }).catch(err => console.warn('Erro ao criar log de interação:', err))
+    }
+
+    // Emit real-time update (APENAS UMA VEZ para evitar duplicatas)
     try {
-      await whatsappService.sendTextMessage(phone, text)
-
-      // Log successful send
-      if (conversation.patientId) {
-        await prisma.patientInteraction.create({
-          data: {
-            patientId: conversation.patientId,
-            type: 'MESSAGE_SENT',
-            description: 'Mensagem enviada via WhatsApp',
-            data: {
-              messageId: message.id,
-              sentBy: req.user.id,
-              sentByName: req.user.name
-            }
-          }
-        })
-      }
-
-      // Emit real-time update
       const realtime = getRealtime()
-      realtime.io.to(`conv:${phone}`).emit('message_sent', {
-        message,
-        conversation
-      })
-
-      res.json({ message, conversation, delivery: 'ok' })
-    } catch (whatsappError) {
-      console.error('Erro ao enviar via WhatsApp:', whatsappError)
-
-      if (conversation.patientId) {
-        await prisma.patientInteraction.create({
-          data: {
-            patientId: conversation.patientId,
-            type: 'MESSAGE_FAILED',
-            description: 'Falha ao enviar mensagem via WhatsApp',
-            data: {
-              messageId: message.id,
-              error: whatsappError instanceof Error ? whatsappError.message : 'Erro desconhecido'
-            }
-          }
-        })
+      const payload = {
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          phoneNumber: message.phoneNumber,
+          messageText: message.messageText,
+          direction: message.direction,
+          from: message.from,
+          timestamp: message.timestamp.toISOString()
+        },
+        conversation: updatedConversation,
+        phone
       }
+      // Emitir apenas para as salas relevantes, não globalmente (evita duplicatas)
+      realtime.io.to(`conv:${phone}`).emit('message_sent', payload)
+      realtime.io.to(`conv:${updatedConversation.id}`).emit('message_sent', payload)
+      console.log(`📡 [SINGLE] Evento message_sent emitido para conv:${phone} e conv:${updatedConversation.id}`)
+    } catch (e) {
+      console.warn('Realtime update failed:', e)
+    }
 
+    const elapsed = Date.now() - startTime
+    console.log(`⚡ [PERF] Mensagem enviada em ${elapsed}ms (WhatsApp: ${whatsappSent ? 'OK' : 'FAIL'})`)
+
+    // Retornar resposta
+    if (whatsappSent) {
+      res.json({ message, conversation: updatedConversation, delivery: 'ok' })
+    } else {
       const failOpen = process.env.NODE_ENV !== 'production' || !process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_FAIL_OPEN === 'true'
       if (failOpen) {
-        res.json({ message, conversation, delivery: 'failed' })
+        res.json({ message, conversation: updatedConversation, delivery: 'failed' })
       } else {
         res.status(500).json({ error: 'Erro ao enviar mensagem via WhatsApp' })
       }
@@ -652,7 +673,14 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
 })
 
 // Process incoming WhatsApp message (called from webhook)
-export async function processIncomingMessage(phone: string, text: string, messageId: string): Promise<void> {
+export async function processIncomingMessage(
+  phone: string,
+  text: string,
+  messageId: string,
+  messageType: string = 'TEXT',
+  mediaUrl: string | null = null,
+  metadata: any = null
+): Promise<void> {
   try {
     // Find or create patient
     let patient = await prisma.patient.findUnique({
@@ -684,6 +712,10 @@ export async function processIncomingMessage(phone: string, text: string, messag
       where: { phone }
     })
 
+    // Initialize session times
+    const now = new Date()
+    const sessionExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {
@@ -691,9 +723,24 @@ export async function processIncomingMessage(phone: string, text: string, messag
           status: 'BOT_QUEUE',
           patientId: patient.id,
           lastMessage: text,
-          lastTimestamp: new Date()
+          lastTimestamp: new Date(),
+          sessionStartTime: now,
+          sessionExpiryTime: sessionExpiryTime,
+          sessionStatus: 'active',
+          lastUserActivity: now,
+          channel: 'whatsapp'
         }
       })
+      console.log(`💬 Nova conversa criada: ${conversation.id} com sessão de 24h`)
+
+      // Start session in memory manager
+      try {
+        await sessionManager.startSession(conversation.id, patient.id)
+        console.log(`✅ Sessão iniciada no manager para: ${conversation.id}`)
+      } catch (err) {
+        console.warn(`⚠️ Erro ao iniciar sessão no manager:`, err)
+      }
+
       try {
         const wf = await getDefaultWorkflow()
         if (wf) {
@@ -708,6 +755,41 @@ export async function processIncomingMessage(phone: string, text: string, messag
           })
         }
       } catch { }
+    } else {
+      // Check session status and update
+      const sessionExpired = conversation.sessionExpiryTime && new Date(conversation.sessionExpiryTime) < now
+
+      if (sessionExpired && conversation.sessionStatus !== 'expired') {
+        console.log(`⏰ Sessão expirada para conversa ${conversation.id}`)
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            sessionStatus: 'expired',
+            lastUserActivity: now
+          }
+        })
+      } else if (!sessionExpired) {
+        // Update last activity
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastUserActivity: now
+          }
+        })
+
+        // Update session in memory manager
+        try {
+          await sessionManager.updateSessionActivity(conversation.id)
+          console.log(`📊 Atividade de sessão atualizada para: ${conversation.id}`)
+        } catch (err) {
+          // Session might not exist in memory, start it
+          try {
+            await sessionManager.startSession(conversation.id, patient.id)
+          } catch (startErr) {
+            console.warn(`⚠️ Erro ao gerenciar sessão:`, startErr)
+          }
+        }
+      }
     }
 
     // Create message
@@ -716,13 +798,54 @@ export async function processIncomingMessage(phone: string, text: string, messag
         conversationId: conversation.id,
         phoneNumber: phone,
         messageText: text,
+        messageType,
+        mediaUrl,
+        metadata,
         direction: 'RECEIVED',
         from: 'USER',
         timestamp: new Date()
       }
     })
 
-    // Update conversation
+    // IMPORTANTE: Emitir evento Socket.IO IMEDIATAMENTE após criar a mensagem
+    // Isso reduz a latência percebida pelo usuário
+    const shouldProcessWithBot = conversation.status === 'BOT_QUEUE';
+
+    // Emitir eventos em tempo real IMEDIATAMENTE (antes de outras operações)
+    try {
+      const realtime = getRealtime()
+      const messagePayload = {
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          phoneNumber: message.phoneNumber,
+          messageText: message.messageText,
+          messageType: message.messageType,
+          mediaUrl: message.mediaUrl,
+          metadata: message.metadata,
+          direction: message.direction,
+          from: message.from,
+          timestamp: message.timestamp.toISOString()
+        },
+        conversation: {
+          id: conversation.id,
+          phone: conversation.phone,
+          status: conversation.status,
+          lastMessage: text,
+          lastTimestamp: new Date().toISOString()
+        },
+        phone
+      }
+
+      console.log(`📡 Emitindo new_message com mediaUrl:`, message.mediaUrl, `tipo:`, message.messageType)
+      realtime.io.to(`conv:${phone}`).emit('new_message', messagePayload)
+      realtime.io.to(`conv:${conversation.id}`).emit('new_message', messagePayload)
+      console.log(`📡 [ROOMS] Evento new_message emitido para conv:${phone} e conv:${conversation.id}`)
+    } catch (e) {
+      console.warn('Realtime update failed:', e)
+    }
+
+    // Update conversation (pode ser feito em paralelo ou depois)
     conversation = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
@@ -736,7 +859,22 @@ export async function processIncomingMessage(phone: string, text: string, messag
       }
     })
 
-    if (conversation.workflowId && conversation.status === 'BOT_QUEUE') {
+    // Emitir atualização de conversa após atualizar
+    try {
+      const realtime = getRealtime()
+      realtime.io.to(`conv:${conversation.phone}`).emit('conversation_updated', conversation)
+      realtime.io.to(`conv:${conversation.id}`).emit('conversation_updated', conversation)
+    } catch (e) {
+      console.warn('Realtime conversation update failed:', e)
+    }
+
+    if (!shouldProcessWithBot) {
+      console.log(`👤 Mensagem recebida em conversa com humano (status: ${conversation.status}). Bot não processará.`)
+      return
+    }
+
+    // Processar apenas se estiver na fila do bot
+    if (conversation.workflowId && shouldProcessWithBot) {
       try {
         const def = await getDefaultWorkflow()
         if (def && def.id !== conversation.workflowId) {
@@ -755,7 +893,8 @@ export async function processIncomingMessage(phone: string, text: string, messag
         }
       } catch { }
       await advanceWorkflow(conversation, text)
-    } else {
+    } else if (shouldProcessWithBot) {
+      // Fallback para conversas sem workflow mas ainda na fila do bot
       const handled = await handleAppointmentFlow(conversation, patient, text)
       if (!handled) {
         if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
@@ -766,17 +905,8 @@ export async function processIncomingMessage(phone: string, text: string, messag
       }
     }
 
-    // Emit real-time updates
-    try {
-      const realtime = getRealtime()
-      realtime.io.to(`conv:${phone}`).emit('new_message', {
-        message,
-        conversation
-      })
-      realtime.io.emit('conversation_updated', conversation)
-    } catch (e) {
-      console.warn('Realtime update failed:', e)
-    }
+    // Nota: Os eventos Socket.IO já foram emitidos acima (imediatamente após criar a mensagem)
+    // Este código não é mais necessário, mas mantido como fallback de segurança
 
   } catch (error) {
     console.error('Erro ao processar mensagem recebida:', error)
@@ -1198,19 +1328,166 @@ router.post('/:id/files', authMiddleware, upload.array('files', 5), async (req: 
       return
     }
 
-    // Create file records
-    const savedFiles = files.map((file) => ({
-      conversationId: id,
-      originalName: file.originalname,
-      fileName: `${Date.now()}-${file.originalname}`,
-      mimeType: file.mimetype,
-      size: file.size,
-      uploadedBy: req.user.id,
-      uploadedAt: new Date(),
-      category: file.mimetype.startsWith('image/') ? 'IMAGE' :
-        file.mimetype === 'application/pdf' ? 'DOCUMENT' :
+    // Create file records and send via WhatsApp
+    const savedFiles = []
+    const messages = []
+
+    // Ensure uploads directory exists
+    const uploadsDir = path.join(process.cwd(), 'uploads')
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true })
+    }
+
+    for (const file of files) {
+      const uniqueName = FileValidationService.generateUniqueFilename(file.originalname)
+      const filePath = path.join(uploadsDir, uniqueName)
+      fs.writeFileSync(filePath, file.buffer)
+
+      const category = file.mimetype.startsWith('image/') ? 'IMAGE' :
+        file.mimetype === 'application/pdf' || file.mimetype.includes('document') || file.mimetype === 'application/msword' ? 'DOCUMENT' :
           file.mimetype.startsWith('audio/') ? 'AUDIO' : 'OTHER'
-    }))
+
+      savedFiles.push({
+        conversationId: id,
+        originalName: file.originalname,
+        fileName: uniqueName,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedBy: req.user.id,
+        uploadedAt: new Date(),
+        category
+      })
+
+      // Prepare upload path and mimetype (transcode audio webm/unsupported to mp3)
+      let uploadPath = filePath
+      let uploadMime = file.mimetype
+      let messageMediaFileName = uniqueName
+      if (category === 'AUDIO') {
+        // Prefer AAC (m4a) for broad playback support; if it fails, fallback to OGG voice then MP3
+        try {
+          const { outputPath } = await transcodeToAacM4a(filePath)
+          uploadPath = outputPath
+          uploadMime = 'audio/mp4'
+          messageMediaFileName = path.basename(outputPath)
+          console.log(`🎧 Audio transcoded to m4a (aac): ${messageMediaFileName}`)
+        } catch (errAac) {
+          console.warn('⚠️ Failed to transcode to AAC, attempting OGG voice', errAac)
+          try {
+            const { outputPath } = await transcodeToOggOpus(filePath)
+            uploadPath = outputPath
+            uploadMime = 'audio/ogg'
+            messageMediaFileName = path.basename(outputPath)
+            console.log(`🎧 Audio transcoded to ogg: ${messageMediaFileName}`)
+          } catch (errOgg) {
+            console.warn('⚠️ Failed to transcode to OGG, attempting MP3', errOgg)
+            try {
+              const { outputPath } = await transcodeToMp3(filePath)
+              uploadPath = outputPath
+              uploadMime = 'audio/mpeg'
+              messageMediaFileName = path.basename(outputPath)
+              console.log(`🎧 Audio transcoded to mp3: ${messageMediaFileName}`)
+            } catch (errMp3) {
+              console.warn('⚠️ Failed to transcode audio, attempting raw upload as audio', errMp3)
+            }
+          }
+        }
+      }
+
+      // Send via WhatsApp (upload to Meta and send using media ID)
+      let whatsappSent = false
+      let uploadedMediaId: string | null = null
+      try {
+        let whatsappType: 'image' | 'document' | 'audio' = 'document'
+        if (category === 'IMAGE') whatsappType = 'image'
+        else if (category === 'AUDIO') whatsappType = 'audio'
+
+        uploadedMediaId = await whatsappService.uploadMedia(uploadPath, uploadMime)
+        await whatsappService.sendMediaMessage(
+          conversation.phone,
+          whatsappType,
+          uploadedMediaId,
+          undefined,
+          category === 'IMAGE' ? undefined : undefined,
+          whatsappType === 'document' ? file.originalname : undefined,
+          (whatsappType === 'audio' && uploadMime === 'audio/ogg')
+        )
+        whatsappSent = true
+        console.log(`✅ Mídia enviada via WhatsApp (mediaId=${uploadedMediaId}): ${uniqueName}`)
+      } catch (error) {
+        console.error(`❌ Erro ao enviar mídia via WhatsApp:`, error)
+        if (category === 'AUDIO') {
+          try {
+            const fallbackId = uploadedMediaId || (await whatsappService.uploadMedia(uploadPath, uploadMime || 'audio/mpeg'))
+            await whatsappService.sendMediaMessage(
+              conversation.phone,
+              'audio',
+              fallbackId,
+              undefined,
+              undefined,
+              undefined,
+              false
+            )
+            whatsappSent = true
+            console.log(`✅ Áudio fallback enviado como audio (mediaId=${fallbackId}): ${uniqueName}`)
+          } catch (err) {
+            console.error('❌ Fallback de áudio como audio falhou:', err)
+          }
+        }
+      }
+
+      // Create message in database
+      const messageText = category === 'IMAGE' ? 'Imagem enviada' :
+        category === 'AUDIO' ? 'Áudio enviado' :
+          `Documento enviado: ${file.originalname}`
+
+      const message = await prisma.message.create({
+        data: {
+          conversationId: id,
+          phoneNumber: conversation.phone,
+          messageText,
+          messageType: category,
+          mediaUrl: `/api/conversations/files/${messageMediaFileName}`,
+          metadata: {
+            filename: file.originalname,
+            mimeType: file.mimetype,
+            size: file.size
+          },
+          direction: 'SENT',
+          from: 'AGENT',
+          timestamp: new Date()
+        }
+      })
+
+      messages.push(message)
+
+      const updatedConversation = await prisma.conversation.update({
+        where: { id },
+        data: {
+          lastMessage: message.messageText,
+          lastTimestamp: new Date()
+        }
+      })
+
+      const realtime = getRealtime()
+      const payload = {
+        message: {
+          id: message.id,
+          conversationId: message.conversationId,
+          phoneNumber: message.phoneNumber,
+          messageText: message.messageText,
+          messageType: message.messageType,
+          mediaUrl: message.mediaUrl,
+          metadata: message.metadata,
+          direction: message.direction,
+          from: message.from,
+          timestamp: message.timestamp.toISOString()
+        },
+        conversation: updatedConversation,
+        phone: conversation.phone
+      }
+      realtime.io.to(`conv:${conversation.phone}`).emit('message_sent', payload)
+      realtime.io.to(`conv:${id}`).emit('message_sent', payload)
+    }
 
     await prisma.auditLog.create({
       data: {
@@ -1220,29 +1497,9 @@ router.post('/:id/files', authMiddleware, upload.array('files', 5), async (req: 
       }
     })
 
-    // Create system message about file upload
-    const fileList = savedFiles.map(f => `${f.originalName} (${f.category})`).join(', ')
-    const systemMessage = await prisma.message.create({
-      data: {
-        conversationId: id,
-        phoneNumber: conversation.phone,
-        messageText: `Arquivos enviados: ${fileList}`,
-        direction: 'SENT',
-        from: 'AGENT',
-        timestamp: new Date()
-      }
-    })
-
-    // Emit real-time update
-    const realtime = getRealtime()
-    realtime.io.emit('message', {
-      conversationId: id,
-      message: systemMessage
-    })
-
     res.json({
       files: savedFiles,
-      message: systemMessage
+      messages
     })
   } catch (error) {
     console.error('Erro ao fazer upload de arquivos:', error)
@@ -1270,24 +1527,268 @@ router.get('/:id/files', authMiddleware, async (req: Request, res: Response): Pr
 })
 
 // Serve uploaded files
-router.get('/files/:filename', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+// Serve uploaded files (no auth required for images to load in <img> tags)
+router.get('/files/:filename', async (req: Request, res: Response): Promise<void> => {
   try {
     const { filename } = req.params
-    const logs = await prisma.auditLog.findMany({ where: { action: 'FILE_UPLOAD' }, orderBy: { createdAt: 'desc' } })
-    let found: any = null
-    for (const log of logs) {
-      const files = (log as any).details?.files || []
-      const match = files.find((f: any) => f.fileName === filename)
-      if (match) { found = match; break }
-    }
-    if (!found) {
-      res.status(404).json({ error: 'Arquivo não encontrado' })
+
+    // Sanitize filename to prevent directory traversal
+    const safeFilename = path.basename(filename)
+    const uploadsDir = path.join(process.cwd(), 'uploads')
+    const filePath = path.join(uploadsDir, safeFilename)
+
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: 'Arquivo não encontrado no servidor' })
       return
     }
-    res.json(found)
+
+    res.sendFile(filePath)
   } catch (error) {
     console.error('Erro ao buscar arquivo:', error)
     res.status(500).json({ error: 'Erro ao buscar arquivo' })
+  }
+})
+
+// ==========================================
+// SESSION MANAGEMENT ENDPOINTS
+// ==========================================
+
+// Get session status for a conversation
+router.get('/:id/session', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        phone: true,
+        sessionStartTime: true,
+        sessionExpiryTime: true,
+        sessionStatus: true,
+        lastUserActivity: true,
+        channel: true,
+        channelMetadata: true,
+        status: true
+      }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // Get session from memory manager
+    let memorySession = null
+    try {
+      memorySession = sessionManager.getSession(id)
+    } catch (err) {
+      console.warn('Erro ao buscar sessão do memory manager:', err)
+    }
+
+    // Calculate remaining time
+    let timeRemaining = null
+    let canSendMessage = true
+    let requiresTemplate = false
+
+    if (conversation.sessionExpiryTime) {
+      const now = new Date()
+      const expiry = new Date(conversation.sessionExpiryTime)
+      timeRemaining = Math.max(0, expiry.getTime() - now.getTime())
+
+      // Check if session is expired
+      if (timeRemaining === 0) {
+        canSendMessage = false
+        requiresTemplate = true
+      }
+    }
+
+    // Helper function to format milliseconds
+    const formatMs = (ms: number): string => {
+      const hours = Math.floor(ms / (1000 * 60 * 60))
+      const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60))
+      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+    }
+
+    res.json({
+      conversation: {
+        id: conversation.id,
+        phone: conversation.phone,
+        channel: conversation.channel,
+        status: conversation.status
+      },
+      session: {
+        startTime: conversation.sessionStartTime,
+        expiryTime: conversation.sessionExpiryTime,
+        status: conversation.sessionStatus,
+        lastActivity: conversation.lastUserActivity,
+        timeRemaining,
+        timeRemainingFormatted: timeRemaining ? formatMs(timeRemaining) : null,
+        canSendMessage,
+        requiresTemplate,
+        memorySession: memorySession ? {
+          status: memorySession.status,
+          messageCount: memorySession.messageCount,
+          transferCount: memorySession.transferCount
+        } : null
+      }
+    })
+  } catch (error) {
+    console.error('Erro ao buscar status da sessão:', error)
+    res.status(500).json({ error: 'Erro ao buscar status da sessão' })
+  }
+})
+
+// Reopen expired session (requires WhatsApp template)
+router.post('/:id/session/reopen', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    const { templateName, templateParams } = req.body
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        patient: true
+      }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // Check if session is actually expired
+    const now = new Date()
+    const sessionExpired = conversation.sessionExpiryTime && new Date(conversation.sessionExpiryTime) < now
+
+    if (!sessionExpired) {
+      res.status(400).json({
+        error: 'Sessão ainda está ativa',
+        session: {
+          expiryTime: conversation.sessionExpiryTime,
+          status: conversation.sessionStatus
+        }
+      })
+      return
+    }
+
+    // Send template message to reopen session
+    if (!templateName) {
+      res.status(400).json({
+        error: 'Nome do template é obrigatório para reabrir sessão expirada',
+        hint: 'Você precisa enviar um template aprovado pelo WhatsApp para reabrir a conversa'
+      })
+      return
+    }
+
+    try {
+      // Send template via WhatsApp service
+      await whatsappService.sendTemplateMessage(
+        conversation.phone,
+        templateName,
+        templateParams || []
+      )
+
+      // Reopen session
+      const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+      const updatedConversation = await prisma.conversation.update({
+        where: { id },
+        data: {
+          sessionStartTime: now,
+          sessionExpiryTime: newExpiryTime,
+          sessionStatus: 'active',
+          lastUserActivity: now,
+          status: 'BOT_QUEUE'
+        }
+      })
+
+      // Restart session in memory manager
+      try {
+        await sessionManager.startSession(id, conversation.patient?.id || 'system')
+      } catch (err) {
+        console.warn('Erro ao reiniciar sessão no memory manager:', err)
+      }
+
+      // Log reopening
+      if (conversation.patient) {
+        await prisma.patientInteraction.create({
+          data: {
+            patientId: conversation.patient.id,
+            type: 'SESSION_REOPENED',
+            description: 'Sessão reaberta via template do WhatsApp',
+            data: {
+              conversationId: id,
+              templateName,
+              reopenedBy: req.user.id
+            }
+          }
+        })
+      }
+
+      res.json({
+        success: true,
+        message: 'Sessão reaberta com sucesso',
+        conversation: updatedConversation,
+        session: {
+          startTime: updatedConversation.sessionStartTime,
+          expiryTime: updatedConversation.sessionExpiryTime,
+          status: updatedConversation.sessionStatus
+        }
+      })
+    } catch (whatsappError: any) {
+      console.error('Erro ao enviar template do WhatsApp:', whatsappError)
+      res.status(500).json({
+        error: 'Erro ao enviar template do WhatsApp',
+        details: whatsappError.message
+      })
+    }
+  } catch (error) {
+    console.error('Erro ao reabrir sessão:', error)
+    res.status(500).json({ error: 'Erro ao reabrir sessão' })
+  }
+})
+
+// Get session statistics
+router.get('/sessions/stats', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const stats = sessionManager.getSessionStats()
+
+    // Also get database stats
+    const now = new Date()
+    const activeSessionsDb = await prisma.conversation.count({
+      where: {
+        sessionStatus: 'active',
+        sessionExpiryTime: {
+          gte: now
+        }
+      }
+    })
+
+    const expiredSessionsDb = await prisma.conversation.count({
+      where: {
+        OR: [
+          { sessionStatus: 'expired' },
+          {
+            sessionExpiryTime: {
+              lt: now
+            },
+            sessionStatus: { not: 'closed' }
+          }
+        ]
+      }
+    })
+
+    res.json({
+      memory: stats,
+      database: {
+        activeSessions: activeSessionsDb,
+        expiredSessions: expiredSessionsDb
+      }
+    })
+  } catch (error) {
+    console.error('Erro ao buscar estatísticas de sessão:', error)
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' })
   }
 })
 

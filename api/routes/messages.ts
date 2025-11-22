@@ -1,5 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import prisma from '../prisma/client.js'
+import { authMiddleware } from '../utils/auth.js'
+import { getRealtime } from '../realtime.js'
 
 const router = Router()
 
@@ -32,6 +34,36 @@ router.delete('/:phone', async (req: Request, res: Response): Promise<void> => {
   const { phone } = req.params
   await prisma.message.deleteMany({ where: { phoneNumber: phone } })
   res.json({ success: true })
+})
+
+// Delete single message by ID
+router.delete('/id/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    const msg = await prisma.message.findUnique({ where: { id } })
+    if (!msg) {
+      res.status(404).json({ error: 'Mensagem não encontrada' })
+      return
+    }
+
+    const conv = await prisma.conversation.findUnique({ where: { id: msg.conversationId } })
+    await prisma.message.delete({ where: { id } })
+
+    const last = await prisma.message.findFirst({ where: { conversationId: msg.conversationId }, orderBy: { timestamp: 'desc' } })
+    await prisma.conversation.update({ where: { id: msg.conversationId }, data: { lastMessage: last?.messageText || null, lastTimestamp: last?.timestamp || null } })
+
+    const realtime = getRealtime()
+    const payload = { id, conversationId: msg.conversationId }
+    if (conv?.phone) {
+      realtime.io.to(`conv:${conv.phone}`).emit('message_deleted', payload)
+    }
+    realtime.io.to(`conv:${msg.conversationId}`).emit('message_deleted', payload)
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Erro ao deletar mensagem:', error)
+    res.status(500).json({ error: 'Erro ao deletar mensagem' })
+  }
 })
 
 export default router

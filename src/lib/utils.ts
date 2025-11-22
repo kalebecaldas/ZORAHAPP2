@@ -9,7 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // API utility with authentication
 export const api = axios.create({
-  baseURL: (import.meta as any)?.env?.VITE_API_URL || 'http://localhost:3001',
+  baseURL: (import.meta as any)?.env?.VITE_API_URL || '/',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -26,11 +26,18 @@ api.interceptors.request.use((config) => {
         try {
           const parsed = JSON.parse(persisted);
           token = parsed?.state?.token || null;
-        } catch {}
+        } catch { }
       }
     }
     if (token) {
       (config.headers as any).Authorization = `Bearer ${token}`;
+    }
+    // Ensure proper Content-Type for FormData uploads
+    const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData;
+    if (isFormData) {
+      if ((config.headers as any)['Content-Type']) {
+        delete (config.headers as any)['Content-Type'];
+      }
     }
   }
   return config;

@@ -28,3 +28,6 @@ dist-ssr
 # Environment files
 .env
 .env.*
+uploads/
+prisma/dev.db
+api/prisma/dev.db

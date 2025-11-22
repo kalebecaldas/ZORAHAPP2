@@ -41,6 +41,9 @@ export const useAuth = create<AuthState>()(
       logout: () => {
         set({ user: null, token: null });
         localStorage.removeItem('token');
+        // Limpar sessionStorage para resetar estado do menu
+        sessionStorage.removeItem('hasVisitedConversations');
+        sessionStorage.removeItem('sidebarCollapsed');
       },
 
       setUser: (user: User, token: string) => {

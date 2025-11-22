@@ -335,20 +335,24 @@ class LoggerService {
    * Save log entry to database
    */
   private async saveToDatabase(logEntry: any): Promise<void> {
-    try {
-      await (prisma as any).systemLog.create({
-        data: {
-          level: logEntry.level,
-          category: logEntry.category,
-          message: logEntry.message,
-          metadata: logEntry.metadata,
-          timestamp: new Date()
-        }
-      });
-    } catch (error) {
-      // Don't throw error to avoid infinite loop, just log to console
-      console.error('Failed to save log to database:', error);
-    }
+    // TODO: Implement SystemLog model in Prisma schema
+    // For now, skip database logging to avoid errors
+    return;
+    
+    // try {
+    //   await (prisma as any).systemLog.create({
+    //     data: {
+    //       level: logEntry.level,
+    //       category: logEntry.category,
+    //       message: logEntry.message,
+    //       metadata: logEntry.metadata,
+    //       timestamp: new Date()
+    //     }
+    //   });
+    // } catch (error) {
+    //   // Don't throw error to avoid infinite loop, just log to console
+    //   console.error('Failed to save log to database:', error);
+    // }
   }
 
   /**

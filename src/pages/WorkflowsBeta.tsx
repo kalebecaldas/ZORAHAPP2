@@ -66,35 +66,35 @@ export const WorkflowsBeta: React.FC = () => {
             } else {
                 // Fallback to example workflow if none found
                 setWorkflow({
-                    name: 'Workflow Beta',
-                    description: 'Editor Beta responsivo inspirado em n8n/Miro',
-                    nodes: [
-                        { id: 'start', type: 'START', content: { text: 'Bem-vindo' }, position: { x: 80, y: 60 }, connections: ['menu'] },
-                        { id: 'menu', type: 'MESSAGE', content: { text: '1 Valores | 2 Convênios | 3 Localização | 4 Agendar | 5 Humano' }, position: { x: 340, y: 60 }, connections: [{ targetId: 'select', port: 'main' }] },
-                        {
-                            id: 'select', type: 'CONDITION', content: { condition: '1|2|3|4|5' }, position: { x: 600, y: 60 }, connections: [
-                                { targetId: 'list_procedures', port: '1' },
-                                { targetId: 'list_insurances', port: '2' },
-                                { targetId: 'location', port: '3' },
-                                { targetId: 'collect', port: '4' },
-                                { targetId: 'handoff', port: '5' }
-                            ]
-                        },
-                        { id: 'list_procedures', type: 'API_CALL', content: { endpoint: 'get_clinic_procedures', message: 'Buscando procedimentos...' }, position: { x: 860, y: 0 }, connections: [{ targetId: 'continue', port: 'main' }] },
-                        { id: 'list_insurances', type: 'API_CALL', content: { endpoint: 'get_clinic_insurances', message: 'Buscando convênios...' }, position: { x: 860, y: 120 }, connections: [{ targetId: 'continue', port: 'main' }] },
-                        { id: 'location', type: 'API_CALL', content: { endpoint: 'get_clinic_location', message: 'Buscando localização...' }, position: { x: 860, y: 240 }, connections: [{ targetId: 'continue', port: 'main' }] },
-                        {
-                            id: 'continue', type: 'CONDITION', content: { condition: 'continue|end' }, position: { x: 1120, y: 120 }, connections: [
-                                { targetId: 'menu', port: 'continue' },
-                                { targetId: 'end', port: 'end' }
-                            ]
-                        },
-                        { id: 'collect', type: 'COLLECT_INFO', content: { fields: ['name', 'cpf', 'birth_date', 'phone', 'email', 'address', 'insurance', 'insurance_number', 'preferences', 'procedure_type', 'preferred_date', 'preferred_shift'], message: 'Coletando informações...' }, position: { x: 860, y: 360 }, connections: [{ targetId: 'end', port: 'main' }] },
-                        { id: 'handoff', type: 'TRANSFER_HUMAN', content: { finalMessage: 'Transferindo para atendente' }, position: { x: 860, y: 480 }, connections: [{ targetId: 'end', port: 'main' }] },
-                        { id: 'end', type: 'END', content: { finalMessage: 'Obrigado!' }, position: { x: 1280, y: 360 }, connections: [] }
-                    ] as BackendNode[],
-                    isActive: false
-                })
+        name: 'Workflow Beta',
+        description: 'Editor Beta responsivo inspirado em n8n/Miro',
+        nodes: [
+            { id: 'start', type: 'START', content: { text: 'Bem-vindo' }, position: { x: 80, y: 60 }, connections: ['menu'] },
+            { id: 'menu', type: 'MESSAGE', content: { text: '1 Valores | 2 Convênios | 3 Localização | 4 Agendar | 5 Humano' }, position: { x: 340, y: 60 }, connections: [{ targetId: 'select', port: 'main' }] },
+            {
+                id: 'select', type: 'CONDITION', content: { condition: '1|2|3|4|5' }, position: { x: 600, y: 60 }, connections: [
+                    { targetId: 'list_procedures', port: '1' },
+                    { targetId: 'list_insurances', port: '2' },
+                    { targetId: 'location', port: '3' },
+                    { targetId: 'collect', port: '4' },
+                    { targetId: 'handoff', port: '5' }
+                ]
+            },
+            { id: 'list_procedures', type: 'API_CALL', content: { endpoint: 'get_clinic_procedures', message: 'Buscando procedimentos...' }, position: { x: 860, y: 0 }, connections: [{ targetId: 'continue', port: 'main' }] },
+            { id: 'list_insurances', type: 'API_CALL', content: { endpoint: 'get_clinic_insurances', message: 'Buscando convênios...' }, position: { x: 860, y: 120 }, connections: [{ targetId: 'continue', port: 'main' }] },
+            { id: 'location', type: 'API_CALL', content: { endpoint: 'get_clinic_location', message: 'Buscando localização...' }, position: { x: 860, y: 240 }, connections: [{ targetId: 'continue', port: 'main' }] },
+            {
+                id: 'continue', type: 'CONDITION', content: { condition: 'continue|end' }, position: { x: 1120, y: 120 }, connections: [
+                    { targetId: 'menu', port: 'continue' },
+                    { targetId: 'end', port: 'end' }
+                ]
+            },
+            { id: 'collect', type: 'COLLECT_INFO', content: { fields: ['name', 'cpf', 'birth_date', 'phone', 'email', 'address', 'insurance', 'insurance_number', 'preferences', 'procedure_type', 'preferred_date', 'preferred_shift'], message: 'Coletando informações...' }, position: { x: 860, y: 360 }, connections: [{ targetId: 'end', port: 'main' }] },
+            { id: 'handoff', type: 'TRANSFER_HUMAN', content: { finalMessage: 'Transferindo para atendente' }, position: { x: 860, y: 480 }, connections: [{ targetId: 'end', port: 'main' }] },
+            { id: 'end', type: 'END', content: { finalMessage: 'Obrigado!' }, position: { x: 1280, y: 360 }, connections: [] }
+        ] as BackendNode[],
+        isActive: false
+    })
             }
         } catch (error) {
             console.error('Error loading workflow:', error)

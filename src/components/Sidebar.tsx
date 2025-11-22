@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   MessageSquare,
   Users,
+  UserCog,
   UserPlus,
   BarChart3,
   Settings,
@@ -14,14 +15,54 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { api } from '../lib/utils';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
 
-  // Start collapsed on conversations page, don't auto-expand
-  const isConversationsPage = location.pathname.startsWith('/conversations');
-  const [isCollapsed, setIsCollapsed] = useState(isConversationsPage);
+  // Verificar se é a primeira vez acessando conversas nesta sessão
+  const getInitialCollapsedState = () => {
+    const hasVisitedConversations = sessionStorage.getItem('hasVisitedConversations');
+    const isConversationsPage = location.pathname.startsWith('/conversations');
+    
+    // Se é a primeira vez acessando conversas OU já está na página de conversas, recolher
+    if (isConversationsPage && !hasVisitedConversations) {
+      sessionStorage.setItem('hasVisitedConversations', 'true');
+      return true;
+    }
+    
+    // Se já visitou antes, usar preferência salva ou padrão expandido
+    const savedState = sessionStorage.getItem('sidebarCollapsed');
+    return savedState === 'true';
+  };
+
+  const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
+
+  // Salvar estado do menu quando mudar
+  useEffect(() => {
+    sessionStorage.setItem('sidebarCollapsed', String(isCollapsed));
+  }, [isCollapsed]);
+
+  // Buscar número de conversas aguardando
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      try {
+        const response = await api.get('/api/conversations');
+        const conversations = response.data.conversations || [];
+        const pending = conversations.filter((c: any) => c.status === 'PRINCIPAL' && !c.assignedToId);
+        setPendingCount(pending.length);
+      } catch (error) {
+        console.error('Erro ao buscar conversas aguardando:', error);
+      }
+    };
+
+    fetchPendingCount();
+    // Atualizar a cada 10 segundos
+    const interval = setInterval(fetchPendingCount, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -29,7 +70,7 @@ const Sidebar: React.FC = () => {
     { path: '/patients', icon: Users, label: 'Pacientes' },
     { path: '/workflows', icon: Workflow, label: 'Workflows' },
     { path: '/stats', icon: BarChart3, label: 'Estatísticas' },
-    ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: Users, label: 'Usuários' }] : []),
+    ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: UserCog, label: 'Usuários' }] : []),
     { path: '/settings', icon: Settings, label: 'Configurações' },
     { path: '/test', icon: Bot, label: 'Teste' },
   ];
@@ -126,15 +167,13 @@ const Sidebar: React.FC = () => {
         {/* Header/Logo */}
         <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl logo-glow shadow-lg border border-white/20">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl logo-glow shadow-lg border border-white/20 flex-shrink-0">
               <Bot className="h-6 w-6 text-white" />
             </div>
-            {!isCollapsed && (
-              <div className="overflow-hidden">
-                <h1 className="text-xl font-bold text-gray-400">ClinicAI</h1>
-                <p className="text-xs text-gray-500">WhatsApp + IA</p>
-              </div>
-            )}
+            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+              <h1 className="text-xl font-bold text-gray-400 whitespace-nowrap">ClinicAI</h1>
+              <p className="text-xs text-gray-500 whitespace-nowrap">WhatsApp + IA</p>
+            </div>
           </div>
         </div>
 
@@ -144,6 +183,8 @@ const Sidebar: React.FC = () => {
             {menuItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.path);
+              const isConversationsItem = item.path === '/conversations';
+              const showBadge = isConversationsItem && pendingCount > 0;
 
               return (
                 <li key={item.path}>
@@ -153,18 +194,35 @@ const Sidebar: React.FC = () => {
                       ? 'menu-item-active text-blue-500'
                       : 'text-gray-600 hover:text-gray-500 hover:bg-white/5'
                       } ${isCollapsed ? 'justify-center' : 'space-x-3'}`}
-                    title={isCollapsed ? item.label : ''}
+                    title={isCollapsed ? (showBadge ? `${item.label} (${pendingCount} aguardando)` : item.label) : ''}
                   >
-                    <Icon className={`h-5 w-5 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'
-                      }`} />
+                    <div className="relative">
+                      <Icon className={`h-5 w-5 transition-transform duration-300 ${active ? 'scale-110' : 'group-hover:scale-110'
+                        }`} />
+                      {/* Badge no ícone apenas quando recolhido */}
+                      {showBadge && isCollapsed && (
+                        <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                          {pendingCount > 99 ? '99+' : pendingCount}
+                        </span>
+                      )}
+                    </div>
                     {!isCollapsed && (
-                      <span className="font-medium truncate">{item.label}</span>
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <span className="font-medium truncate">{item.label}</span>
+                        {/* Badge à direita apenas quando expandido */}
+                        {showBadge && (
+                          <span className="ml-2 bg-red-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-1.5">
+                            {pendingCount > 99 ? '99+' : pendingCount}
+                          </span>
+                        )}
+                      </div>
                     )}
 
                     {/* Tooltip for collapsed state */}
                     {isCollapsed && (
                       <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-gray-300 text-xs rounded opacity-0 group-hover:opacity-100 whitespace-nowrap pointer-events-none transition-opacity duration-200 z-50">
                         {item.label}
+                        {showBadge && ` (${pendingCount} aguardando)`}
                       </div>
                     )}
                   </Link>

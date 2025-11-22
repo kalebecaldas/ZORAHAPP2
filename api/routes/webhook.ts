@@ -1,6 +1,17 @@
 import { Router, type Request, type Response } from 'express'
 import { processIncomingMessage } from '../routes/conversations.js'
+import { WhatsAppService } from '../services/whatsapp.js'
+import fs from 'fs/promises'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const whatsappService = new WhatsAppService(
+  process.env.META_ACCESS_TOKEN || '',
+  process.env.META_PHONE_NUMBER_ID || ''
+)
 const router = Router()
 
 // Meta verification
@@ -23,27 +34,175 @@ router.post('/', async (req: Request, res: Response) => {
   res.status(200).json({ received: true })
 
   try {
-    const entry = req.body?.entry?.[0]
-    const changes = entry?.changes?.[0]
-    const value = changes?.value
-    const messages = value?.messages
+    console.log('📥 Webhook recebido:', JSON.stringify(req.body, null, 2))
     
-    if (!messages || !Array.isArray(messages)) return
+    const entry = req.body?.entry?.[0]
+    if (!entry) {
+      console.log('⚠️ Nenhuma entrada encontrada no webhook')
+      return
+    }
 
-    for (const message of messages) {
-      const phone = message.from
-      const text = message.text?.body || message.button?.text || ''
-      const messageId = message.id
-      
-      if (!phone || !text) continue
+    const changes = entry?.changes?.[0]
+    if (!changes) {
+      console.log('⚠️ Nenhuma mudança encontrada')
+      return
+    }
 
-      // Process message asynchronously
-      processIncomingMessage(phone, text, messageId).catch(error => {
-        console.error('Erro ao processar mensagem:', error)
-      })
+    const value = changes?.value
+    
+    // Handle messages
+    const messages = value?.messages
+    if (messages && Array.isArray(messages)) {
+      for (const message of messages) {
+        const phone = message.from
+        const messageId = message.id
+        const timestamp = message.timestamp
+        
+        let text = ''
+        let messageType = 'TEXT'
+        let mediaUrl: string | null = null
+        let metadata: any = {}
+        
+        // Extract text and media from different message types
+        if (message.text?.body) {
+          text = message.text.body
+          messageType = 'TEXT'
+        } else if (message.button?.text) {
+          text = message.button.text
+          messageType = 'TEXT'
+        } else if (message.interactive?.button_reply?.title) {
+          text = message.interactive.button_reply.title
+          messageType = 'TEXT'
+        } else if (message.interactive?.list_reply?.title) {
+          text = message.interactive.list_reply.title
+          messageType = 'TEXT'
+        } else if (message.type === 'image') {
+          messageType = 'IMAGE'
+          text = message.image?.caption || 'Imagem recebida'
+          
+          // Download and save image
+          try {
+            const mediaId = message.image?.id
+            if (mediaId) {
+              console.log(`📷 Baixando imagem: ${mediaId}`)
+              const mediaUrlFromMeta = await whatsappService.getMediaUrl(mediaId)
+              const mediaBuffer = await whatsappService.downloadMedia(mediaUrlFromMeta)
+              
+              // Save to uploads directory
+              const uploadsDir = path.join(__dirname, '../../uploads')
+              await fs.mkdir(uploadsDir, { recursive: true })
+              
+              const filename = `${Date.now()}-${messageId}.jpg`
+              const filepath = path.join(uploadsDir, filename)
+              await fs.writeFile(filepath, mediaBuffer)
+              
+              mediaUrl = `/api/conversations/files/${filename}`
+              metadata = {
+                mime_type: message.image?.mime_type,
+                sha256: message.image?.sha256,
+                originalId: mediaId
+              }
+              console.log(`✅ Imagem salva: ${filename}`)
+            }
+          } catch (error) {
+            console.error('❌ Erro ao baixar imagem:', error)
+            text = '[IMAGE] Erro ao baixar imagem'
+          }
+        } else if (message.type === 'document') {
+          messageType = 'DOCUMENT'
+          text = message.document?.caption || message.document?.filename || 'Documento recebido'
+          
+          // Download and save document
+          try {
+            const mediaId = message.document?.id
+            if (mediaId) {
+              console.log(`📄 Baixando documento: ${mediaId}`)
+              const mediaUrlFromMeta = await whatsappService.getMediaUrl(mediaId)
+              const mediaBuffer = await whatsappService.downloadMedia(mediaUrlFromMeta)
+              
+              // Save to uploads directory
+              const uploadsDir = path.join(__dirname, '../../uploads')
+              await fs.mkdir(uploadsDir, { recursive: true })
+              
+              const ext = message.document?.filename?.split('.').pop() || 'pdf'
+              const filename = `${Date.now()}-${messageId}.${ext}`
+              const filepath = path.join(uploadsDir, filename)
+              await fs.writeFile(filepath, mediaBuffer)
+              
+              mediaUrl = `/api/conversations/files/${filename}`
+              metadata = {
+                filename: message.document?.filename,
+                mime_type: message.document?.mime_type,
+                sha256: message.document?.sha256,
+                originalId: mediaId
+              }
+              console.log(`✅ Documento salvo: ${filename}`)
+            }
+          } catch (error) {
+            console.error('❌ Erro ao baixar documento:', error)
+            text = '[DOCUMENT] Erro ao baixar documento'
+          }
+        } else if (message.type === 'audio') {
+          messageType = 'AUDIO'
+          text = 'Áudio recebido'
+          
+          // Download and save audio
+          try {
+            const mediaId = message.audio?.id
+            if (mediaId) {
+              console.log(`🎤 Baixando áudio: ${mediaId}`)
+              const mediaUrlFromMeta = await whatsappService.getMediaUrl(mediaId)
+              const mediaBuffer = await whatsappService.downloadMedia(mediaUrlFromMeta)
+              
+              // Save to uploads directory
+              const uploadsDir = path.join(__dirname, '../../uploads')
+              await fs.mkdir(uploadsDir, { recursive: true })
+              
+              const filename = `${Date.now()}-${messageId}.ogg`
+              const filepath = path.join(uploadsDir, filename)
+              await fs.writeFile(filepath, mediaBuffer)
+              
+              mediaUrl = `/api/conversations/files/${filename}`
+              metadata = {
+                mime_type: message.audio?.mime_type,
+                sha256: message.audio?.sha256,
+                originalId: mediaId
+              }
+              console.log(`✅ Áudio salvo: ${filename}`)
+            }
+          } catch (error) {
+            console.error('❌ Erro ao baixar áudio:', error)
+            text = '[AUDIO] Erro ao baixar áudio'
+          }
+        } else {
+          console.log('⚠️ Tipo de mensagem não suportado:', message.type)
+          continue
+        }
+        
+        if (!phone || !text) {
+          console.log('⚠️ Mensagem sem telefone ou texto:', { phone, text })
+          continue
+        }
+
+        console.log(`📨 Processando mensagem de ${phone}: ${text} (${messageType})`)
+
+        // Process message asynchronously with media info
+        processIncomingMessage(phone, text, messageId, messageType, mediaUrl, metadata).catch(error => {
+          console.error('❌ Erro ao processar mensagem:', error)
+        })
+      }
+    }
+
+    // Handle message status updates
+    const statuses = value?.statuses
+    if (statuses && Array.isArray(statuses)) {
+      for (const status of statuses) {
+        console.log(`📊 Status da mensagem ${status.id}: ${status.status}`)
+        // You can handle status updates here if needed
+      }
     }
   } catch (error) {
-    console.error('Erro no webhook:', error)
+    console.error('❌ Erro no webhook:', error)
   }
 })
 
