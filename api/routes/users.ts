@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
 import { authorize, forbidModifyingMaster } from '../utils/auth.js'
@@ -24,8 +25,8 @@ router.get('/', usersAuth, usersAuthorizeList, async (req: Request, res: Respons
 
     const where = search ? {
       OR: [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { email: { contains: search as string, mode: 'insensitive' } },
+        { name: { contains: search as string, mode: 'insensitive' as Prisma.QueryMode } },
+        { email: { contains: search as string, mode: 'insensitive' as Prisma.QueryMode } },
       ]
     } : {}
 
