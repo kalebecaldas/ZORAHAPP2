@@ -1,0 +1,372 @@
+[
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "unimed",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "bradesco",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "sulamerica",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "amil",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "hapvida",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "mediservice",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "saude-caixa",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "petrobras",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "geap",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "pro-social",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "postal-saude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "conab",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "affeam",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "ambep",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "gama",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "life",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "notredame",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "oab",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "capesaude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "casembrapa",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "clubsaude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "cultural",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "evida",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "fogas",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "fusex",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "plan-assite",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "adepol",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "bem-care",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "bemol",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "pro-saude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "vita",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "particular",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "unimed",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "bradesco",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "sulamerica",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "amil",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "hapvida",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "mediservice",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "saude-caixa",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "petrobras",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "geap",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "pro-social",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "postal-saude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "conab",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "affeam",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "ambep",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "gama",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "life",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "notredame",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "oab",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "capesaude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "casembrapa",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "clubsaude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "cultural",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "evida",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "fogas",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "fusex",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "plan-assite",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "adepol",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "bem-care",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "bemol",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "pro-saude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "vita",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "particular",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "plan",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "plan",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "particular-vieiralves",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "particular-sao-jose",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "bemcare",
+    "isActive": true
+  },
+  {
+    "clinicCode": "vieiralves",
+    "insuranceCode": "prosaude",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "particular-vieiralves",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "particular-sao-jose",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "bemcare",
+    "isActive": true
+  },
+  {
+    "clinicCode": "sao-jose",
+    "insuranceCode": "prosaude",
+    "isActive": true
+  }
+]

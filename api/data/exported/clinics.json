@@ -1,0 +1,77 @@
+[
+  {
+    "id": "cmi4o1i300002xgaelhpz5jzs",
+    "code": "vieiralves",
+    "name": "Clínica Vieiralves",
+    "displayName": "Clínica Vieiralves",
+    "address": "Rua Rio Içá, 850",
+    "neighborhood": "Nossa Sra. das Graças",
+    "city": "Manaus",
+    "state": "AM",
+    "zipCode": "69053-100",
+    "phone": "(92) 3234-5678",
+    "email": "vieiralves@clinicafisioterapia.com.br",
+    "openingHours": {
+      "Segunda": "08:00 - 18:00",
+      "Terça": "08:00 - 18:00",
+      "Quarta": "08:00 - 18:00",
+      "Quinta": "08:00 - 18:00",
+      "Sexta": "08:00 - 18:00",
+      "Sábado": "08:00 - 12:00",
+      "Domingo": "Fechado"
+    },
+    "coordinates": null,
+    "specialties": [
+      "Fisioterapia Ortopédica",
+      "Fisioterapia Pélvica",
+      "Acupuntura",
+      "Pilates"
+    ],
+    "parkingAvailable": true,
+    "accessibility": [
+      "Acesso para cadeirantes",
+      "Elevador",
+      "Banheiro adaptado"
+    ],
+    "isActive": true,
+    "createdAt": "2025-11-18T14:25:37.740Z",
+    "updatedAt": "2025-11-23T03:00:16.258Z"
+  },
+  {
+    "id": "cmi4o1i310003xgaexolwgvpi",
+    "code": "sao-jose",
+    "name": "Clínica São José",
+    "displayName": "Clínica São José",
+    "address": "Av. Autaz Mirim, 5773",
+    "neighborhood": "São José Operário",
+    "city": "Manaus",
+    "state": "AM",
+    "zipCode": "69085-000",
+    "phone": "(92) 3234-5679",
+    "email": "saojose@clinicafisioterapia.com.br",
+    "openingHours": {
+      "Segunda": "07:00 - 19:00",
+      "Terça": "07:00 - 19:00",
+      "Quarta": "07:00 - 19:00",
+      "Quinta": "07:00 - 19:00",
+      "Sexta": "07:00 - 19:00",
+      "Sábado": "08:00 - 14:00",
+      "Domingo": "Fechado"
+    },
+    "coordinates": null,
+    "specialties": [
+      "Fisioterapia Ortopédica",
+      "RPG",
+      "Pilates",
+      "Acupuntura"
+    ],
+    "parkingAvailable": false,
+    "accessibility": [
+      "Acesso para cadeirantes",
+      "Rampa de acesso"
+    ],
+    "isActive": true,
+    "createdAt": "2025-11-18T14:25:37.741Z",
+    "updatedAt": "2025-11-23T03:00:16.259Z"
+  }
+]

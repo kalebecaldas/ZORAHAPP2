@@ -1,0 +1,265 @@
+[
+  {
+    "id": "cmi2cbfy40000jie4wxi80f4u",
+    "name": "Sistema Multi-Clínica Dinâmico",
+    "description": "Workflow completo que carrega dados de clínicas, convênios e procedimentos diretamente do banco de dados",
+    "type": "CONSULTATION",
+    "config": {
+      "nodes": [
+        {
+          "id": "start",
+          "type": "START",
+          "position": {
+            "x": 100,
+            "y": 200
+          },
+          "data": {
+            "message": "Olá! Seja bem-vindo(a) à nossa clínica. Em qual unidade você gostaria de ser atendido(a)?"
+          }
+        },
+        {
+          "id": "clinic_selection",
+          "type": "CONDITION",
+          "position": {
+            "x": 400,
+            "y": 200
+          },
+          "data": {
+            "condition": "clinic_selection",
+            "trueMessage": "Ótima escolha! Agora, em que posso ajudar você?",
+            "falseMessage": "Por favor, escolha uma de nossas unidades."
+          }
+        },
+        {
+          "id": "gpt_classifier",
+          "type": "GPT_RESPONSE",
+          "position": {
+            "x": 700,
+            "y": 200
+          },
+          "data": {
+            "systemPrompt": "Você é um classificador de intenção simples. Analise a mensagem do usuário e encaminhe para: 1) valores de procedimentos, 2) convênios, 3) localização, 4) agendamento, 5) falar com atendente."
+          }
+        },
+        {
+          "id": "appointment_request",
+          "type": "MESSAGE",
+          "position": {
+            "x": 1000,
+            "y": 360
+          },
+          "data": {
+            "message": "Para agendar sua consulta, por favor, me informe:\n📅 Data preferencial\n🕐 Horário preferencial\n📋 Tipo de procedimento\n💳 Convênio ou particular"
+          }
+        },
+        {
+          "id": "appointment_collection",
+          "type": "COLLECT_INFO",
+          "position": {
+            "x": 1300,
+            "y": 360
+          },
+          "data": {
+            "fields": [
+              "procedure_type",
+              "preferred_date",
+              "preferred_time",
+              "insurance"
+            ],
+            "message": "Aguarde enquanto processo suas informações..."
+          }
+        },
+        {
+          "id": "human_transfer",
+          "type": "MESSAGE",
+          "position": {
+            "x": 1000,
+            "y": 480
+          },
+          "data": {
+            "message": "Estou transferindo você para um de nossos atendentes. Por favor, aguarde um momento."
+          }
+        },
+        {
+          "id": "end_conversation",
+          "type": "END",
+          "position": {
+            "x": 1900,
+            "y": 200
+          },
+          "data": {
+            "message": "Obrigado por entrar em contato! Se precisar de mais alguma coisa, estarei aqui. Tenha um ótimo dia!"
+          }
+        },
+        {
+          "id": "tmpl_prices",
+          "type": "MESSAGE",
+          "position": {
+            "x": 1000,
+            "y": 0
+          },
+          "data": {
+            "message": "💰 Valores de Procedimentos\n\nProcedimento: ${procedimento_x}\nValor: ${valor_procedimento}\nDuração: ${duracao_procedimento}\nObservações: ${observacao_procedimento}\n\nDeseja agendar este procedimento ou saber sobre outro?"
+          }
+        },
+        {
+          "id": "tmpl_insurance",
+          "type": "MESSAGE",
+          "position": {
+            "x": 1000,
+            "y": 120
+          },
+          "data": {
+            "message": "Confirmamos que atendemos ao seu convênio ${convenio_x}.\n\nSeu convenio cobre estes procedimentos com a gente:\n\n1. ${procedimento_1}\n2. ${procedimento_2}\n3. ${procedimento_3}\n\nPosso auxiliar com mais alguma informação ou esclarecimento adicional sobre este processo?"
+          }
+        },
+        {
+          "id": "tmpl_location",
+          "type": "MESSAGE",
+          "position": {
+            "x": 1000,
+            "y": 240
+          },
+          "data": {
+            "message": "📍 Localização e Horários\n\nUnidade: ${unidade_nome}\nEndereço: ${endereco}\nHorário de atendimento: ${horario_atendimento}\nContato: ${telefone}\nMapa: ${maps_url}\n\nPosso ajudar com mais alguma informação?"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "start_to_clinic",
+          "source": "start",
+          "target": "clinic_selection",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "classifier_to_procedure",
+          "source": "gpt_classifier",
+          "target": "tmpl_prices",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "1"
+          }
+        },
+        {
+          "id": "classifier_to_insurance",
+          "source": "gpt_classifier",
+          "target": "tmpl_insurance",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "2"
+          }
+        },
+        {
+          "id": "classifier_to_location",
+          "source": "gpt_classifier",
+          "target": "tmpl_location",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "3"
+          }
+        },
+        {
+          "id": "classifier_to_appointment",
+          "source": "gpt_classifier",
+          "target": "appointment_request",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "4"
+          }
+        },
+        {
+          "id": "classifier_to_human",
+          "source": "gpt_classifier",
+          "target": "human_transfer",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "5"
+          }
+        },
+        {
+          "id": "appointment_to_collection",
+          "source": "appointment_request",
+          "target": "appointment_collection",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "tmpl_prices_to_classifier",
+          "source": "tmpl_prices",
+          "target": "gpt_classifier",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "tmpl_insurance_to_classifier",
+          "source": "tmpl_insurance",
+          "target": "gpt_classifier",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "tmpl_location_to_classifier",
+          "source": "tmpl_location",
+          "target": "gpt_classifier",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "appointment_to_classifier",
+          "source": "appointment_collection",
+          "target": "gpt_classifier",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "human_to_end",
+          "source": "human_transfer",
+          "target": "end_conversation",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "output"
+          }
+        },
+        {
+          "id": "e_clinic_direct_gpt_classifier",
+          "source": "clinic_selection",
+          "target": "gpt_classifier",
+          "type": "smoothstep",
+          "animated": false,
+          "data": {
+            "port": "true"
+          }
+        }
+      ]
+    },
+    "isActive": true,
+    "createdAt": "2025-11-16T23:21:53.788Z",
+    "updatedAt": "2025-11-21T16:26:53.865Z"
+  }
+]

@@ -1,0 +1,399 @@
+[
+  {
+    "id": "cmi8vlx6y0000xgyxpp6bnuj6",
+    "code": "consulta-ortopedica",
+    "name": "Consulta Ortopédica",
+    "description": "Avaliação médica ortopédica",
+    "importantInfo": "Avaliação médica ortopédica para diagnóstico e tratamento de lesões músculo-esqueléticas",
+    "basePrice": 0,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "consulta"
+    ],
+    "createdAt": "2025-11-21T13:08:32.458Z",
+    "updatedAt": "2025-11-21T13:08:32.458Z"
+  },
+  {
+    "id": "cmi8vlx700001xgyx1rc6dlh6",
+    "code": "consulta-clinico-geral",
+    "name": "Consulta Clínico Geral",
+    "description": "Consulta com clínico geral",
+    "importantInfo": "Consulta médica geral para avaliação de saúde e orientação",
+    "basePrice": 200,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "consulta"
+    ],
+    "createdAt": "2025-11-21T13:08:32.460Z",
+    "updatedAt": "2025-11-23T03:00:16.189Z"
+  },
+  {
+    "id": "cmi8vlx700002xgyxcmjpns6c",
+    "code": "avaliacao-acupuntura",
+    "name": "Avaliação Acupuntura",
+    "description": "Avaliação inicial para acupuntura",
+    "importantInfo": "Avaliação inicial para acupuntura. Obrigatória antes da primeira sessão.",
+    "basePrice": 200,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "acupuntura"
+    ],
+    "createdAt": "2025-11-21T13:08:32.461Z",
+    "updatedAt": "2025-11-23T03:00:16.192Z"
+  },
+  {
+    "id": "cmi8vlx710003xgyxe0i5rwuo",
+    "code": "avaliacao-fisio-pelvica",
+    "name": "Avaliação Fisioterapia Pélvica",
+    "description": "Avaliação inicial para fisioterapia pélvica",
+    "importantInfo": "Avaliação inicial para fisioterapia pélvica. Obrigatória antes da primeira sessão.",
+    "basePrice": 250,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "fisioterapia"
+    ],
+    "createdAt": "2025-11-21T13:08:32.461Z",
+    "updatedAt": "2025-11-23T03:00:16.193Z"
+  },
+  {
+    "id": "cmi8vlx720004xgyx9p2tj3c0",
+    "code": "acupuntura",
+    "name": "Acupuntura",
+    "description": "Tratamento com acupuntura para dor e equilíbrio energético",
+    "importantInfo": "Tratamento com acupuntura para dor e equilíbrio energético. Requer avaliação prévia.",
+    "basePrice": 180,
+    "requiresEvaluation": true,
+    "duration": 45,
+    "categories": [
+      "acupuntura",
+      "tradicional"
+    ],
+    "createdAt": "2025-11-21T13:08:32.462Z",
+    "updatedAt": "2025-11-23T03:00:16.182Z"
+  },
+  {
+    "id": "cmi8vlx720005xgyxctw5t33d",
+    "code": "fisioterapia-ortopedica",
+    "name": "Fisioterapia Ortopédica",
+    "description": "Reabilitação ortopédica",
+    "importantInfo": "Tratamento para lesões musculoesqueléticas. Requer avaliação prévia.",
+    "basePrice": 90,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "fisioterapia"
+    ],
+    "createdAt": "2025-11-21T13:08:32.463Z",
+    "updatedAt": "2025-11-23T03:00:16.190Z"
+  },
+  {
+    "id": "cmi8vlx730006xgyx1cibnzqq",
+    "code": "fisioterapia-neurologica",
+    "name": "Fisioterapia Neurológica",
+    "description": "Tratamento para disfunções neurológicas",
+    "importantInfo": "Tratamento para condições neurológicas. Requer avaliação prévia.",
+    "basePrice": 100,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "fisioterapia"
+    ],
+    "createdAt": "2025-11-21T13:08:32.464Z",
+    "updatedAt": "2025-11-23T03:00:16.189Z"
+  },
+  {
+    "id": "cmi8vlx740007xgyxxp4lv4so",
+    "code": "fisioterapia-pelvica",
+    "name": "Fisioterapia Pélvica",
+    "description": "Tratamento especializado para disfunções do assoalho pélvico",
+    "importantInfo": "Tratamento para disfunções do assoalho pélvico. Requer avaliação prévia.",
+    "basePrice": 220,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "fisioterapia",
+      "especializada"
+    ],
+    "createdAt": "2025-11-21T13:08:32.464Z",
+    "updatedAt": "2025-11-23T03:00:16.177Z"
+  },
+  {
+    "id": "cmi8vlx740008xgyxrly4297u",
+    "code": "fisioterapia-respiratoria",
+    "name": "Fisioterapia Respiratória",
+    "description": "Tratamento de função respiratória",
+    "importantInfo": "Tratamento para condições respiratórias. Requer avaliação prévia.",
+    "basePrice": 100,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "fisioterapia"
+    ],
+    "createdAt": "2025-11-21T13:08:32.465Z",
+    "updatedAt": "2025-11-23T03:00:16.191Z"
+  },
+  {
+    "id": "cmi8vlx750009xgyx8zol9r8o",
+    "code": "fisioterapia-pos-operatoria",
+    "name": "Fisioterapia Pós Operatória",
+    "description": "Reabilitação pós-operatória",
+    "importantInfo": "Tratamento pós-cirúrgico. Requer avaliação prévia.",
+    "basePrice": 60,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "fisioterapia"
+    ],
+    "createdAt": "2025-11-21T13:08:32.465Z",
+    "updatedAt": "2025-11-23T03:00:16.191Z"
+  },
+  {
+    "id": "cmi8vlx75000axgyxt28l5er5",
+    "code": "tens",
+    "name": "Estimulação Elétrica Transcutânea (TENS)",
+    "description": "Terapia com estimulação transcutânea",
+    "importantInfo": "Estimulação elétrica transcutânea para controle de dor",
+    "basePrice": 80,
+    "requiresEvaluation": false,
+    "duration": 20,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-21T13:08:32.466Z",
+    "updatedAt": "2025-11-23T03:00:16.197Z"
+  },
+  {
+    "id": "cmi8vlx76000bxgyx5t6cbnim",
+    "code": "infiltracao-ponto-gatilho",
+    "name": "Infiltração de Ponto Gatilho",
+    "description": "Infiltração para alívio de pontos gatilho",
+    "importantInfo": "Infiltração direcionada para alívio de pontos de tensão muscular",
+    "basePrice": 0,
+    "requiresEvaluation": true,
+    "duration": 30,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-21T13:08:32.466Z",
+    "updatedAt": "2025-11-23T03:00:16.198Z"
+  },
+  {
+    "id": "cmi8vlx76000cxgyx232194sz",
+    "code": "agulhamento-seco",
+    "name": "Agulhamento a Seco",
+    "description": "Técnica de agulhamento seco",
+    "importantInfo": "Técnica de agulhamento seco para liberação de pontos gatilho",
+    "basePrice": 0,
+    "requiresEvaluation": true,
+    "duration": 30,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-21T13:08:32.467Z",
+    "updatedAt": "2025-11-23T03:00:16.198Z"
+  },
+  {
+    "id": "cmi8vlx77000dxgyx58cv5kf9",
+    "code": "quiropraxia",
+    "name": "Quiropraxia",
+    "description": "Técnicas de ajuste articular",
+    "importantInfo": "Ajustes quiropráticos para alinhamento da coluna vertebral",
+    "basePrice": 120,
+    "requiresEvaluation": false,
+    "duration": 45,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-21T13:08:32.467Z",
+    "updatedAt": "2025-11-23T03:00:16.196Z"
+  },
+  {
+    "id": "cmi8vlx77000exgyxlip5q1qo",
+    "code": "ondas-de-choque",
+    "name": "Terapias por Ondas de Choque",
+    "description": "Terapia por ondas para dor e inflamação",
+    "importantInfo": "Terapia por ondas de choque para tratamento de tendinites e calcificações",
+    "basePrice": 0,
+    "requiresEvaluation": true,
+    "duration": 30,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-21T13:08:32.467Z",
+    "updatedAt": "2025-11-23T03:00:16.197Z"
+  },
+  {
+    "id": "cmi8vlx77000fxgyxspvlefi0",
+    "code": "rpg",
+    "name": "RPG - Reeducação Postural Global",
+    "description": "Método de tratamento para correção postural e alívio de dores",
+    "importantInfo": "Reeducação Postural Global. Requer avaliação prévia.",
+    "basePrice": 120,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "postura",
+      "reeducação"
+    ],
+    "createdAt": "2025-11-21T13:08:32.468Z",
+    "updatedAt": "2025-11-23T03:00:16.185Z"
+  },
+  {
+    "id": "cmi8vlx78000gxgyxxwyfortu",
+    "code": "pilates-2x",
+    "name": "Pilates 2x na Semana",
+    "description": "Plano de pilates duas vezes por semana",
+    "importantInfo": "Pacote mensal de Pilates com 2 sessões semanais",
+    "basePrice": 39,
+    "requiresEvaluation": false,
+    "duration": 50,
+    "categories": [
+      "pilates"
+    ],
+    "createdAt": "2025-11-21T13:08:32.468Z",
+    "updatedAt": "2025-11-23T03:00:16.194Z"
+  },
+  {
+    "id": "cmi8vlx78000hxgyxi0wbn3u4",
+    "code": "pilates-3x",
+    "name": "Pilates 3x na Semana",
+    "description": "Plano de pilates três vezes por semana",
+    "importantInfo": "Pacote mensal de Pilates com 3 sessões semanais",
+    "basePrice": 56,
+    "requiresEvaluation": false,
+    "duration": 50,
+    "categories": [
+      "pilates"
+    ],
+    "createdAt": "2025-11-21T13:08:32.469Z",
+    "updatedAt": "2025-11-23T03:00:16.194Z"
+  },
+  {
+    "id": "cmi8vlx79000ixgyx7clx8667",
+    "code": "pilates-avulsa",
+    "name": "Pilates Sessão Avulsa",
+    "description": "Sessão única de pilates",
+    "importantInfo": "Sessão avulsa de Pilates",
+    "basePrice": 70,
+    "requiresEvaluation": false,
+    "duration": 50,
+    "categories": [
+      "pilates"
+    ],
+    "createdAt": "2025-11-21T13:08:32.469Z",
+    "updatedAt": "2025-11-23T03:00:16.195Z"
+  },
+  {
+    "id": "cmib4rdtj0000ji0yjz8x480a",
+    "code": "pilates-solo",
+    "name": "Pilates no Solo",
+    "description": "Exercícios de pilates sem equipamentos para fortalecimento muscular",
+    "importantInfo": null,
+    "basePrice": 120,
+    "requiresEvaluation": false,
+    "duration": 50,
+    "categories": [
+      "pilates",
+      "fortalecimento"
+    ],
+    "createdAt": "2025-11-23T03:00:16.183Z",
+    "updatedAt": "2025-11-23T03:00:16.183Z"
+  },
+  {
+    "id": "cmib4rdtk0001ji0yj3k5irim",
+    "code": "pilates-aparelhos",
+    "name": "Pilates em Aparelhos",
+    "description": "Pilates com equipamentos especializados para reabilitação",
+    "importantInfo": null,
+    "basePrice": 200,
+    "requiresEvaluation": true,
+    "duration": 60,
+    "categories": [
+      "pilates",
+      "reabilitação"
+    ],
+    "createdAt": "2025-11-23T03:00:16.184Z",
+    "updatedAt": "2025-11-23T03:00:16.184Z"
+  },
+  {
+    "id": "cmib4rdtl0002ji0ypl8wvgf4",
+    "code": "ventosaterapia",
+    "name": "Ventosaterapia",
+    "description": "Terapia com ventosas para alívio de tensões musculares",
+    "importantInfo": null,
+    "basePrice": 100,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-23T03:00:16.186Z",
+    "updatedAt": "2025-11-23T03:00:16.186Z"
+  },
+  {
+    "id": "cmib4rdtm0003ji0yyck7wxxb",
+    "code": "liberacao-miofascial",
+    "name": "Liberação Miofascial",
+    "description": "Técnica para liberação de tensões na fáscia muscular",
+    "importantInfo": null,
+    "basePrice": 160,
+    "requiresEvaluation": false,
+    "duration": 45,
+    "categories": [
+      "fisioterapia",
+      "miofascial"
+    ],
+    "createdAt": "2025-11-23T03:00:16.186Z",
+    "updatedAt": "2025-11-23T03:00:16.186Z"
+  },
+  {
+    "id": "cmib4rdtm0004ji0yeuo9xaq9",
+    "code": "crioterapia",
+    "name": "Crioterapia",
+    "description": "Tratamento com gelo para controle de inflamação e dor",
+    "importantInfo": null,
+    "basePrice": 80,
+    "requiresEvaluation": false,
+    "duration": 20,
+    "categories": [
+      "terapia-complementar"
+    ],
+    "createdAt": "2025-11-23T03:00:16.187Z",
+    "updatedAt": "2025-11-23T03:00:16.187Z"
+  },
+  {
+    "id": "cmib4rdtn0005ji0yvhrboib4",
+    "code": "eletroterapia",
+    "name": "Eletroterapia",
+    "description": "Uso de correntes elétricas para tratamento de dores e lesões",
+    "importantInfo": null,
+    "basePrice": 90,
+    "requiresEvaluation": false,
+    "duration": 25,
+    "categories": [
+      "fisioterapia",
+      "eletroterapia"
+    ],
+    "createdAt": "2025-11-23T03:00:16.188Z",
+    "updatedAt": "2025-11-23T03:00:16.188Z"
+  },
+  {
+    "id": "cmib4rdto0006ji0yeey8zo1l",
+    "code": "consulta-ortopedista",
+    "name": "Consulta com Ortopedista",
+    "description": "Avaliação médica ortopédica",
+    "importantInfo": null,
+    "basePrice": 400,
+    "requiresEvaluation": false,
+    "duration": 30,
+    "categories": [
+      "consulta"
+    ],
+    "createdAt": "2025-11-23T03:00:16.188Z",
+    "updatedAt": "2025-11-23T03:00:16.188Z"
+  }
+]

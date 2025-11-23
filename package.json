@@ -21,7 +21,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
     "migrate:procedures": "tsx scripts/migrate_procedure_general_to_ortopedica.ts",
-    "cleanup:workflows": "tsx scripts/delete_unused_workflows.ts"
+    "cleanup:workflows": "tsx scripts/delete_unused_workflows.ts",
+    "db:export": "tsx scripts/export_clinic_data.ts",
+    "db:import": "tsx scripts/import_clinic_data.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
