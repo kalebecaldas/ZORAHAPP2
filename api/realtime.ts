@@ -16,6 +16,7 @@ export function initRealtime(server: HTTPServer): Realtime {
         'http://localhost:4002',
         'http://localhost:5173',
         'http://localhost:5174',
+        'https://zorahapp2-production.up.railway.app',
       ],
       methods: ['GET', 'POST'],
       credentials: true,

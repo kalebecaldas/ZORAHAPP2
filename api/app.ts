@@ -134,6 +134,13 @@ app.use(['/api/health','/health'], (req: Request, res: Response, next: NextFunct
   })
 })
 
+const clientDistPath = path.resolve(__dirname, '../dist')
+app.use(express.static(clientDistPath))
+app.get('*', (req: Request, res: Response, next: NextFunction) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) return next()
+  res.sendFile(path.join(clientDistPath, 'index.html'))
+})
+
 /**
  * Global error handler
  */

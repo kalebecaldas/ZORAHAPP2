@@ -14,6 +14,7 @@
     "kill-ports": "sh -c 'lsof -ti tcp:3001 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4001 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4002 | xargs kill -9 2>/dev/null || true; lsof -ti tcp:4007 | xargs kill -9 2>/dev/null || true'",
     "up": "npm run kill-ports && npm run dev",
     "start": "./scripts/start-server.sh",
+    "start:prod": "npx prisma generate && npx prisma migrate deploy && npx tsx api/server.ts",
     "start:win": "scripts\\start-server.bat",
     "start:node": "node scripts/start-server.js",
     "test": "vitest",
