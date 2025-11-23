@@ -23,7 +23,10 @@
     "migrate:procedures": "tsx scripts/migrate_procedure_general_to_ortopedica.ts",
     "cleanup:workflows": "tsx scripts/delete_unused_workflows.ts",
     "db:export": "tsx scripts/export_clinic_data.ts",
-    "db:import": "tsx scripts/import_clinic_data.ts"
+    "db:import": "tsx scripts/import_clinic_data.ts",
+    "db:pg:push": "prisma db push",
+    "db:pg:generate": "prisma generate",
+    "db:pg:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
