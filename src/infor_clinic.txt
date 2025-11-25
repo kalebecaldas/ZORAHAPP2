@@ -1,217 +1,333 @@
-(BRADESCO - Acupuntura 
-Consulta com Ortopedista 
-Fisioterapia Neurológica 
-Fisioterapia Ortopédica
-Fisioterapia Pélvica 
-Infiltração de ponto gatilho e Agulhamento a seco 
-RPG)
+Perfeito! Aqui está **o texto completo, revisado, organizado e com os pacotes da UNIDADE VIEIRALVES atualizados conforme seus novos valores**.
+Tudo já está pronto para colocar no seu sistema, documentação ou no BOT.
 
-(SULAMERICA - Acupuntura
-Estimulação Elétrica Transcutânea 
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica)
+---
 
-(MEDISERVICE - Acupuntura
-Consulta com Ortopedista
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Infiltração de ponto gatilho e Agulhamento a seco
-RPG)
+# ✅ **CONVÊNIOS E PROCEDIMENTOS ATENDIDOS**
 
-(SAÚDE CAIXA - Acupuntura
-Consulta com Ortopedista
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Terapias por ondas de Choque)
+## **BRADESCO**
 
-(PETROBRAS - Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-RPG)
+* Acupuntura
+* Consulta com Ortopedista
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Infiltração de ponto gatilho e Agulhamento a seco
+* RPG
 
-(GEAP - Consulta com Ortopedista
-Fisioterapia Neurológica
-Fisioterapia Ortopédica)
+---
 
-(PRO SOCIAL - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória
-Infiltração de ponto gatilho e Agulhamento a seco
-RPG)
+## **SULAMÉRICA**
 
-(POSTAL SAÚDE - Acupuntura
-Consulta com Ortopedista
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica 
-RPG)
+* Acupuntura
+* Estimulação Elétrica Transcutânea
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
 
-(CONAB - Acupuntura
-Consulta com Ortopedista
-Estimulação elétrica transcutânea (TENS)
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória
-Infiltração de ponto gatilho
-RPG)
+---
 
-(AFFEAM - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória)
+## **MEDISERVICE**
 
-(AMBEP - Acupuntura
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória
-RPG)
+* Acupuntura
+* Consulta com Ortopedista
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Infiltração de ponto gatilho e Agulhamento a seco
+* RPG
 
-(GAMA - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Respiratória)
+---
 
-(LIFE - Acupuntura
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória
-RPG)
+## **SAÚDE CAIXA**
 
+* Acupuntura
+* Consulta com Ortopedista
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Terapias por Ondas de Choque
 
+---
 
+## **PETROBRAS**
 
-(NOTREDAME - Acupuntura
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-RPG)
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* RPG
 
-(OAB - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Respiratória
-RPG)
+---
 
-(ADEPOL – temos DESCONTO para esse convenio)
+## **GEAP**
 
-(BEM CARE – temos DESCONTO para esse convenio)
+* Consulta com Ortopedista
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
 
-(BEMOL – temos DESCONTO para esse convenio)
+---
 
-(CAPESAUDE - Acupuntura)
+## **PRO SOCIAL**
 
-(CASEMBRAPA - Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica 
-RPG)
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
+* Infiltração de ponto gatilho e Agulhamento a seco
+* RPG
 
-(CLUBSAUDE - temos DESCONTO para esse convenio)
+---
 
-(CULTURAL - Acupuntura
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Respiratória
-RPG)
+## **POSTAL SAÚDE**
 
-(EVIDA - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Respiratória
-RPG)
+* Acupuntura
+* Consulta com Ortopedista
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* RPG
 
-(FOGAS - Acupuntura
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Respiratória
-RPG)
+---
 
-(FUSEX - Acupuntura
-Consulta Ortopédica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-Fisioterapia Pélvica
-Quiropraxia
-RPG)
+## **CONAB**
 
-(PLAN-ASSITE - Acupuntura
-Consulta Ortopédica
-Fisioterapia Pélvica
-Fisioterapia Neurológica
-Fisioterapia Ortopédica
-RPG )
+* Acupuntura
+* Consulta com Ortopedista
+* Estimulação Elétrica Transcutânea
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
+* Infiltração de ponto gatilho
+* RPG
 
-(PRO-SAUDE – temos DESCONTO para esse convenio)
+---
 
-(ADEPOL - temos DESCONTO para esse convenio)
+## **AFFEAM**
 
-(VITA - temos DESCONTO para esse convenio)
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
 
+---
 
+## **AMBEP**
 
-regra de convenios com desconto: vamos aplicar uma porcentagem de 20% de desconto em cima de todos os atendimentos particulares. então quando o paciente falar que tem um desses convenios que tem desconto o bot precisa retornar todos os procedimentos particulares trazendo o valor ja tendo sido calculado o desconto em cima, cada convenio vai possuir um desconto diferente um do outro, ou igual, quem vai decidir isso é o admin do sistema.
+* Acupuntura
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
+* RPG
 
+---
 
+## **GAMA**
 
-PARTICULAR UNIDADE VIEIRALVES -
-FISIOTERAPIA ORTOPEDICA R$ 90,00
-FISIOTERAPIA NEUROLOGICA R$ 100,00
-FISIOTERAPIA RESPIRATORIA R$ 100,00
-FISIOTERAPIA PELVICA R$ 220,00
-CONSULTA ORTOPEDISTA R$ 400,00
-AVALIAÇÃO ACUPUNTURA R$ 200,00
-ACUPUNTURA R$ 180,00
-AVALIAÇÃO FISIOTERAPIA PÉLVICA R$ 250,00
-RPG R$ 120,00
-PILATES 2x na Semana R$ 39,00
-PILATES 3x na Semana R$ 56,00
-PILATES SESSÃO AVULSA R$ 70,00
-QUIROPRAXIA R$ 120,00
-REGRAS DO PARTICULAR UNIDADE VIEIRALVES:
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Respiratória
 
-Para procedimentos como fisioterapia pélvica e acupuntura e fisioterapia, esses sempre terão que ter a avaliação primeiro, ou seja, se caso o paciente queira agendar somente uma sessão ele terá que pagar a avaliação. Mas se pagar o pacote de 10 sessões ele terá desconto na avaliação ficando 10  avaliação não cobrariamos, ficando somente valor de sessão avulsa. Então é preciso criar uma parte de inserir pacote na hora de inseri o procedimento ao convenio, se caso o convenio for particular.
+---
 
-______________________________________________
+## **LIFE**
 
-PARTICULAR SÃO JOSÉ -
-FISIOTERAPIA ORTOPEDICA R$ 45,00
-FISIOTERAPIA NEUROLOGICA R$ 60,00
-FISIOTERAPIA RESPIRATORIA R$ 60,00
-FISIOTERAPIA PÓS OPERATÓRIA R$ 60,00
-ACUPUNTURA R$ 60,00
-RPG R$ 50,00
-CONSULTA ORTOPEDICA R$ 200,00
-CONSULTA CLINICO GERAL R$ 200,00
+* Acupuntura
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
+* RPG
 
-PACOTES UNIDADE SÃO JOSÉ
-FISIOTERAPIA ORTOPEDICA R$ 200,00
-FISIOTERAPIA NEUROLOGICA R$ 500,00
-FISIOTERAPIA RESPIRATORIA R$ 500,00
-FISIOTERAPIA PÓS OPERATÓRIA R$ 500,00
-ACUPUNTURA R$ 400,00
-RPG R$ 350,00
+---
 
+## **NOTREDAME**
 
+* Acupuntura
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* RPG
 
+---
 
+## **OAB**
 
-LOCALIZAÇÃO 
-UNIDADE VIEIRALVES
-https://maps.app.goo.gl/3FkWaZd1V3MB9TLP9
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Respiratória
+* RPG
 
-UNIDADE SAO JOSE
-https://maps.app.goo.gl/CdN3PYDkjkoQXzfRA
+---
+
+## **CAPESAUDE**
+
+* Acupuntura
+
+---
+
+## **CASEMBRAPA**
+
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* RPG
+
+---
+
+## **CULTURAL**
+
+* Acupuntura
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Respiratória
+* RPG
+
+---
+
+## **EVIDA**
+
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Respiratória
+* RPG
+
+---
+
+## **FOGAS**
+
+* Acupuntura
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Respiratória
+* RPG
+
+---
+
+## **FUSEX**
+
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* Fisioterapia Pélvica
+* Quiropraxia
+* RPG
+
+---
+
+## **PLAN-ASSITE**
+
+* Acupuntura
+* Consulta Ortopédica
+* Fisioterapia Pélvica
+* Fisioterapia Neurológica
+* Fisioterapia Ortopédica
+* RPG
+
+---
+
+# 🟦 **CONVÊNIOS COM DESCONTO**
+
+Esses convênios não têm tabela própria, mas **aplicam desconto (%) sobre os valores particulares**:
+
+* ADEPOL
+* BEM CARE
+* BEMOL
+* CLUBSAÚDE
+* PRO-SAUDE
+* VITA
+
+**Regra:** cada convênio pode ter sua própria porcentagem de desconto definida pelo admin do sistema.
+Exemplo padrão: **20% de desconto** sobre qualquer procedimento particular.
+
+---
+
+# 🟩 **PARTICULAR – UNIDADE VIEIRALVES**
+
+### **Valores Avulsos**
+
+* Fisioterapia Ortopédica — **R$ 90,00**
+* Fisioterapia Neurológica — **R$ 100,00**
+* Fisioterapia Respiratória — **R$ 100,00**
+* Fisioterapia Pélvica — **R$ 220,00**
+* Consulta Ortopedista — **R$ 400,00**
+* Avaliação Acupuntura — **R$ 200,00**
+* Acupuntura — **R$ 180,00**
+* Avaliação Fisioterapia Pélvica — **R$ 250,00**
+* RPG — **R$ 120,00**
+* Pilates 2x na semana — **R$ 39,00**
+* Pilates 3x na semana — **R$ 56,00**
+* Pilates sessão avulsa — **R$ 70,00**
+* Quiropraxia — **R$ 120,00**
+
+---
+
+# 🟩 **PACOTES – UNIDADE VIEIRALVES**
+
+*(válidos para: Fisioterapia, Fisioterapia Pélvica, Acupuntura e RPG)*
+
+* **Pacote Fisioterapia Ortopédica (10 sessões): R$ 800,00**
+* **Pacote Fisioterapia Neurológica (10 sessões): R$ 900,00**
+* **Pacote Fisioterapia Respiratória (10 sessões): R$ 900,00**
+* **Pacote Fisioterapia Pélvica (10 sessões): R$ 2.000,00**
+* **Pacote Acupuntura (10 sessões): R$ 1.600,00**
+* **Pacote RPG (10 sessões): R$ 1.000,00**
+
+### **Regras**
+
+* Para Fisioterapia, Fisioterapia Pélvica e Acupuntura, é obrigatória **avaliação** para sessão avulsa.
+* Ao fechar **pacote de 10 sessões**,
+  ✔ a avaliação **não é cobrada**
+  ✔ o valor final é apenas o valor do pacote.
+* O sistema precisa permitir **vincular pacotes** ao procedimento quando o convênio for particular.
+
+---
+
+# 🟧 **PARTICULAR – UNIDADE SÃO JOSÉ**
+
+### **Valores Avulsos**
+
+* Fisioterapia Ortopédica — **R$ 45,00**
+* Fisioterapia Neurológica — **R$ 60,00**
+* Fisioterapia Respiratória — **R$ 60,00**
+* Fisioterapia Pós-operatória — **R$ 60,00**
+* Acupuntura — **R$ 60,00**
+* RPG — **R$ 50,00**
+* Consulta Ortopédica — **R$ 200,00**
+* Consulta Clínico Geral — **R$ 200,00**
+
+### **Pacotes São José**
+
+* Fisioterapia Ortopédica — **R$ 200,00**
+* Fisioterapia Neurológica — **R$ 500,00**
+* Fisioterapia Respiratória — **R$ 500,00**
+* Fisioterapia Pós-operatória — **R$ 500,00**
+* Acupuntura — **R$ 400,00**
+* RPG — **R$ 350,00**
+
+---
+
+# 📍 **LOCALIZAÇÕES**
+
+### **Unidade Vieiralves**
+
+[https://maps.app.goo.gl/3FkWaZd1V3MB9TLP9](https://maps.app.goo.gl/3FkWaZd1V3MB9TLP9)
+
+### **Unidade São José**
+
+[https://maps.app.goo.gl/CdN3PYDkjkoQXzfRA](https://maps.app.goo.gl/CdN3PYDkjkoQXzfRA)
+
+---

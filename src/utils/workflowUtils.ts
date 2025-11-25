@@ -70,11 +70,10 @@ export const getConditionPorts = (cond?: string): Port[] => {
     { id: '5', label: '5', type: 'output', position: 'bottom' }
     ]
   }
-  if (c.includes('|')) {
-    const tokens = c.split('|').map(s => s.trim()).filter(Boolean)
-    return [...base, ...tokens.map(t => ({ id: t, label: t, type: 'output' as const, position: 'bottom' as const }))]
-  }
-  return [...base, { id: 'output', label: 'Saída', type: 'output', position: 'bottom' }]
+  // IMPORTANTE: CONDITION nodes sempre têm ports 'true' e 'false' para as edges
+  // Os tokens (ex: sim|quero|adicionar) são apenas para lógica de classificação
+  // mas as edges sempre usam true/false como sourceHandle
+  return [...base, { id: 'true', label: 'Verdadeiro', type: 'output', position: 'bottom' }, { id: 'false', label: 'Falso', type: 'output', position: 'bottom' }]
 }
 
 // Conversão Backend -> React Flow
@@ -84,23 +83,39 @@ export const nodesToReactFlow = (nodes: BackendNode[]): Node[] => {
     let ports: Port[] = []
     
     if (node.type === 'CONDITION') {
-      const condition = node.content?.condition || ''
+      // Procurar condition em content ou data
+      const condition = node.content?.condition || (node.content as any)?.data?.condition || (node.content as any)?.condition || ''
+      
       if (condition === 'clinic_selection') {
         ports = getConditionPorts('clinic_selection')
       } else if (condition === 'service_selection') {
         ports = getConditionPorts('service_selection')
       } else {
-        ports = getConditionPorts(condition)
+        // IMPORTANTE: Todos os CONDITION nodes (exceto clinic_selection e service_selection)
+        // sempre têm ports 'true' e 'false', independente dos tokens na condição
+        // Os tokens (ex: sim|quero|adicionar) são apenas para lógica de classificação
+        // mas as edges sempre usam true/false como sourceHandle
+        ports = [
+          { id: 'input', label: 'Entrada', type: 'input', position: 'top' },
+          { id: 'true', label: 'Verdadeiro', type: 'output', position: 'bottom' },
+          { id: 'false', label: 'Falso', type: 'output', position: 'bottom' }
+        ]
       }
+      
+      console.log(`🔧 CONDITION node "${node.id}":`, {
+        condition,
+        ports: ports.map(p => p.id).join(', ')
+      })
     } else if (node.type === 'GPT_RESPONSE') {
-      // GPT_RESPONSE precisa de ports 1-5 para as diferentes intenções
+      // GPT_RESPONSE precisa de ports 1-6 para as diferentes intenções
       ports = [
         { id: 'input', label: 'Entrada', type: 'input', position: 'top' },
-        { id: '1', label: '1', type: 'output', position: 'bottom' },
-        { id: '2', label: '2', type: 'output', position: 'bottom' },
-        { id: '3', label: '3', type: 'output', position: 'bottom' },
-        { id: '4', label: '4', type: 'output', position: 'bottom' },
-        { id: '5', label: '5', type: 'output', position: 'bottom' }
+        { id: '1', label: 'Valores', type: 'output', position: 'bottom' },
+        { id: '2', label: 'Convênios', type: 'output', position: 'bottom' },
+        { id: '3', label: 'Localização', type: 'output', position: 'bottom' },
+        { id: '4', label: 'Explicação', type: 'output', position: 'bottom' },
+        { id: '5', label: 'Agendar', type: 'output', position: 'bottom' },
+        { id: '6', label: 'Humano', type: 'output', position: 'bottom' }
       ]
     } else {
       ports = getDefaultPorts()
@@ -123,27 +138,105 @@ export const nodesToReactFlow = (nodes: BackendNode[]): Node[] => {
 export const edgesToReactFlow = (nodes: BackendNode[], backendEdges?: any[]): Edge[] => {
   const edges: Edge[] = []
 
+  // Criar um mapa de nós para acesso rápido
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
+
+  console.log('🔗 edgesToReactFlow - Convertendo edges do backend')
+  console.log('   Nodes disponíveis:', nodes.map(n => n.id))
+  console.log('   Backend edges recebidas:', backendEdges?.length || 0)
+
   // Se temos edges do backend, usar elas diretamente
   if (backendEdges && backendEdges.length > 0) {
-    return backendEdges.map((edge, idx) => {
-      let port = edge.data?.port || edge.port || 'main'
+    const convertedEdges = backendEdges.map((edge, idx) => {
+      // Pegar port do data.port ou sourceHandle
+      let port = edge.data?.port || edge.sourceHandle || edge.port || 'main'
+      const condition = edge.data?.condition || edge.condition
       
-      // Mapear "output" para "main" (padrão dos nós)
-      if (port === 'output') {
-        port = 'main'
+      // Verificar se source e target existem
+      const sourceExists = nodeMap.has(edge.source)
+      const targetExists = nodeMap.has(edge.target)
+      
+      if (!sourceExists || !targetExists) {
+        console.warn(`⚠️ Edge inválida: ${edge.source} -> ${edge.target}`, {
+          sourceExists,
+          targetExists,
+          edge
+        })
+        return null
       }
       
-      return {
+      const sourceNode = nodeMap.get(edge.source)
+      
+      // Para CONDITION nodes, validar que o port existe nos tokens
+      if (sourceNode && sourceNode.type === 'CONDITION') {
+        const condValue = (sourceNode.content?.condition || '').toLowerCase()
+        
+        // Se o port ainda é 'main', precisamos inferir do condition
+        if (port === 'main' && condition) {
+          const tokens = condition.split('|').map(s => s.trim()).filter(Boolean)
+          if (tokens.length > 0) {
+            port = tokens[0] // Usar primeiro token
+          }
+        }
+        
+        // Validar se o port existe na lista de tokens do node
+        if (condValue.includes('|')) {
+          const tokens = condValue.split('|').map(s => s.trim())
+          // Se port não está nos tokens e não é 'true'/'false', usar primeiro token do condition da edge
+          if (!tokens.includes(port) && port !== 'true' && port !== 'false') {
+            const edgeTokens = (condition || '').split('|').map(s => s.trim()).filter(Boolean)
+            if (edgeTokens.length > 0 && tokens.includes(edgeTokens[0])) {
+              port = edgeTokens[0]
+            }
+          }
+        } else if (condValue === 'clinic_selection') {
+          // Usar 'true' como padrão para ambas as clínicas (só temos 2 saídas)
+          if (port === 'main') {
+            port = 'true'
+          }
+        } else {
+          // Nodes com condição simples (ex: patient_found) usam 'true'/'false'
+          if (port === 'main') {
+            port = condition ? 'false' : 'true'
+          }
+        }
+      }
+      
+      // Mapear "output" para "main" (padrão dos nós que não são CONDITION)
+      if (port === 'output') {
+        if (!sourceNode || sourceNode.type !== 'CONDITION') {
+          port = 'main'
+        }
+      }
+      
+      const reactFlowEdge = {
         id: edge.id || `e_${edge.source}_${edge.target}_${idx}`,
         source: edge.source,
         target: edge.target,
         sourceHandle: port,
         targetHandle: 'input',
-        label: edge.data?.condition || edge.condition,
-        type: edge.type || 'smoothstep',
-        animated: edge.animated || false,
+        label: condition,
+        type: 'smoothstep',
+        animated: false,
+        style: {
+          stroke: '#64748b',
+          strokeWidth: 3
+        },
+        markerEnd: {
+          type: 'arrowclosed' as const,
+          color: '#64748b',
+          width: 20,
+          height: 20
+        }
       }
-    })
+      
+      console.log(`   ✅ ${edge.source}[${port}] → ${edge.target}`)
+      
+      return reactFlowEdge
+    }).filter(Boolean) // Remove edges inválidas (null)
+    
+    console.log(`✅ Total de edges convertidas: ${convertedEdges.length}`)
+    return convertedEdges as Edge[]
   }
 
   // Fallback: gerar edges a partir de node.connections
@@ -211,4 +304,22 @@ export const reactFlowToWorkflow = (rfNodes: Node[], rfEdges: Edge[], originalWo
       }
     }))
   }
+}
+
+// Ensure required edges exist for the pre-scheduling chain
+export const ensureRequiredEdges = (wf: BackendWorkflow): BackendWorkflow => {
+  const nodes = wf.nodes || []
+  const edges = wf.edges || []
+  const nodeIds = new Set(nodes.map(n => n.id))
+  const hasEdge = (src: string, tgt: string) => edges.some((e: any) => e.source === src && e.target === tgt)
+  const pushEdge = (src: string, tgt: string, port = 'main', condition?: string) => {
+    if (nodeIds.has(src) && nodeIds.has(tgt) && !hasEdge(src, tgt)) {
+      edges.push({ id: `e_${src}_${tgt}_${edges.length+1}`, source: src, target: tgt, data: { port, condition } })
+    }
+  }
+  // Minimal chain fix-ups
+  pushEdge('msg_cadastro_sucesso', 'ask_procedimentos')
+  pushEdge('msg_paciente_encontrado', 'ask_procedimentos')
+  pushEdge('ask_procedimentos', 'collect_proc_1')
+  return { ...wf, edges }
 }

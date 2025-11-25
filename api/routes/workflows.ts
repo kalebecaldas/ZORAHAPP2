@@ -5,6 +5,9 @@ import { authMiddleware } from '../utils/auth.js'
 import { workflowSchema } from '../utils/validation.js'
 import axios from 'axios'
 import { WorkflowEngine, type WorkflowNode } from '../../src/services/workflowEngine.js'
+import fs from 'fs'
+import path from 'path'
+import { emitToAll } from '../realtime.js'
 
 const router = Router()
 
@@ -181,10 +184,14 @@ router.put('/:id', workflowsAuth, async (req: Request, res: Response): Promise<v
       return
     }
 
-    const updatedWorkflow = await prisma.workflow.update({
+  const updatedWorkflow = await prisma.workflow.update({
       where: { id },
       data
     })
+
+    try {
+      emitToAll('workflow:updated', { id, name: updatedWorkflow.name, isActive: updatedWorkflow.isActive })
+    } catch {}
 
     res.json(updatedWorkflow)
   } catch (error) {
@@ -213,6 +220,10 @@ router.patch('/:id', workflowsAuth, async (req: Request, res: Response): Promise
       where: { id },
       data
     })
+
+    try {
+      emitToAll('workflow:updated', { id, name: updatedWorkflow.name, isActive: updatedWorkflow.isActive })
+    } catch {}
 
     res.json(updatedWorkflow)
   } catch (error) {
@@ -318,6 +329,82 @@ router.post('/:id/test', workflowsAuth, async (req: Request, res: Response): Pro
   } catch (error) {
     console.error('Erro ao testar workflow:', error)
     res.status(500).json({ error: 'Erro interno' })
+  }
+})
+
+// Sync active workflow from local JSON file
+router.post('/sync/local', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const fileName = String(req.body?.file || 'workflow_completo_definitivo.json')
+    const filePath = path.isAbsolute(fileName) ? fileName : path.join(process.cwd(), fileName)
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: `Arquivo não encontrado: ${filePath}` })
+      return
+    }
+
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+    const nodes = (data.config?.nodes || data.nodes || []).map((node: any) => ({
+      id: node.id,
+      type: node.type,
+      data: node.data || node.content || {},
+      position: node.position || { x: 0, y: 0 },
+      connections: node.connections || []
+    }))
+    const edges = (data.config?.edges || data.edges || []).map((edge: any) => ({
+      id: edge.id || `${edge.source}_${edge.target}`,
+      source: edge.source,
+      target: edge.target,
+      data: {
+        port: edge.data?.port || edge.port || 'main',
+        condition: edge.data?.condition || edge.condition
+      },
+      type: edge.type || 'smoothstep',
+      animated: edge.animated || false
+    }))
+
+    // Deactivate existing active workflows
+    await prisma.workflow.updateMany({ where: { isActive: true }, data: { isActive: false } })
+
+    // Upsert workflow by name
+    const existing = await prisma.workflow.findFirst({ where: { name: data.name } })
+    let workflow
+    if (existing) {
+      workflow = await prisma.workflow.update({
+        where: { id: existing.id },
+        data: {
+          name: data.name,
+          description: data.description || '',
+          type: data.type || 'CONSULTATION',
+          isActive: true,
+          config: { nodes, edges }
+        }
+      })
+    } else {
+      workflow = await prisma.workflow.create({
+        data: {
+          name: data.name,
+          description: data.description || '',
+          type: data.type || 'CONSULTATION',
+          isActive: true,
+          config: { nodes, edges }
+        }
+      })
+    }
+
+    res.json({
+      success: true,
+      workflowId: workflow.id,
+      name: workflow.name,
+      stats: { nodes: nodes.length, edges: edges.length },
+      message: 'Workflow sincronizado com sucesso do arquivo local'
+    })
+
+    try {
+      emitToAll('workflow:synced', { id: workflow.id, name: workflow.name, isActive: workflow.isActive })
+    } catch {}
+  } catch (error) {
+    console.error('Erro ao sincronizar workflow local:', error)
+    res.status(500).json({ error: 'Erro interno ao sincronizar workflow' })
   }
 })
 
@@ -763,6 +850,182 @@ router.post('/:id/autoconnect', workflowsAuth, async (req: Request, res: Respons
   } catch (error) {
     console.error('Erro ao auto-conectar workflow:', error)
     res.status(500).json({ error: 'Erro interno ao auto-conectar' })
+  }
+})
+
+// Fix workflow to return to GPT classifier after responses
+router.post('/:id/fix-gpt-loop', workflowsAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    const wf = await prisma.workflow.findUnique({ where: { id } })
+    if (!wf) {
+      res.status(404).json({ error: 'Workflow não encontrado' })
+      return
+    }
+
+    const cfg = typeof wf.config === 'string' 
+      ? (() => { try { return JSON.parse(wf.config as any) } catch { return {} } })() 
+      : (wf.config as any) || {}
+
+    let nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
+    let edges = Array.isArray(cfg?.edges) ? cfg.edges : []
+
+    // Encontrar ou criar nó GPT classifier
+    let gptClassifierNode = nodes.find((n: any) => 
+      n.type === 'GPT_RESPONSE' && n.id === 'gpt_classifier'
+    )
+
+    if (!gptClassifierNode) {
+      // Procurar qualquer GPT_RESPONSE existente
+      gptClassifierNode = nodes.find((n: any) => {
+        if (n.type !== 'GPT_RESPONSE') return false
+        const prompt = (n.data?.systemPrompt || n.content?.systemPrompt || '').toLowerCase()
+        return prompt.includes('classificador') || prompt.includes('classificar') || prompt.includes('intenção')
+      })
+
+      // Se não encontrou, criar novo
+      if (!gptClassifierNode) {
+        const maxY = Math.max(...nodes.map((n: any) => (n.position?.y || 0)), 0)
+        gptClassifierNode = {
+          id: 'gpt_classifier',
+          type: 'GPT_RESPONSE',
+          data: {
+            systemPrompt: 'Você é um classificador de intenção simples. Analise a mensagem do usuário e classifique em uma das opções: 1) valores de procedimentos, 2) convênios, 3) localização, 4) agendamento, 5) falar com atendente. Responda apenas com o número da intenção (1-5).'
+          },
+          position: { x: 100, y: maxY + 200 }
+        }
+        nodes.push(gptClassifierNode)
+        console.log('✅ Criado nó GPT classifier')
+      } else {
+        // Renomear para gpt_classifier se necessário
+        if (gptClassifierNode.id !== 'gpt_classifier') {
+          const oldId = gptClassifierNode.id
+          gptClassifierNode.id = 'gpt_classifier'
+          // Atualizar referências nas edges
+          edges = edges.map((e: any) => ({
+            ...e,
+            source: e.source === oldId ? 'gpt_classifier' : e.source,
+            target: e.target === oldId ? 'gpt_classifier' : e.target
+          }))
+          // Atualizar no array de nodes
+          nodes = nodes.map((n: any) => 
+            n.id === oldId ? gptClassifierNode : n
+          )
+          console.log(`✅ Renomeado nó ${oldId} para gpt_classifier`)
+        }
+      }
+    }
+
+    // Encontrar todos os nós MESSAGE que devem voltar ao GPT
+    const messageNodes = nodes.filter((n: any) => 
+      n.type === 'MESSAGE' && 
+      n.id !== 'start' &&
+      !n.id.includes('welcome') &&
+      !n.id.includes('end') &&
+      !n.id.includes('transfer')
+    )
+
+    // Adicionar conexões de volta ao GPT para nós MESSAGE que não têm
+    let addedConnections = 0
+    for (const msgNode of messageNodes) {
+      const hasConnectionToGPT = edges.some((e: any) => 
+        e.source === msgNode.id && 
+        e.target === gptClassifierNode.id
+      )
+
+      if (!hasConnectionToGPT) {
+        const edgeId = `edge_${msgNode.id}_to_gpt_classifier`
+        edges.push({
+          id: edgeId,
+          source: msgNode.id,
+          target: gptClassifierNode.id,
+          sourceHandle: 'output',
+          targetHandle: 'input',
+          data: {
+            port: 'main'
+          },
+          type: 'default'
+        })
+        addedConnections++
+      }
+    }
+
+    // Garantir que o GPT classifier tenha conexões para os diferentes caminhos
+    const gptOutgoingEdges = edges.filter((e: any) => e.source === gptClassifierNode.id)
+    if (gptOutgoingEdges.length === 0) {
+      // Encontrar nós de destino comuns
+      const valueNode = nodes.find((n: any) => 
+        n.id.includes('valor') || n.id.includes('procedure') || n.type === 'API_CALL'
+      )
+      const insuranceNode = nodes.find((n: any) => 
+        n.id.includes('insurance') || n.id.includes('convênio')
+      )
+      const locationNode = nodes.find((n: any) => 
+        n.id.includes('location') || n.id.includes('localização')
+      )
+
+      if (valueNode) {
+        edges.push({
+          id: 'edge_gpt_to_values',
+          source: gptClassifierNode.id,
+          target: valueNode.id,
+          sourceHandle: '1',
+          targetHandle: 'input',
+          data: { port: '1' },
+          type: 'default'
+        })
+      }
+      if (insuranceNode) {
+        edges.push({
+          id: 'edge_gpt_to_insurance',
+          source: gptClassifierNode.id,
+          target: insuranceNode.id,
+          sourceHandle: '2',
+          targetHandle: 'input',
+          data: { port: '2' },
+          type: 'default'
+        })
+      }
+      if (locationNode) {
+        edges.push({
+          id: 'edge_gpt_to_location',
+          source: gptClassifierNode.id,
+          target: locationNode.id,
+          sourceHandle: '3',
+          targetHandle: 'input',
+          data: { port: '3' },
+          type: 'default'
+        })
+      }
+    }
+
+    // Atualizar workflow
+    const updatedConfig = {
+      ...cfg,
+      nodes,
+      edges
+    }
+
+    const updated = await prisma.workflow.update({
+      where: { id },
+      data: {
+        config: updatedConfig as any
+      }
+    })
+
+    res.json({
+      success: true,
+      message: `Workflow ajustado! ${addedConnections} conexões adicionadas ao GPT classifier.`,
+      workflow: updated,
+      stats: {
+        gptClassifierNode: gptClassifierNode.id,
+        messageNodesConnected: addedConnections,
+        totalMessageNodes: messageNodes.length
+      }
+    })
+  } catch (error: any) {
+    console.error('Erro ao ajustar workflow:', error)
+    res.status(500).json({ error: 'Erro interno', details: error.message })
   }
 })
 

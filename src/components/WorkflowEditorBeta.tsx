@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react'
 import {
     ReactFlow,
     ReactFlowProvider,
@@ -18,7 +18,9 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { toast } from 'sonner'
-import { Save, X, ZoomIn, ZoomOut, LayoutGrid } from 'lucide-react'
+import { Save, X, ZoomIn, ZoomOut, LayoutGrid, Play, Pause, CheckCircle2 } from 'lucide-react'
+import { io } from 'socket.io-client'
+import { api } from '../lib/utils'
 
 import CustomNode from './workflow/CustomNode'
 import WorkflowSidebar from './workflow/WorkflowSidebar'
@@ -49,6 +51,69 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
     const [edges, setEdges, onEdgesChange] = useEdgesState(edgesToReactFlow(workflow.nodes, workflow.edges))
     const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null)
     const [selectedNode, setSelectedNode] = useState<Node | null>(null)
+    const [isActive, setIsActive] = useState(workflow.isActive || false)
+    const [toggling, setToggling] = useState(false)
+
+    // Atualizar isActive quando workflow mudar
+    useEffect(() => {
+        setIsActive(workflow.isActive || false)
+    }, [workflow.isActive, workflow.id])
+
+    // Sempre que o workflow mudar (ex.: usuário abre outro fluxo), sincronizamos
+    // novamente os nodes e edges do React Flow para refletir o backend.
+    useEffect(() => {
+        console.log('🔄 WorkflowEditorBeta - Sincronizando workflow')
+        console.log('   Workflow ID:', workflow.id)
+        console.log('   Backend nodes:', workflow.nodes?.length || 0)
+        console.log('   Backend edges:', workflow.edges?.length || 0)
+        
+        const convertedNodes = nodesToReactFlow(workflow.nodes)
+        const convertedEdges = edgesToReactFlow(workflow.nodes, workflow.edges)
+        
+        console.log('   ReactFlow nodes:', convertedNodes.length)
+        console.log('   ReactFlow edges:', convertedEdges.length)
+        
+        // Log detalhado das edges convertidas
+        convertedEdges.forEach((edge, idx) => {
+            console.log(`   Edge ${idx + 1}: ${edge.source}[${edge.sourceHandle}] → ${edge.target}`)
+        })
+        
+        setNodes(convertedNodes)
+        setEdges(convertedEdges)
+        
+        // Forçar re-renderização após um pequeno delay para garantir que o ReactFlow processe
+        setTimeout(() => {
+            console.log('✅ Edges aplicadas no estado:', convertedEdges.length)
+            // Forçar atualização do ReactFlow se disponível
+            if (reactFlowInstance) {
+                reactFlowInstance.fitView({ padding: 0.2, duration: 0 })
+            }
+        }, 100)
+    }, [workflow, setNodes, setEdges, reactFlowInstance])
+
+    // Listen to realtime updates and refresh this editor if the same workflow is updated/synced
+    useEffect(() => {
+        const base = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001')
+        const socket = io(base, { path: '/socket.io', transports: ['websocket','polling'] })
+        const reload = async (wfId: string) => {
+            if (!wfId || wfId !== workflow.id) return
+            try {
+                const resp = await api.get(`/api/workflows/${wfId}`)
+                const loaded = resp.data
+                const cfg = typeof loaded.config === 'string' ? JSON.parse(loaded.config) : (loaded.config || {})
+                const nodes = (cfg.nodes || []).map((n: any) => ({ id: n.id, type: n.type, content: n.data || n.content || {}, position: n.position || { x:0,y:0 }, connections: [] }))
+                const backendEdges = cfg.edges || []
+                const convertedEdges = backendEdges.map((e: any) => ({ id: e.id || `${e.source}_${e.target}`, source: e.source, target: e.target, data: { port: e.data?.port || e.port || 'main', condition: e.data?.condition || e.condition }, type: e.type || 'smoothstep', animated: e.animated || false }))
+                setNodes(nodesToReactFlow(nodes))
+                setEdges(edgesToReactFlow(nodes, convertedEdges))
+            } catch (e) {
+                console.warn('⚠️ Falha ao recarregar workflow atualizado', e)
+            }
+        }
+        socket.on('workflow:updated', (data: any) => reload(String(data?.id || '')))
+        socket.on('workflow:synced', (data: any) => reload(String(data?.id || '')))
+        return () => { socket.disconnect() }
+    }, [workflow.id, setNodes, setEdges])
 
     const onConnect = useCallback(
         (params: Connection) => setEdges((eds) => addEdge({ ...params, type: 'smoothstep', animated: false }, eds)),
@@ -103,8 +168,37 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
 
     const handleSave = () => {
         const updatedWorkflow = reactFlowToWorkflow(nodes, edges, workflow)
+        updatedWorkflow.isActive = isActive
         onSave(updatedWorkflow)
         toast.success('Workflow salvo com sucesso!')
+    }
+
+    const handleToggleActive = async () => {
+        if (!workflow.id) {
+            toast.error('Salve o workflow primeiro antes de ativá-lo')
+            return
+        }
+        
+        try {
+            setToggling(true)
+            // Usar endpoint toggle se disponível
+            try {
+                await api.patch(`/api/workflows/${workflow.id}/toggle`)
+            } catch {
+                // Fallback para PUT se toggle não existir
+                await api.put(`/api/workflows/${workflow.id}`, {
+                    ...workflow,
+                    isActive: !isActive
+                })
+            }
+            setIsActive(!isActive)
+            toast.success(`Workflow ${!isActive ? 'ativado' : 'desativado'} com sucesso!`)
+        } catch (error: any) {
+            console.error('Erro ao atualizar status:', error)
+            toast.error(`Erro ao ${!isActive ? 'ativar' : 'desativar'} workflow: ${error.response?.data?.error || error.message}`)
+        } finally {
+            setToggling(false)
+        }
     }
 
     const updateNodeData = (key: string, value: any) => {
@@ -143,7 +237,15 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                             <LayoutGrid className="h-6 w-6 text-blue-600" />
                         </div>
                         <div>
-                            <div className="font-bold text-gray-900 text-lg">Workflow Editor</div>
+                            <div className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                                Workflow Editor
+                                {isActive && (
+                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded-full flex items-center gap-1.5 border border-green-200">
+                                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                                        ATIVO
+                                    </span>
+                                )}
+                            </div>
                             <div className="text-xs text-gray-500 flex items-center space-x-2">
                                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">BETA</span>
                                 <span>{workflow.name}</span>
@@ -151,6 +253,30 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                         </div>
                     </div>
                     <div className="flex items-center space-x-3">
+                        {workflow.id && (
+                            <button
+                                onClick={handleToggleActive}
+                                disabled={toggling}
+                                className={`px-4 py-2 rounded-lg shadow-sm flex items-center space-x-2 transition-colors font-medium ${
+                                    isActive
+                                        ? 'bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200'
+                                        : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
+                                } ${toggling ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                title={isActive ? 'Desativar workflow' : 'Ativar workflow'}
+                            >
+                                {isActive ? (
+                                    <>
+                                        <Pause className="h-4 w-4" />
+                                        <span>Desativar</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="h-4 w-4" />
+                                        <span>Ativar</span>
+                                    </>
+                                )}
+                            </button>
+                        )}
                         <button
                             onClick={handleSave}
                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm flex items-center space-x-2 transition-colors font-medium"
@@ -171,24 +297,52 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                 <div className="flex flex-1 h-full overflow-hidden">
                     <WorkflowSidebar />
 
-                    <div className="flex-1 h-full relative" ref={reactFlowWrapper}>
+                    <div className="flex-1 h-full relative overflow-visible" ref={reactFlowWrapper} style={{ zIndex: 0 }}>
                         <ReactFlow
                             nodes={nodes}
                             edges={edges}
                             onNodesChange={onNodesChange}
                             onEdgesChange={onEdgesChange}
                             onConnect={onConnect}
-                            onInit={setReactFlowInstance}
+                            onInit={(instance) => {
+                                setReactFlowInstance(instance)
+                                // Forçar fitView após inicialização
+                                setTimeout(() => {
+                                    instance.fitView({ padding: 0.2, duration: 0 })
+                                }, 100)
+                            }}
                             onDrop={onDrop}
                             onDragOver={onDragOver}
                             onNodeClick={onNodeClick}
                             onPaneClick={onPaneClick}
                             nodeTypes={nodeTypes}
                             fitView
+                            fitViewOptions={{ padding: 0.2 }}
                             attributionPosition="bottom-right"
                             snapToGrid={true}
                             snapGrid={[15, 15]}
-                            defaultEdgeOptions={{ type: 'smoothstep', animated: false, style: { strokeWidth: 2, stroke: '#b1b1b7' } }}
+                            defaultEdgeOptions={{ 
+                                type: 'smoothstep',
+                                animated: false,
+                                style: { 
+                                    strokeWidth: 3, 
+                                    stroke: '#64748b',
+                                    pointerEvents: 'visibleStroke'
+                                },
+                                markerEnd: {
+                                    type: 'arrowclosed',
+                                    color: '#64748b',
+                                    width: 20,
+                                    height: 20
+                                }
+                            }}
+                            connectionLineStyle={{
+                                strokeWidth: 3,
+                                stroke: '#3b82f6'
+                            }}
+                            proOptions={{ hideAttribution: true }}
+                            elevateEdgesOnSelect={true}
+                            elevateNodesOnSelect={false}
                         >
                             <Background color="#f1f5f9" gap={20} size={1} variant={BackgroundVariant.Dots} />
                             <Controls showInteractive={false} className="bg-white shadow-md border border-gray-200 rounded-lg p-1" />
@@ -230,8 +384,14 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                                 <div className="space-y-1">
                                                     <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mensagem</label>
                                                     <textarea
-                                                        value={selectedNode.data.text as string || ''}
-                                                        onChange={(e) => updateNodeData('text', e.target.value)}
+                                                        value={(selectedNode.data.message as string) || (selectedNode.data.text as string) || (selectedNode.data.welcomeMessage as string) || ''}
+                                                        onChange={(e) => {
+                                                            // Atualizar todos os campos possíveis
+                                                            const value = e.target.value
+                                                            if (selectedNode.data.message !== undefined) updateNodeData('message', value)
+                                                            else if (selectedNode.data.welcomeMessage !== undefined) updateNodeData('welcomeMessage', value)
+                                                            else updateNodeData('text', value)
+                                                        }}
                                                         className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none min-h-[100px]"
                                                         placeholder="Digite a mensagem..."
                                                     />
@@ -309,13 +469,29 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                                         </select>
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Prompt</label>
-                                                        <input
-                                                            type="text"
-                                                            value={selectedNode.data.prompt as string || ''}
-                                                            onChange={(e) => updateNodeData('prompt', e.target.value)}
-                                                            className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mensagem/Prompt</label>
+                                                        <textarea
+                                                            value={(selectedNode.data.prompt as string) || (selectedNode.data.message as string) || ''}
+                                                            onChange={(e) => {
+                                                                // Salvar em ambos os campos para compatibilidade
+                                                                const value = e.target.value;
+                                                                updateNodeData('prompt', value);
+                                                                updateNodeData('message', value);
+                                                            }}
+                                                            className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none min-h-[80px]"
+                                                            placeholder="Digite a mensagem que será enviada ao usuário pedindo este dado..."
                                                         />
+                                                        <p className="text-xs text-gray-500">Esta mensagem será enviada ao usuário quando o bot precisar coletar este campo.</p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mensagem de Erro (Opcional)</label>
+                                                        <textarea
+                                                            value={(selectedNode.data.errorMessage as string) || ''}
+                                                            onChange={(e) => updateNodeData('errorMessage', e.target.value)}
+                                                            className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none min-h-[60px]"
+                                                            placeholder="Mensagem personalizada de erro (deixe vazio para usar mensagem padrão)..."
+                                                        />
+                                                        <p className="text-xs text-gray-500">Se preenchido, esta mensagem será usada quando o dado for inválido. Caso contrário, será usada uma mensagem padrão baseada no tipo de campo.</p>
                                                     </div>
                                                 </>
                                             )}

@@ -16,7 +16,8 @@ import {
     Search,
     Filter,
     MoreVertical,
-    Workflow as WorkflowIcon
+    Workflow as WorkflowIcon,
+    RefreshCw
 } from 'lucide-react'
 import { api } from '../lib/utils'
 
@@ -40,6 +41,7 @@ export const Workflows: React.FC = () => {
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
+    const [syncing, setSyncing] = useState(false)
 
     useEffect(() => {
         loadWorkflows()
@@ -58,16 +60,38 @@ export const Workflows: React.FC = () => {
         }
     }
 
+    const handleSyncLocal = async () => {
+        try {
+            setSyncing(true)
+            const response = await api.post('/api/workflows/sync/local', { file: 'workflow_completo_definitivo.json' })
+            const name = response.data?.name || 'Workflow'
+            const stats = response.data?.stats || {}
+            toast.success(`${name} sincronizado (${stats.nodes || 0} nós, ${stats.edges || 0} conexões)`)
+            loadWorkflows()
+        } catch (error: any) {
+            toast.error(`Erro ao sincronizar workflow: ${error.response?.data?.error || error.message}`)
+        } finally {
+            setSyncing(false)
+        }
+    }
+
     const handleToggleActive = async (workflow: Workflow) => {
         try {
-            await api.put(`/api/workflows/${workflow.id}`, {
-                ...workflow,
-                isActive: !workflow.isActive
-            })
-            toast.success(`Workflow ${!workflow.isActive ? 'ativado' : 'desativado'}`)
+            // Usar endpoint toggle se disponível, senão usar PUT
+            try {
+                await api.patch(`/api/workflows/${workflow.id}/toggle`)
+            } catch {
+                // Fallback para PUT se toggle não existir
+                await api.put(`/api/workflows/${workflow.id}`, {
+                    ...workflow,
+                    isActive: !workflow.isActive
+                })
+            }
+            toast.success(`Workflow "${workflow.name}" ${!workflow.isActive ? 'ativado' : 'desativado'} com sucesso!`)
             loadWorkflows()
-        } catch (error) {
-            toast.error('Erro ao atualizar status')
+        } catch (error: any) {
+            console.error('Erro ao atualizar status:', error)
+            toast.error(`Erro ao ${!workflow.isActive ? 'ativar' : 'desativar'} workflow: ${error.response?.data?.error || error.message}`)
         }
     }
 
@@ -107,14 +131,24 @@ export const Workflows: React.FC = () => {
         navigate(`/workflows/editor/${id}`)
     }
 
-    const filteredWorkflows = workflows.filter(wf => {
-        const matchesSearch = wf.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            wf.description?.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesFilter = filterStatus === 'all' ||
-            (filterStatus === 'active' && wf.isActive) ||
-            (filterStatus === 'inactive' && !wf.isActive)
-        return matchesSearch && matchesFilter
-    })
+    const filteredWorkflows = workflows
+        .filter(wf => {
+            const matchesSearch = wf.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                wf.description?.toLowerCase().includes(searchTerm.toLowerCase())
+            const matchesFilter = filterStatus === 'all' ||
+                (filterStatus === 'active' && wf.isActive) ||
+                (filterStatus === 'inactive' && !wf.isActive)
+            return matchesSearch && matchesFilter
+        })
+        // Ordenar: ativos primeiro, depois por data de atualização
+        .sort((a, b) => {
+            if (a.isActive !== b.isActive) {
+                return a.isActive ? -1 : 1 // Ativos primeiro
+            }
+            const aDate = new Date(a.updatedAt || a.createdAt || 0).getTime()
+            const bDate = new Date(b.updatedAt || b.createdAt || 0).getTime()
+            return bDate - aDate // Mais recentes primeiro
+        })
 
     const stats = {
         total: workflows.length,
@@ -144,13 +178,24 @@ export const Workflows: React.FC = () => {
                         </h1>
                         <p className="text-gray-600 mt-1">Gerencie seus fluxos de automação</p>
                     </div>
-                    <button
-                        onClick={handleCreateNew}
-                        className="px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 font-medium"
-                    >
-                        <Plus className="h-5 w-5" />
-                        Novo Workflow
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleSyncLocal}
+                            disabled={syncing}
+                            className={`px-5 py-3 ${syncing ? 'bg-gray-300 cursor-not-allowed' : 'bg-white'} border border-gray-200 hover:bg-gray-50 text-gray-800 rounded-xl shadow-sm hover:shadow transition-all duration-200 flex items-center gap-2 font-medium`}
+                            title="Sincronizar workflow com arquivo local"
+                        >
+                            <RefreshCw className={`h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+                            Sincronizar Workflow
+                        </button>
+                        <button
+                            onClick={handleCreateNew}
+                            className="px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2 font-medium"
+                        >
+                            <Plus className="h-5 w-5" />
+                            Novo Workflow
+                        </button>
+                    </div>
                 </div>
 
                 {/* Stats Cards */}
@@ -265,23 +310,29 @@ export const Workflows: React.FC = () => {
                         {filteredWorkflows.map((workflow) => (
                             <div
                                 key={workflow.id}
-                                className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg transition-all duration-200 overflow-hidden group"
+                                className={`bg-white rounded-xl shadow-sm border transition-all duration-200 overflow-hidden group ${
+                                    workflow.isActive 
+                                        ? 'border-green-300 hover:shadow-xl ring-2 ring-green-100' 
+                                        : 'border-gray-100 hover:shadow-lg'
+                                }`}
                             >
                                 <div className="p-6">
                                     {/* Header */}
                                     <div className="flex items-start justify-between mb-4">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-semibold text-gray-900 text-lg line-clamp-1">
+                                                <h3 className={`font-semibold text-lg line-clamp-1 ${
+                                                    workflow.isActive ? 'text-green-700' : 'text-gray-900'
+                                                }`}>
                                                     {workflow.name}
                                                 </h3>
                                                 {workflow.isActive ? (
-                                                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded-full flex items-center gap-1">
-                                                        <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                                                        Ativo
+                                                    <span className="px-2.5 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full flex items-center gap-1.5 border border-green-200">
+                                                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                                                        ATIVO
                                                     </span>
                                                 ) : (
-                                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-medium rounded-full">
+                                                    <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-full border border-gray-200">
                                                         Inativo
                                                     </span>
                                                 )}
@@ -321,16 +372,23 @@ export const Workflows: React.FC = () => {
                                         </button>
                                         <button
                                             onClick={() => handleToggleActive(workflow)}
-                                            className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium text-sm ${
+                                            className={`px-3 py-2 rounded-lg transition-all flex items-center justify-center gap-2 font-medium text-sm ${
                                                 workflow.isActive
-                                                    ? 'bg-orange-50 hover:bg-orange-100 text-orange-700'
-                                                    : 'bg-green-50 hover:bg-green-100 text-green-700'
+                                                    ? 'bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 hover:border-orange-300'
+                                                    : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 hover:border-green-300'
                                             }`}
+                                            title={workflow.isActive ? 'Desativar workflow' : 'Ativar workflow'}
                                         >
                                             {workflow.isActive ? (
-                                                <Pause className="h-4 w-4" />
+                                                <>
+                                                    <Pause className="h-4 w-4" />
+                                                    <span className="hidden sm:inline">Pausar</span>
+                                                </>
                                             ) : (
-                                                <Play className="h-4 w-4" />
+                                                <>
+                                                    <Play className="h-4 w-4" />
+                                                    <span className="hidden sm:inline">Ativar</span>
+                                                </>
                                             )}
                                         </button>
                                         <div className="relative group/menu">
@@ -364,4 +422,3 @@ export const Workflows: React.FC = () => {
         </div>
     )
 }
-

@@ -2,8 +2,12 @@ import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
+import fs from 'fs/promises'
+import path from 'path'
 
 const router = Router()
+
+const CLINIC_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'clinicData.json')
 
 // In development, allow public access for reading settings
 const settingsAuth = process.env.NODE_ENV === 'development'
@@ -18,7 +22,7 @@ router.get('/', settingsAuth, async (req: Request, res: Response): Promise<void>
       ai: {
         enabled: process.env.AI_ENABLE_CLASSIFIER === 'true',
         confidenceThreshold: Number(process.env.AI_CONFIDENCE_THRESHOLD) || 0.7,
-        model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+        model: process.env.OPENAI_MODEL || 'gpt-4o',
         timeout: Number(process.env.OPENAI_TIMEOUT) || 20000,
         openaiApiKeyMasked: process.env.OPENAI_API_KEY ? '********' : '',
         circuitBreaker: {
@@ -107,18 +111,22 @@ router.put('/', authMiddleware, async (req: Request, res: Response): Promise<voi
     // In production, you would update a settings table or config file
 
     if (data.ai?.openaiApiKey) {
-      await prisma.auditLog.create({ data: {
-        actorId: req.user!.id,
-        action: 'SETTINGS_OPENAI_API_KEY',
-        details: { updatedAt: new Date().toISOString(), maskedValue: '********' }
-      } })
+      await prisma.auditLog.create({
+        data: {
+          actorId: req.user!.id,
+          action: 'SETTINGS_OPENAI_API_KEY',
+          details: { updatedAt: new Date().toISOString(), maskedValue: '********' }
+        }
+      })
     }
     if (data.templates && data.templates.length > 0) {
-      await prisma.auditLog.create({ data: {
-        actorId: req.user!.id,
-        action: 'SETTINGS_TEMPLATES_UPDATED',
-        details: { count: data.templates.length, updatedAt: new Date().toISOString() }
-      } })
+      await prisma.auditLog.create({
+        data: {
+          actorId: req.user!.id,
+          action: 'SETTINGS_TEMPLATES_UPDATED',
+          details: { count: data.templates.length, updatedAt: new Date().toISOString() }
+        }
+      })
     }
     res.json({ message: 'Configurações atualizadas com sucesso', settings: data })
   } catch (error) {
@@ -264,7 +272,7 @@ router.post('/ai/test', authMiddleware, async (req: Request, res: Response): Pro
     const AIService = (await import('../services/ai.js')).AIService
     const service = new AIService(
       process.env.OPENAI_API_KEY || '',
-      process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+      process.env.OPENAI_MODEL || 'gpt-4o',
       Number(process.env.OPENAI_TIMEOUT) || 20000
     )
 
@@ -293,6 +301,44 @@ router.post('/ai/test', authMiddleware, async (req: Request, res: Response): Pro
       error: 'Erro ao processar com IA',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
+  }
+})
+
+// Get clinic data JSON
+router.get('/clinic-data', settingsAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const data = await fs.readFile(CLINIC_DATA_PATH, 'utf-8')
+    res.json(JSON.parse(data))
+  } catch (error) {
+    console.error('Erro ao ler clinicData.json:', error)
+    res.status(500).json({ error: 'Erro ao ler dados da clínica' })
+  }
+})
+
+// Update clinic data JSON
+router.post('/clinic-data', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Only admin can update settings
+    if (req.user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Permissão insuficiente' })
+      return
+    }
+
+    const newData = req.body
+
+    // Basic validation to ensure it's a valid object
+    if (!newData || typeof newData !== 'object') {
+      res.status(400).json({ error: 'Dados inválidos' })
+      return
+    }
+
+    // Write to file
+    await fs.writeFile(CLINIC_DATA_PATH, JSON.stringify(newData, null, 2), 'utf-8')
+
+    res.json({ success: true, message: 'Dados da clínica atualizados com sucesso' })
+  } catch (error) {
+    console.error('Erro ao salvar clinicData.json:', error)
+    res.status(500).json({ error: 'Erro ao salvar dados da clínica' })
   }
 })
 

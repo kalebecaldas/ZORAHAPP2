@@ -12,7 +12,11 @@ import axios from 'axios'
 import { getRealtime } from '../realtime.js'
 import { upload, FileValidationService } from '../services/fileValidation.js'
 import { transcodeToMp3, transcodeToOggOpus, transcodeToAacM4a } from '../utils/audioTranscode.js'
-import { WorkflowEngine, type WorkflowNode } from '../../src/services/workflowEngine.js'
+// Old engine (kept for backward compatibility)
+// import { WorkflowEngine as WorkflowEngineOld, type WorkflowNode } from '../../src/services/workflowEngine.js'
+// New modular engine
+import { WorkflowEngine } from '../../src/services/workflow/core/WorkflowEngine.js'
+import type { WorkflowNode } from '../../src/services/workflow/core/types.js'
 import { prismaClinicDataService } from '../services/prismaClinicDataService.js'
 import { sessionManager } from '../services/conversationSession.js'
 
@@ -27,7 +31,7 @@ const whatsappService = new WhatsAppService(
 // AI service instance
 const aiService = new AIService(
   process.env.OPENAI_API_KEY || '',
-  process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+  process.env.OPENAI_MODEL || 'gpt-4o',
   Number(process.env.OPENAI_TIMEOUT) || 20000
 )
 
@@ -680,31 +684,31 @@ export async function processIncomingMessage(
   messageType: string = 'TEXT',
   mediaUrl: string | null = null,
   metadata: any = null
-): Promise<void> {
+): Promise<string[]> {
+  const workflowLogs: string[] = []
+
   try {
-    // Find or create patient
+    // Find patient (but don't create automatically - let workflow handle patient creation)
+    // This allows the workflow to properly check if patient exists before creating
     let patient = await prisma.patient.findUnique({
       where: { phone }
     })
 
+    // Only create temporary patient if conversation already exists and has patientId
+    // This is for backward compatibility with existing conversations
     if (!patient) {
-      patient = await prisma.patient.create({
-        data: {
-          phone,
-          name: 'Paciente ' + phone.slice(-4), // Temporary name
-          preferences: {}
-        }
+      const existingConversation = await prisma.conversation.findFirst({
+        where: { phone },
+        select: { patientId: true }
       })
 
-      // Log new patient
-      await prisma.patientInteraction.create({
-        data: {
-          patientId: patient.id,
-          type: 'PATIENT_CREATED',
-          description: 'Paciente criado via WhatsApp',
-          data: { source: 'whatsapp', messageId }
-        }
-      })
+      // Only create temporary patient if conversation exists and has patientId
+      // Otherwise, let the workflow handle patient creation
+      if (existingConversation?.patientId) {
+        // This shouldn't happen, but handle it gracefully
+        console.warn(`⚠️ Conversation has patientId but patient not found: ${existingConversation.patientId}`)
+      }
+      // Don't create patient here - let workflow handle it
     }
 
     // Find or create conversation
@@ -721,7 +725,7 @@ export async function processIncomingMessage(
         data: {
           phone,
           status: 'BOT_QUEUE',
-          patientId: patient.id,
+          patientId: patient?.id || null, // Only set patientId if patient exists
           lastMessage: text,
           lastTimestamp: new Date(),
           sessionStartTime: now,
@@ -733,12 +737,14 @@ export async function processIncomingMessage(
       })
       console.log(`💬 Nova conversa criada: ${conversation.id} com sessão de 24h`)
 
-      // Start session in memory manager
-      try {
-        await sessionManager.startSession(conversation.id, patient.id)
-        console.log(`✅ Sessão iniciada no manager para: ${conversation.id}`)
-      } catch (err) {
-        console.warn(`⚠️ Erro ao iniciar sessão no manager:`, err)
+      // Start session in memory manager (only if patient exists)
+      if (patient?.id) {
+        try {
+          await sessionManager.startSession(conversation.id, patient.id)
+          console.log(`✅ Sessão iniciada no manager para: ${conversation.id}`)
+        } catch (err) {
+          console.warn(`⚠️ Erro ao iniciar sessão no manager:`, err)
+        }
       }
 
       try {
@@ -782,11 +788,13 @@ export async function processIncomingMessage(
           await sessionManager.updateSessionActivity(conversation.id)
           console.log(`📊 Atividade de sessão atualizada para: ${conversation.id}`)
         } catch (err) {
-          // Session might not exist in memory, start it
-          try {
-            await sessionManager.startSession(conversation.id, patient.id)
-          } catch (startErr) {
-            console.warn(`⚠️ Erro ao gerenciar sessão:`, startErr)
+          // Session might not exist in memory, start it (only if patient exists)
+          if (patient?.id) {
+            try {
+              await sessionManager.startSession(conversation.id, patient.id)
+            } catch (startErr) {
+              console.warn(`⚠️ Erro ao gerenciar sessão:`, startErr)
+            }
           }
         }
       }
@@ -870,7 +878,7 @@ export async function processIncomingMessage(
 
     if (!shouldProcessWithBot) {
       console.log(`👤 Mensagem recebida em conversa com humano (status: ${conversation.status}). Bot não processará.`)
-      return
+      return workflowLogs
     }
 
     // Processar apenas se estiver na fila do bot
@@ -892,7 +900,8 @@ export async function processIncomingMessage(
           })
         }
       } catch { }
-      await advanceWorkflow(conversation, text)
+      const logs = await advanceWorkflow(conversation, text)
+      workflowLogs.push(...logs)
     } else if (shouldProcessWithBot) {
       // Fallback para conversas sem workflow mas ainda na fila do bot
       const handled = await handleAppointmentFlow(conversation, patient, text)
@@ -911,6 +920,8 @@ export async function processIncomingMessage(
   } catch (error) {
     console.error('Erro ao processar mensagem recebida:', error)
   }
+
+  return workflowLogs
 }
 
 async function handleAppointmentFlow(conversation: any, patient: any, text: string): Promise<boolean> {
@@ -1209,13 +1220,17 @@ async function sendAutoResponse(conversation: any, patient: any): Promise<void> 
 
 async function transferToHuman(conversation: any, reason: string): Promise<void> {
   try {
-    await prisma.conversation.update({
+    console.log(`🔄 transferToHuman called - conversationId: ${conversation.id}, reason: ${reason}, current status: ${conversation.status}`);
+
+    const updated = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
         status: 'PRINCIPAL',
         assignedToId: null
       }
     })
+
+    console.log(`🔄 ✅ Conversation ${conversation.id} updated to PRINCIPAL status. New status: ${updated.status}`);
 
     // Log transfer
     if (conversation.patientId) {
@@ -1227,6 +1242,7 @@ async function transferToHuman(conversation: any, reason: string): Promise<void>
           data: { reason, previousStatus: conversation.status }
         }
       })
+      console.log(`🔄 ✅ Patient interaction logged`);
     }
 
     // Emit transfer notification
@@ -1237,8 +1253,11 @@ async function transferToHuman(conversation: any, reason: string): Promise<void>
       reason
     })
 
+    console.log(`🔄 ✅ Transfer notification emitted`);
+
   } catch (error) {
-    console.error('Erro ao transferir para humano:', error)
+    console.error('❌ Erro ao transferir para humano:', error)
+    throw error;
   }
 }
 
@@ -1861,157 +1880,416 @@ function evaluateCondition(condition: string, phone: string, message: string, co
   }
 }
 
-async function advanceWorkflow(conversation: any, incomingText: string): Promise<void> {
-  const conv = await prisma.conversation.findUnique({ where: { id: conversation.id } })
-  if (!conv?.workflowId) return
-  const wf = await prisma.workflow.findUnique({ where: { id: conv.workflowId } })
-  if (!wf) return
-
-  const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
-  const nodes = (Array.isArray(cfg?.nodes) ? cfg.nodes : []).map((node: any) => ({
-    id: node.id,
-    type: node.type,
-    content: node.content || node.data || {},
-    position: node.position || { x: 0, y: 0 },
-    connections: node.connections || []
-  })) as WorkflowNode[]
-
-  if (nodes.length === 0) return
-
-  // Create or get existing engine context
-  let context: any = conv.workflowContext || {}
-  let currentNodeId = conv.currentWorkflowNode || ''
-
-  console.log(`🔄 advanceWorkflow called for conversation ${conversation.id}`)
-  console.log(`🔄 Conversation state - currentWorkflowNode: ${currentNodeId}, workflowContext:`, context)
-
-  // Create engine with current state and connections
-  let connections: any[] = []
-  if (Array.isArray(cfg?.connections) && cfg.connections.length > 0) {
-    connections = cfg.connections as any[]
-  } else if (Array.isArray((cfg as any)?.edges) && (cfg as any).edges.length > 0) {
-    connections = (cfg as any).edges.map((e: any) => ({
-      source: e.source,
-      target: e.target,
-      condition: (e.data && e.data.condition) || e.condition,
-      sourcePort: (e.data && e.data.port) || e.sourcePort,
-      data: e.data
-    }))
-  }
-  console.log(`🔄 Creating WorkflowEngine with ${nodes.length} nodes and ${connections.length} connections`)
-  console.log(`🔄 First few connections:`, connections.slice(0, 3))
-
-  const engine = new WorkflowEngine(nodes, conv.workflowId, conv.phone, incomingText, connections)
-  engine.setUserResponse(incomingText)
-
-  // Set existing context if available
-  if (context.userData) {
-    engine.getContext().userData = context.userData
+async function advanceWorkflow(conversation: any, incomingText: string): Promise<string[]> {
+  const workflowLogs: string[] = []
+  const addLog = (msg: string) => {
+    workflowLogs.push(msg)
+    console.log(`🔄 [WORKFLOW] ${msg}`)
   }
 
-  // Set current node if available
-  if (currentNodeId) {
-    console.log(`🔄 Setting current node in engine: ${currentNodeId}`)
-    engine.setCurrentNodeId(currentNodeId)
-  } else {
-    console.log(`🔄 No current node found, finding start node`)
-    // Find the start node when no current node is set
-    const startNode = nodes.find(node => node.type === 'START')
-    if (startNode) {
-      currentNodeId = startNode.id
-      console.log(`🔄 Found start node: ${currentNodeId}`)
-      engine.setCurrentNodeId(currentNodeId)
-    } else {
-      console.log(`🔄 No start node found, engine will start from default`)
+  try {
+    const conv = await prisma.conversation.findUnique({ where: { id: conversation.id } })
+    if (!conv?.workflowId) {
+      addLog('⚠️ Conversa sem workflowId')
+      return workflowLogs
     }
-  }
+    const wf = await prisma.workflow.findUnique({ where: { id: conv.workflowId } })
+    if (!wf) {
+      addLog('⚠️ Workflow não encontrado no banco')
+      return workflowLogs
+    }
 
-  // Execute next node
-  console.log(`🔄 Executing workflow node: ${currentNodeId || 'start'}`)
-  let result = await engine.executeNextNode()
-  console.log(`🔄 Workflow execution result:`, result)
+    const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
+    const nodes = (Array.isArray(cfg?.nodes) ? cfg.nodes : []).map((node: any) => ({
+      id: node.id,
+      type: node.type,
+      content: node.content || node.data || {},
+      position: node.position || { x: 0, y: 0 },
+      connections: node.connections || []
+    })) as WorkflowNode[]
 
-  // Handle response from first node
-  if (result.response) {
-    console.log(`🔄 Sending workflow response: ${result.response}`)
-    await sendAIMessage(conversation, result.response)
-  }
+    if (nodes.length === 0) {
+      addLog('⚠️ Workflow sem nodes configurados')
+      return workflowLogs
+    }
 
-  // Continue executing nodes if we shouldn't stop and have a next node
-  while (!result.shouldStop && result.nextNodeId) {
-    console.log(`🔄 Continuing to next node: ${result.nextNodeId}`)
-    result = await engine.executeNextNode()
-    console.log(`🔄 Continued execution result:`, result)
+    // Create or get existing engine context
+    let context: any = conv.workflowContext || {}
+    let currentNodeId = conv.currentWorkflowNode || ''
 
-    // Handle response from continued execution
+    console.log(`🔄 advanceWorkflow called for conversation ${conversation.id}`)
+    console.log(`🔄 Conversation state - currentWorkflowNode: ${currentNodeId}, workflowContext:`, context)
+    console.log(`🔄 Incoming text: "${incomingText}"`)
+
+    // Se há uma nova mensagem do usuário (não vazia), verificar se devemos voltar ao GPT classifier
+    // MAS APENAS se não estiver em processo de coleta de dados (DATA_COLLECTION)
+    if (incomingText && incomingText.trim()) {
+      const isAwaitingInput = !!conv.awaitingInput
+      const isCollectingData = context.userData?.collectingField || context.userData?.currentCollectField || (isAwaitingInput ? 'awaiting' : '')
+
+      // Se estiver coletando dados, NÃO fazer nenhuma reclassificação de intenção
+      // A mensagem será processada apenas como resposta ao campo atual
+      if (isCollectingData) {
+        addLog(`🔒 Em processo de coleta de dados (campo: ${context.userData?.collectingField}). Ignorando reclassificação de intenção.`)
+      } else {
+        // Apenas processar intenções se NÃO estiver coletando dados
+        // Verificar se é mensagem genérica (oi, olá, etc.)
+        const normalized = incomingText.toLowerCase().trim()
+        const genericGreetings = ['oi', 'olá', 'ola', 'opa', 'eae', 'e aí', 'e ai', 'hey', 'hi', 'hello',
+          'tchau', 'tchauzinho', 'obrigado', 'obrigada', 'valeu', 'vlw', 'ok', 'okay', 'beleza', 'blz',
+          'tudo bem', 'td bem', 'como vai', 'tudo certo', 'td certo', 'claro', 'pode ser']
+        const isGenericMessage = genericGreetings.some(g => {
+          return normalized === g || normalized.startsWith(g + ' ') || normalized.endsWith(' ' + g) ||
+            normalized.includes(' ' + g + ' ') || (normalized.length <= 10 && normalized.includes(g))
+        })
+
+        // Encontrar o nó GPT classifier no workflow
+        // Procura por: gpt_classifier, qualquer nó GPT_RESPONSE que seja usado como classificador
+        let gptClassifierNode = nodes.find((n: any) =>
+          n.type === 'GPT_RESPONSE' && n.id === 'gpt_classifier'
+        )
+
+        // Se não encontrou pelo ID exato, procura por qualquer GPT_RESPONSE que pareça ser classificador
+        if (!gptClassifierNode) {
+          gptClassifierNode = nodes.find((n: any) => {
+            if (n.type !== 'GPT_RESPONSE') return false
+            const prompt = (n.content?.systemPrompt || '').toLowerCase()
+            return prompt.includes('classificador') || prompt.includes('classificar') || prompt.includes('intenção') || prompt.includes('intent')
+          })
+        }
+
+        // Se ainda não encontrou, pega o primeiro GPT_RESPONSE disponível
+        if (!gptClassifierNode) {
+          gptClassifierNode = nodes.find((n: any) => n.type === 'GPT_RESPONSE')
+        }
+
+        const currentNode = nodes.find((n: any) => n.id === currentNodeId)
+
+        // Se estiver em CONDITION node (ex: aguardando "sim/não", "1/2"), não desviar o fluxo
+        const isInConditionFlow = currentNode && currentNode.type === 'CONDITION'
+        const isInDataCollection = currentNode && (currentNode.type === 'DATA_COLLECTION' || currentNode.type === 'COLLECT_INFO')
+
+        // Detectar seleção de clínica (mas apenas se não estiver em outro fluxo estruturado)
+        const isClinicSelectionResponse = !isCollectingData && !isInConditionFlow && (() => {
+          const trimmed = normalized.replace(/\s+/g, ' ').trim()
+          const numericOptions = ['1', '2', 'um', 'dois']
+          const clinicKeywords = ['vieiralves', 'vieira', 'sao jose', 'são josé', 'sao josé', 'são jose', 'salvador', 'centro']
+
+          if (numericOptions.includes(trimmed)) return true
+
+          return clinicKeywords.some(keyword => trimmed.includes(keyword))
+        })()
+
+        const clinicSelectionNode = nodes.find((n: any) => n.id === 'clinic_selection')
+
+        if (isClinicSelectionResponse && clinicSelectionNode) {
+          addLog(`Mensagem "${incomingText}" identificada como seleção de clínica. Enviando para clinic_selection.`)
+          currentNodeId = clinicSelectionNode.id
+        } else if (gptClassifierNode) {
+          // Se for mensagem genérica e já está no GPT classifier, não fazer nada (aguardar intenção clara)
+          if (isGenericMessage && currentNode?.id === gptClassifierNode.id) {
+            addLog(`Mensagem genérica "${incomingText}" recebida no GPT classifier. Aguardando intenção clara.`)
+            // Não alterar currentNodeId, deixar o GPT classifier tratar
+          }
+          // Se o nó atual não é o GPT classifier e não está coletando dados e não é mensagem genérica,
+          // voltar ao GPT classifier para reclassificar a intenção
+          else if (!isGenericMessage && !isCollectingData && !isInConditionFlow && !isInDataCollection && !isAwaitingInput) {
+            const shouldReturnToGPT = currentNode &&
+              currentNode.id !== gptClassifierNode.id && // Não é o próprio GPT classifier
+              currentNode.type !== 'COLLECT_INFO' && // Não está coletando informações estruturadas
+              currentNode.type !== 'DATA_COLLECTION' && // Não está coletando dados
+              currentNode.type !== 'CONDITION' && // Não é uma condição
+              currentNode.type !== 'ACTION' && // Não é uma ação
+              currentNode.type !== 'API_CALL' // Não é uma chamada de API
+
+            if (shouldReturnToGPT) {
+              addLog(`Nova mensagem "${incomingText}". Voltando ao GPT classifier para reclassificar intenção.`)
+              addLog(`Nó atual era: ${currentNodeId} (${currentNode?.type})`)
+              currentNodeId = gptClassifierNode.id
+              // Limpar tópico anterior para permitir nova classificação
+              if (context.userData?.lastTopic) {
+                delete context.userData.lastTopic
+              }
+            }
+          }
+          // Se for mensagem genérica e não está no GPT classifier e não está em fluxo estruturado,
+          // voltar ao início (START)
+          else if (isGenericMessage && currentNode?.id !== gptClassifierNode.id && !isCollectingData && !isInConditionFlow && !isInDataCollection && !isAwaitingInput) {
+            const startNode = nodes.find((n: any) => n.type === 'START')
+            if (startNode) {
+              addLog(`Mensagem genérica "${incomingText}" recebida. Resetando workflow para início.`)
+              currentNodeId = startNode.id
+              // Limpar contexto para reiniciar conversa
+              context.userData = {}
+            }
+          }
+        } else {
+          addLog(`⚠️ Nenhum nó GPT_RESPONSE encontrado no workflow`)
+        }
+      }
+    }
+
+    // Create engine with current state and connections
+    let connections: any[] = []
+    if (Array.isArray(cfg?.connections) && cfg.connections.length > 0) {
+      connections = cfg.connections as any[]
+    } else if (Array.isArray((cfg as any)?.edges) && (cfg as any).edges.length > 0) {
+      connections = (cfg as any).edges.map((e: any) => ({
+        source: e.source,
+        target: e.target,
+        condition: (e.data && e.data.condition) || e.condition,
+        sourcePort: (e.data && e.data.port) || e.sourcePort,
+        data: e.data
+      }))
+    }
+    console.log(`🔄 Creating WorkflowEngine with ${nodes.length} nodes and ${connections.length} connections`)
+    console.log(`🔄 First few connections:`, connections.slice(0, 3))
+
+    // Prepare context for engine
+    const engineContext = {
+      currentNodeId: currentNodeId || '',
+      conversationHistory: context.conversationHistory || [],
+      userData: context.userData || {}
+    }
+
+    // Find start node if no current node
+    if (!currentNodeId) {
+      console.log(`🔄 No current node found, finding start node`)
+      const startNode = nodes.find(node => node.type === 'START')
+      if (startNode) {
+        currentNodeId = startNode.id
+        engineContext.currentNodeId = currentNodeId
+        console.log(`🔄 Found start node: ${currentNodeId}`)
+      } else {
+        console.log(`🔄 No start node found, engine will start from default`)
+      }
+    }
+
+    // Create engine with context
+    const engine = new WorkflowEngine(
+      nodes,
+      conv.workflowId,
+      conv.phone,
+      incomingText,
+      connections,
+      engineContext
+    )
+
+    console.log(`🔄 Engine created with current node: ${engine.getContext().currentNodeId}`)
+
+    // Execute next node
+    addLog(`Executando node: ${currentNodeId || 'start'}`)
+    let result = await engine.executeNextNode()
+
+    const currentNode = nodes.find((n: any) => n.id === (currentNodeId || ''))
+    if (currentNode) {
+      addLog(`Node atual: ${currentNode.id} (${currentNode.type})`)
+    }
+
+    // Handle response from first node
     if (result.response) {
       console.log(`🔄 Sending workflow response: ${result.response}`)
       await sendAIMessage(conversation, result.response)
     }
-  }
 
-  // Update conversation state
-  const updatedContext = engine.getContext()
-  console.log(`🔄 Updating conversation state - currentNodeId: ${updatedContext.currentNodeId}, userData:`, updatedContext.userData)
+    // Continue executing nodes if we shouldn't stop and have a next node
+    while (!result.shouldStop && result.nextNodeId) {
+      addLog(`Continuando para próximo node: ${result.nextNodeId}`)
+      result = await engine.executeNextNode()
 
-  const ctxUserData: any = updatedContext.userData || {}
-  if (ctxUserData.intentReady && !ctxUserData.intentLogged) {
-    const intent = ctxUserData.intentSummary || {}
+      const nextNode = nodes.find((n: any) => n.id === result.nextNodeId)
+      if (nextNode) {
+        addLog(`Node executado: ${nextNode.id} (${nextNode.type})`)
+      }
+
+      // Handle response from continued execution
+      if (result.response) {
+        addLog(`Enviando resposta: "${result.response.substring(0, 50)}..."`)
+        await sendAIMessage(conversation, result.response)
+      }
+    }
+
+    if (result.shouldStop) {
+      addLog(`Workflow pausado - aguardando resposta do usuário`)
+    }
+
+    // Update conversation state
+    const updatedContext = engine.getContext()
+    console.log(`🔄 Updating conversation state - currentNodeId: ${updatedContext.currentNodeId}, userData:`, updatedContext.userData)
+
+    // Check if we just executed msg_paciente_encontrado or msg_cadastro_sucesso
+    // by checking the last bot message from the database (more reliable than context history)
     try {
-      const locations = await prismaClinicDataService.getLocations()
-      const clinic = locations.find(l => l.id === String(intent.clinic || ''))
-      const procedures = await prismaClinicDataService.getProcedures()
-      const collected = (ctxUserData.collectedData || {}) as any
-      let patientName = String(collected.name || '')
-      if (!patientName && conv.patientId) {
-        try {
-          const pat2 = await prisma.patient.findUnique({ where: { id: conv.patientId } })
-          patientName = String(pat2?.name || '')
-        } catch { }
+      const lastBotMessage = await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          direction: 'SENT',
+          from: 'BOT'
+        },
+        orderBy: {
+          createdAt: 'desc'
+        }
+      });
+
+      console.log(`🔄 Last bot message from DB:`, lastBotMessage?.messageText?.substring(0, 100));
+
+      if (lastBotMessage) {
+        const messageContent = (lastBotMessage.messageText || '').toLowerCase();
+        const isPatientFoundMessage = messageContent.includes('encontrei seu cadastro') ||
+          messageContent.includes('encontrei seu cadastro!') ||
+          messageContent.includes('encontrei seu cadastro') ||
+          messageContent.includes('encontrei seu cadastro! vamos prosseguir');
+        const isRegistrationSuccessMessage = messageContent.includes('cadastro realizado com sucesso') ||
+          messageContent.includes('cadastro realizado') ||
+          messageContent.includes('cadastro realizado com sucesso!');
+        const hasQueueMessage = messageContent.includes('foi encaminhado para um de nossos atendentes') ||
+          messageContent.includes('encaminhado para um de nossos atendentes') ||
+          messageContent.includes('aguarda o atendimento');
+
+        console.log(`🔄 Checking message - isPatientFound: ${isPatientFoundMessage}, isRegistrationSuccess: ${isRegistrationSuccessMessage}, hasQueueMessage: ${hasQueueMessage}`);
+        console.log(`🔄 Message content (first 200 chars): ${messageContent.substring(0, 200)}`);
+
+        if (isPatientFoundMessage || isRegistrationSuccessMessage || hasQueueMessage) {
+          console.log(`🔄 ✅ Detected patient found/registration success/queue message, transferring to PRINCIPAL queue`);
+          await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
+          console.log(`🔄 ✅ Transfer completed`);
+        }
       }
-      const birthISO = (collected.birth_date || '') as string
-      const birthLine = birthISO ? `\nNascimento: ${new Date(birthISO).toLocaleDateString('pt-BR')}` : ''
-      const insuranceDisplay = String(intent.insurance || collected.insurance || 'Particular')
-      const procRaw = (collected.procedure_type || intent.procedure || '') as string
-      const procName = procedures.find(p => p.id === procRaw || p.name === procRaw)?.name || procRaw
-      const day = String(collected.preferred_date || intent.date || '')
-      const shift = String(collected.preferred_shift || intent.shift || '')
-      const convText = `📝 Intenção de Agendamento\nPaciente: ${patientName || '-'}${birthLine}\nUnidade: ${clinic?.name || intent.clinic}\nConvênio: ${insuranceDisplay}\nProcedimento: ${procName}\nDia: ${day}\nTurno: ${shift}`
-      await prisma.message.create({ data: { conversationId: conv.id, phoneNumber: conv.phone, messageText: convText, direction: 'SENT', from: 'BOT' } })
-      if (conv.patientId) {
-        await prisma.patientInteraction.create({ data: { patientId: conv.patientId, type: 'INTENT_SCHEDULING', description: 'Intenção de agendamento registrada', data: intent } })
-      }
-      ctxUserData.intentLogged = true
-      // Move conversation to principal queue for human follow-up
-      await transferToHuman(conversation, 'Intenção de agendamento registrada')
-    } catch { }
-  }
-  await prisma.conversation.update({
-    where: { id: conv.id },
-    data: {
+    } catch (error) {
+      console.error(`❌ Error checking last bot message:`, error);
+    }
+
+    const ctxUserData: any = updatedContext.userData || {}
+    if (ctxUserData.intentReady && !ctxUserData.intentLogged) {
+      const intent = ctxUserData.intentSummary || {}
+      try {
+        const locations = await prismaClinicDataService.getLocations()
+        const clinic = locations.find(l => l.id === String(intent.clinic || ''))
+        const procedures = await prismaClinicDataService.getProcedures()
+        const collected = (ctxUserData.collectedData || {}) as any
+        let patientName = String(collected.name || '')
+        if (!patientName && conv.patientId) {
+          try {
+            const pat2 = await prisma.patient.findUnique({ where: { id: conv.patientId } })
+            patientName = String(pat2?.name || '')
+          } catch { }
+        }
+        const birthISO = (collected.birth_date || '') as string
+        const birthLine = birthISO ? `\nNascimento: ${new Date(birthISO).toLocaleDateString('pt-BR')}` : ''
+        const insuranceDisplay = String(intent.insurance || collected.insurance || 'Particular')
+        const procRaw = (collected.procedure_type || intent.procedure || '') as string
+        const procName = procedures.find(p => p.id === procRaw || p.name === procRaw)?.name || procRaw
+        const day = String(collected.preferred_date || intent.date || '')
+        const shift = String(collected.preferred_shift || intent.shift || '')
+        const convText = `📝 Intenção de Agendamento\nPaciente: ${patientName || '-'}${birthLine}\nUnidade: ${clinic?.name || intent.clinic}\nConvênio: ${insuranceDisplay}\nProcedimento: ${procName}\nDia: ${day}\nTurno: ${shift}`
+        await prisma.message.create({ data: { conversationId: conv.id, phoneNumber: conv.phone, messageText: convText, direction: 'SENT', from: 'BOT' } })
+        if (conv.patientId) {
+          await prisma.patientInteraction.create({ data: { patientId: conv.patientId, type: 'INTENT_SCHEDULING', description: 'Intenção de agendamento registrada', data: intent } })
+        }
+        ctxUserData.intentLogged = true
+        // Move conversation to principal queue for human follow-up
+        await transferToHuman(conversation, 'Intenção de agendamento registrada')
+      } catch { }
+    }
+    // Update conversation with patientId if patient was created
+    const updateData: any = {
       currentWorkflowNode: updatedContext.currentNodeId,
       workflowContext: { userData: ctxUserData },
       awaitingInput: !!ctxUserData.collectingField
-    }
-  })
+    };
 
-  console.log(`🔄 Conversation state updated successfully`)
+    // CRITICAL FIX: If patient was created or found, update conversation with patientId
+    // Always update if we have a patientId in context (not just when conv.patientId is empty)
+    // This ensures we use the patient from THIS workflow execution
+    if (ctxUserData.patientId) {
+      console.log(`🔄 Patient ID in context: ${ctxUserData.patientId}, current conv patientId: ${conv.patientId || 'none'}`);
+      updateData.patientId = ctxUserData.patientId;
+      console.log(`🔄 Updating conversation ${conv.id} with patientId: ${ctxUserData.patientId}`);
 
-  // Handle transfer to human
-  if (result.shouldStop && updatedContext.currentNodeId) {
-    const currentNode = nodes.find(n => n.id === updatedContext.currentNodeId)
-    if (currentNode?.type === 'TRANSFER_HUMAN') {
-      await transferToHuman(conversation, 'Transferência automática do workflow')
-      return
-    }
-    if (currentNode?.type === 'END') {
-      // Workflow completed
-      return
-    }
-  }
+      // Verify patient exists before associating
+      try {
+        const patientExists = await prisma.patient.findUnique({
+          where: { id: ctxUserData.patientId },
+          select: { id: true, name: true, phone: true }
+        });
 
-  // Continue execution if there's a next node and we shouldn't stop
-  if (result.nextNodeId && !result.shouldStop) {
-    await advanceWorkflow(conversation, '')
+        if (patientExists) {
+          console.log(`✅ Patient verified before association: ${patientExists.name} (${patientExists.id})`);
+        } else {
+          console.error(`❌ Patient ${ctxUserData.patientId} not found in database - cannot associate with conversation`);
+          delete updateData.patientId; // Don't associate if patient doesn't exist
+        }
+      } catch (error: any) {
+        console.error(`❌ Error verifying patient before association:`, error);
+        delete updateData.patientId; // Don't associate if verification fails
+      }
+    }
+
+    console.log(`🔄 Updating conversation ${conv.id} with data:`, {
+      currentWorkflowNode: updateData.currentWorkflowNode,
+      patientId: updateData.patientId || conv.patientId || 'none',
+      awaitingInput: updateData.awaitingInput
+    });
+
+    await prisma.conversation.update({
+      where: { id: conv.id },
+      data: updateData
+    })
+
+    console.log(`🔄 Conversation state updated successfully`)
+
+    // Handle transfer to human
+    if (result.shouldStop && updatedContext.currentNodeId) {
+      const currentNode = nodes.find(n => n.id === updatedContext.currentNodeId)
+      console.log(`🔄 Checking transfer - currentNodeId: ${updatedContext.currentNodeId}, node found: ${!!currentNode}, node type: ${currentNode?.type}, node id: ${currentNode?.id}`);
+
+      if (currentNode?.type === 'TRANSFER_HUMAN') {
+        await transferToHuman(conversation, 'Transferência automática do workflow')
+        return
+      }
+      if (currentNode?.type === 'END') {
+        // Workflow completed
+        return
+      }
+      // Transfer to human queue when showing registration success or patient found message
+      if (currentNode?.id === 'msg_cadastro_sucesso' || currentNode?.id === 'msg_paciente_encontrado') {
+        console.log(`🔄 Transferring conversation to PRINCIPAL queue after ${currentNode.id}`);
+        await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
+      }
+    }
+
+    // Also check if the last executed node was one of these messages (in case currentNodeId wasn't updated yet)
+    if (result.shouldStop) {
+      const lastExecutedNode = nodes.find(n => {
+        // Check if this node's message was just sent
+        const lastBotMessage = updatedContext.conversationHistory
+          ?.filter((h: any) => h.role === 'bot')
+          ?.slice(-1)[0];
+        if (lastBotMessage && n.type === 'MESSAGE') {
+          const nodeMessage = n.content?.message || n.data?.message || '';
+          return lastBotMessage.content?.includes(nodeMessage.substring(0, 50)) ||
+            nodeMessage.substring(0, 50).includes(lastBotMessage.content?.substring(0, 50) || '');
+        }
+        return false;
+      });
+
+      if (lastExecutedNode && (lastExecutedNode.id === 'msg_cadastro_sucesso' || lastExecutedNode.id === 'msg_paciente_encontrado')) {
+        console.log(`🔄 Transferring conversation to PRINCIPAL queue after detecting ${lastExecutedNode.id} in last message`);
+        await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
+      }
+    }
+
+    // Continue execution if there's a next node and we shouldn't stop
+    if (result.nextNodeId && !result.shouldStop) {
+      const moreLogs = await advanceWorkflow(conversation, '')
+      workflowLogs.push(...moreLogs)
+    }
+
+    return workflowLogs
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    addLog(`❌ Erro ao executar workflow: ${errorMsg}`)
+    console.error('❌ Erro em advanceWorkflow:', error)
+    return workflowLogs
   }
 }

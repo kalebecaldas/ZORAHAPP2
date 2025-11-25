@@ -181,9 +181,37 @@ const ConversationsPage: React.FC = () => {
                     lastUserActivity: conv.lastUserActivity,
                     channel: conv.channel || 'whatsapp'
                 });
+            } else {
+                // If no conversation data, clear selection
+                setSelectedConversation(null);
+                setMessages([]);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching messages:', error);
+            console.error('Error details:', {
+                status: error?.response?.status,
+                statusText: error?.response?.statusText,
+                data: error?.response?.data,
+                message: error?.message
+            });
+            
+            // Check if it's a 404 or auth error
+            if (error?.response?.status === 404) {
+                toast.error('Conversa não encontrada');
+                setSelectedConversation(null);
+                setMessages([]);
+            } else if (error?.response?.status === 401 || error?.response?.status === 403) {
+                toast.error('Sem permissão para acessar esta conversa');
+                // Don't redirect, just clear selection
+                setSelectedConversation(null);
+                setMessages([]);
+                // Prevent interceptor from redirecting
+                error._handled = true;
+            } else {
+                toast.error('Erro ao carregar conversa');
+                setSelectedConversation(null);
+                setMessages([]);
+            }
         }
     };
 
@@ -511,7 +539,18 @@ const ConversationsPage: React.FC = () => {
             if (conv) {
                 setSelectedConversation(conv);
                 fetchMessages(phone);
+            } else {
+                // If conversation not in list, try to fetch it directly
+                // This handles cases where conversation was just moved to a queue
+                fetchMessages(phone).catch((error) => {
+                    console.error('Error fetching conversation:', error);
+                    // Don't redirect, just show error
+                    toast.error('Conversa não encontrada');
+                });
             }
+        } else {
+            setSelectedConversation(null);
+            setMessages([]);
         }
     }, [phone, conversations]);
 

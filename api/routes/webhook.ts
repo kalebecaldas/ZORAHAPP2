@@ -30,8 +30,16 @@ router.get('/', (req: Request, res: Response) => {
 
 // Process incoming WhatsApp messages
 router.post('/', async (req: Request, res: Response) => {
-  // Respond immediately to avoid timeout
-  res.status(200).json({ received: true })
+  // Detectar se é uma chamada de teste (da página de teste)
+  const isTestCall = req.body?.entry?.[0]?.id === 'simulated'
+  
+  // Se for teste, não responder imediatamente - aguardar processamento
+  if (!isTestCall) {
+    // Respond immediately to avoid timeout
+    res.status(200).json({ received: true })
+  }
+
+  const testLogs: string[] = []
 
   try {
     console.log('📥 Webhook recebido:', JSON.stringify(req.body, null, 2))
@@ -186,10 +194,20 @@ router.post('/', async (req: Request, res: Response) => {
 
         console.log(`📨 Processando mensagem de ${phone}: ${text} (${messageType})`)
 
-        // Process message asynchronously with media info
-        processIncomingMessage(phone, text, messageId, messageType, mediaUrl, metadata).catch(error => {
-          console.error('❌ Erro ao processar mensagem:', error)
-        })
+        if (isTestCall) {
+          try {
+            const logs = await processIncomingMessage(phone, text, messageId, messageType, mediaUrl, metadata)
+            testLogs.push(...logs)
+          } catch (error) {
+            console.error('❌ Erro ao processar mensagem (teste):', error)
+            return res.status(500).json({ received: false, error: (error as Error).message })
+          }
+        } else {
+          // Process message de forma assíncrona
+          processIncomingMessage(phone, text, messageId, messageType, mediaUrl, metadata).catch(error => {
+            console.error('❌ Erro ao processar mensagem:', error)
+          })
+        }
       }
     }
 
@@ -203,7 +221,17 @@ router.post('/', async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error('❌ Erro no webhook:', error)
+    if (isTestCall) {
+      return res.status(500).json({ received: false, error: (error as Error).message, workflowLogs: testLogs })
+    }
   }
+
+  if (isTestCall) {
+    return res.status(200).json({ received: true, workflowLogs: testLogs })
+  }
+
+  // Para chamadas reais, a resposta já foi enviada no início
+  return
 })
 
 export default router

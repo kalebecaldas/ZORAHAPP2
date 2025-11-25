@@ -21,7 +21,7 @@ let io: SocketIOServer
 // Initialize intelligent bot service
 const botService = new IntelligentBotService(
   process.env.OPENAI_API_KEY || '',
-  'gpt-3.5-turbo'
+  'gpt-4o'
 )
 
 // Initialize services with Socket.IO

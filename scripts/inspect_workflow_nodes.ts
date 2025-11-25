@@ -1,122 +1,118 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient()
 
-async function inspectWorkflow() {
-  console.log('🔍 Inspecionando nós do workflow...\n');
-  
+function getNodeById(nodes: any[], id: string) {
+  return nodes.find((n: any) => n.id === id)
+}
+
+function getIncomingEdges(edges: any[], nodeId: string) {
+  return edges.filter((e: any) => e.target === nodeId)
+}
+
+function getOutgoingEdges(edges: any[], nodeId: string) {
+  return edges.filter((e: any) => e.source === nodeId)
+}
+
+function disconnectedNodes(nodes: any[], edges: any[]) {
+  const ids = new Set(nodes.map((n: any) => n.id))
+  const incomingMap: Record<string, number> = {}
+  const outgoingMap: Record<string, number> = {}
+  nodes.forEach((n: any) => { incomingMap[n.id] = 0; outgoingMap[n.id] = 0 })
+  edges.forEach((e: any) => { if (ids.has(e.target)) incomingMap[e.target]++; if (ids.has(e.source)) outgoingMap[e.source]++ })
+  const isolated = nodes.filter((n: any) => incomingMap[n.id] === 0 && outgoingMap[n.id] === 0)
+  const noIncoming = nodes.filter((n: any) => incomingMap[n.id] === 0)
+  const noOutgoing = nodes.filter((n: any) => outgoingMap[n.id] === 0)
+  return { isolated, noIncoming, noOutgoing }
+}
+
+function invalidEdges(nodes: any[], edges: any[]) {
+  const ids = new Set(nodes.map((n: any) => n.id))
+  return edges.filter((e: any) => !ids.has(e.source) || !ids.has(e.target))
+}
+
+function validatePreScheduling(nodes: any[], edges: any[]) {
+  const expected = [
+    'msg_solicita_cadastro',
+    'confirma_cadastro',
+    'msg_cadastro_sucesso',
+    'ask_procedimentos',
+    'ask_turno',
+    'collect_turno',
+    'resumo_agendamento',
+    'confirma_agendamento',
+    'create_appointment',
+    'fila_aguardando',
+    'end_success'
+  ]
+  const exists = expected.map(id => ({ id, present: !!getNodeById(nodes, id) }))
+  const chain = [
+    ['msg_solicita_cadastro', 'confirma_cadastro'],
+    ['confirma_cadastro', 'msg_cadastro_sucesso'],
+    ['msg_cadastro_sucesso', 'ask_procedimentos'],
+    ['ask_turno', 'collect_turno'],
+    ['collect_turno', 'resumo_agendamento'],
+    ['resumo_agendamento', 'confirma_agendamento'],
+    ['confirma_agendamento', 'create_appointment'],
+    ['create_appointment', 'fila_aguardando'],
+    ['fila_aguardando', 'end_success']
+  ]
+  const chainOk = chain.map(([a, b]) => ({ from: a, to: b, connected: isReachable(edges, a, b) }))
+  return { exists, chainOk }
+}
+
+function isReachable(edges: any[], from: string, to: string) {
+  const seen = new Set<string>()
+  const q: string[] = [from]
+  let steps = 0
+  while (q.length && steps < 300) {
+    steps++
+    const cur = q.shift() as string
+    if (cur === to) return true
+    if (seen.has(cur)) continue
+    seen.add(cur)
+    const nexts = edges.filter((e: any) => e.source === cur).map((e: any) => e.target)
+    nexts.forEach(n => { if (!seen.has(n)) q.push(n) })
+  }
+  return false
+}
+
+async function inspectActiveWorkflow() {
+  console.log('🔍 Inspecionando workflow ativo\n')
   try {
-    const workflow = await prisma.workflow.findFirst({ where: { isActive: true } });
-    
+    const workflow = await prisma.workflow.findFirst({ where: { isActive: true } })
     if (!workflow) {
-      console.log('❌ Nenhum workflow ativo encontrado');
-      return;
+      console.log('❌ Nenhum workflow ativo encontrado')
+      return
     }
-    
-    console.log(`📋 Workflow: ${workflow.name}\n`);
-    
-    const config = typeof workflow.config === 'string' 
-      ? JSON.parse(workflow.config) 
-      : workflow.config as any;
-    
-    const nodes = config?.nodes || [];
-    const edges = config?.edges || [];
-    
-    // Find nodes related to welcome message
-    console.log('🔍 Procurando nós com mensagem "Você pode perguntar sobre consultas"...\n');
-    
-    const welcomeNodes = nodes.filter((n: any) => {
-      const content = n.data?.message || n.data?.text || n.content?.message || n.content?.text || '';
-      return content.includes('Você pode perguntar') || content.includes('consultas');
-    });
-    
-    if (welcomeNodes.length > 0) {
-      console.log(`✅ Encontrados ${welcomeNodes.length} nó(s):\n`);
-      
-      for (const node of welcomeNodes) {
-        console.log(`📌 Nó ID: ${node.id}`);
-        console.log(`   Tipo: ${node.type}`);
-        console.log(`   Mensagem: ${node.data?.message || node.data?.text || node.content?.message || node.content?.text || 'N/A'}`);
-        
-        // Find connections TO this node
-        const incomingEdges = edges.filter((e: any) => e.target === node.id);
-        if (incomingEdges.length > 0) {
-          console.log(`   Recebe de:`);
-          incomingEdges.forEach((e: any) => {
-            const sourceNode = nodes.find((n: any) => n.id === e.source);
-            console.log(`      - ${e.source} (${sourceNode?.type || 'unknown'})`);
-          });
-        }
-        
-        // Find connections FROM this node
-        const outgoingEdges = edges.filter((e: any) => e.source === node.id);
-        if (outgoingEdges.length > 0) {
-          console.log(`   Conecta para:`);
-          outgoingEdges.forEach((e: any) => {
-            const targetNode = nodes.find((n: any) => n.id === e.target);
-            console.log(`      - ${e.target} (${targetNode?.type || 'unknown'})`);
-          });
-        } else {
-          console.log(`   ⚠️  Sem conexões de saída (nó órfão)`);
-        }
-        
-        console.log('');
-      }
-    } else {
-      console.log('❌ Nenhum nó encontrado com essa mensagem');
-    }
-    
-    // Check clinic_selection node specifically
-    console.log('\n🔍 Verificando nó clinic_selection...\n');
-    const clinicNode = nodes.find((n: any) => n.id === 'clinic_selection');
-    if (clinicNode) {
-      console.log(`📌 clinic_selection encontrado:`);
-      console.log(`   Tipo: ${clinicNode.type}`);
-      console.log(`   Data:`, JSON.stringify(clinicNode.data, null, 2));
-      console.log(`   Content:`, JSON.stringify(clinicNode.content, null, 2));
-      
-      const outgoing = edges.filter((e: any) => e.source === 'clinic_selection');
-      console.log(`\n   Conexões de saída (${outgoing.length}):`);
-      outgoing.forEach((e: any) => {
-        const targetNode = nodes.find((n: any) => n.id === e.target);
-        console.log(`      → ${e.target} (${targetNode?.type || 'unknown'}) [port: ${e.data?.port || e.sourceHandle || 'default'}]`);
-      });
-    }
-    
-    // Check gpt_welcome node
-    console.log('\n🔍 Verificando nó gpt_welcome...\n');
-    const welcomeNode = nodes.find((n: any) => n.id === 'gpt_welcome');
-    if (welcomeNode) {
-      console.log(`📌 gpt_welcome encontrado:`);
-      console.log(`   Tipo: ${welcomeNode.type}`);
-      console.log(`   Mensagem: ${welcomeNode.data?.message || welcomeNode.content?.message || 'N/A'}`);
-      
-      const incoming = edges.filter((e: any) => e.target === 'gpt_welcome');
-      const outgoing = edges.filter((e: any) => e.source === 'gpt_welcome');
-      
-      console.log(`   Conexões de entrada: ${incoming.length}`);
-      incoming.forEach((e: any) => {
-        console.log(`      ← ${e.source}`);
-      });
-      
-      console.log(`   Conexões de saída: ${outgoing.length}`);
-      outgoing.forEach((e: any) => {
-        console.log(`      → ${e.target}`);
-      });
-      
-      if (incoming.length === 0 && outgoing.length === 0) {
-        console.log(`   ✅ Nó está isolado (bom!)`);
-      }
-    } else {
-      console.log('❌ Nó gpt_welcome não encontrado');
-    }
-    
+    console.log(`📋 Workflow: ${workflow.name} (${workflow.id})`)
+    const config = typeof (workflow as any).config === 'string' ? JSON.parse((workflow as any).config) : ((workflow as any).config || {})
+    const nodes = (Array.isArray(config?.nodes) ? config.nodes : [])
+    const edges = (Array.isArray(config?.edges) ? config.edges : [])
+    console.log(`🧩 Nodes: ${nodes.length} | 🔗 Edges: ${edges.length}`)
+    const start = nodes.find((n: any) => n.type === 'START')
+    const gpt = nodes.find((n: any) => n.type === 'GPT_RESPONSE' && (n.id === 'gpt_classifier' || String(n.content?.systemPrompt || '').toLowerCase().includes('classific'))) || nodes.find((n: any) => n.type === 'GPT_RESPONSE')
+    console.log(`🚦 START: ${start ? start.id : 'N/A'} | 🤖 GPT: ${gpt ? gpt.id : 'N/A'}`)
+    const disc = disconnectedNodes(nodes, edges)
+    console.log(`❗ Isolados: ${disc.isolated.length} | Sem entrada: ${disc.noIncoming.length} | Sem saída: ${disc.noOutgoing.length}`)
+    if (disc.isolated.length > 0) { console.log('🔎 Isolados:', disc.isolated.map((n: any) => n.id).join(', ')) }
+    const bad = invalidEdges(nodes, edges)
+    console.log(`⚠️ Edges inválidas: ${bad.length}`)
+    if (bad.length > 0) { bad.slice(0, 10).forEach((e: any) => console.log(`- inválida: ${e.source} → ${e.target}`)) }
+    const pre = validatePreScheduling(nodes, edges)
+    console.log('🗓️ Pré-agendamento: presença dos nós:')
+    pre.exists.forEach(x => console.log(`- ${x.id}: ${x.present ? 'OK' : 'FALTANDO'}`))
+    console.log('🧭 Pré-agendamento: conexões da cadeia:')
+    pre.chainOk.forEach(x => console.log(`- ${x.from} → ${x.to}: ${x.connected ? 'OK' : 'QUEBRADA'}`))
+    const dangling = edges.filter((e: any) => !getOutgoingEdges(edges, e.target).length && getNodeById(nodes, e.target)?.type !== 'END')
+    if (dangling.length > 0) { console.log(`🟠 Saídas que terminam sem END: ${dangling.length}`); dangling.slice(0, 10).forEach((e: any) => console.log(`- ${e.source} → ${e.target}`)) }
+    const gptOut = edges.filter((e: any) => e.source === (gpt?.id || ''))
+    console.log(`🤖 Saídas do GPT classifier: ${gptOut.length}`)
   } catch (error) {
-    console.error('❌ Erro:', error);
+    console.error('❌ Erro ao inspecionar workflow:', error)
   } finally {
-    await prisma.$disconnect();
+    await prisma.$disconnect()
   }
 }
 
-inspectWorkflow();
-
+inspectActiveWorkflow()

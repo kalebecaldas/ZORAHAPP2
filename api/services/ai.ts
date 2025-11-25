@@ -67,7 +67,7 @@ export class AIService {
   private model: string
   private timeout: number
 
-  constructor(apiKey: string, model = 'gpt-3.5-turbo', timeout = 20000) {
+  constructor(apiKey: string, model = 'gpt-4o', timeout = 20000) {
     this.openai = new OpenAI({ apiKey })
     this.model = model
     this.timeout = timeout
@@ -303,6 +303,73 @@ Responda apenas com a categoria mais provável.`,
     } catch (error) {
       console.error('Erro ao analisar sentimento:', error)
       return 'neutral'
+    }
+  }
+
+  async interpretIntentIAAM(message: string): Promise<{ intencao: 'LOCALIZACAO' | 'CONVENIOS' | 'CONVENIO_PROCEDIMENTOS' | 'VALOR_PARTICULAR' | 'INFO_PROCEDIMENTO' | 'FAQ' | 'AGENDAR' | 'REAGENDAR' | 'CANCELAR', textoInterpretado: string }> {
+    const intents = ['LOCALIZACAO','CONVENIOS','CONVENIO_PROCEDIMENTOS','VALOR_PARTICULAR','INFO_PROCEDIMENTO','FAQ','AGENDAR','REAGENDAR','CANCELAR'] as const
+    const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const fixTypos = (s: string) => {
+      let t = s
+      t = t.replace(/\b(gendar|ajendar|agnda|aje\s*nda)\b/gi, 'agendar')
+      t = t.replace(/\b(reagnda|remaracr|reagendar|remarcar)\b/gi, 'reagendar')
+      t = t.replace(/\b(desmacar|desmaracr|desmarcar)\b/gi, 'cancelar')
+      t = t.replace(/\b(ond\s*f\s*ica|ond\s*fica|onde\s*f\s*ica)\b/gi, 'onde fica')
+      t = t.replace(/\b(valro|valr)\b/gi, 'valor')
+      t = t.replace(/\bacupuntra\b/gi, 'acupuntura')
+      return t
+    }
+    const clean = (s: string) => fixTypos(s).replace(/\s+/g, ' ').trim()
+    const msg = clean(message)
+    const nmsg = normalize(msg)
+    const hasAny = (arr: string[]) => arr.some(k => nmsg.includes(normalize(k)))
+    const trg = {
+      LOCALIZACAO: ['onde fica','local','endereco','como chegar','perto de','localizacao','qual o endereco','manda a localizacao','mapa'],
+      CONVENIOS: ['convenio','plano','aceita meu plano','aceita','atende'],
+      CONVENIO_PROCEDIMENTOS: ['cobre','cobertura','procedimentos do convenio','plano cobre','cobre acupuntura'],
+      VALOR_PARTICULAR: ['valor','preco','quanto custa','particular','pacote','preco do procedimento'],
+      INFO_PROCEDIMENTO: ['o que e','pra que serve','beneficio','explica','quero saber mais','descricao','o que faz'],
+      AGENDAR: ['agendar','marcar','agenda ai','quero horario','quero agendar hoje','marcar consulta','agnd','aje dar'],
+      REAGENDAR: ['remarcar','reagendar','mudar horario','trocar horario','reagnda','mudar consulta'],
+      CANCELAR: ['cancelar','desmarcar','cancela ai','remover agendamento','nao quero mais']
+    }
+    const pick = (): typeof intents[number] => {
+      if (hasAny(trg.CANCELAR)) return 'CANCELAR'
+      if (hasAny(trg.REAGENDAR)) return 'REAGENDAR'
+      if (hasAny(trg.AGENDAR)) return 'AGENDAR'
+      if (hasAny(trg.LOCALIZACAO)) return 'LOCALIZACAO'
+      if (hasAny(trg.CONVENIO_PROCEDIMENTOS)) return 'CONVENIO_PROCEDIMENTOS'
+      if (hasAny(trg.CONVENIOS)) return 'CONVENIOS'
+      if (hasAny(trg.VALOR_PARTICULAR)) return 'VALOR_PARTICULAR'
+      if (hasAny(trg.INFO_PROCEDIMENTO)) return 'INFO_PROCEDIMENTO'
+      return 'FAQ'
+    }
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: `Você é o interpretador oficial de intenções do Assistente Virtual das Clínicas IAAM.
+Seu trabalho é identificar com precisão a intenção do paciente, mesmo com erros, gírias, abreviações ou palavras incompletas.
+Considere que o paciente já escolheu uma unidade que possui endereço, convênios, procedimentos cobertos, valores particulares, pacotes e descrição/benefícios.
+Retorne sempre apenas JSON com as chaves: {"intencao","textoInterpretado"}. Os valores de "intencao" devem ser exatamente um destes: LOCALIZACAO, CONVENIOS, CONVENIO_PROCEDIMENTOS, VALOR_PARTICULAR, INFO_PROCEDIMENTO, FAQ, AGENDAR, REAGENDAR, CANCELAR.
+Corrija mentalmente o texto antes de interpretar.`
+          },
+          { role: 'user', content: msg }
+        ],
+        max_tokens: 60,
+        temperature: 0,
+      }, { timeout: this.timeout })
+      const raw = completion.choices[0]?.message?.content?.trim() || ''
+      let parsed: any = {}
+      try { parsed = JSON.parse(raw) } catch { parsed = {} }
+      const intent = typeof parsed.intencao === 'string' && intents.includes(parsed.intencao as any) ? parsed.intencao as any : pick()
+      const texto = typeof parsed.textoInterpretado === 'string' && parsed.textoInterpretado.trim() ? clean(parsed.textoInterpretado) : msg
+      return { intencao: intent, textoInterpretado: texto }
+    } catch {
+      const intent = pick()
+      return { intencao: intent, textoInterpretado: msg }
     }
   }
 }

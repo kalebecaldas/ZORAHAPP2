@@ -65,10 +65,26 @@ app.use(cors({
 // Logging
 app.use(morgan('dev'))
 
-// Rate limiting
-const apiLimiter = rateLimit({
+// Rate limiting - Granular configuration for different endpoints
+// For authenticated routes (conversations, patients, etc.)
+const authenticatedLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 60, // 60 requests per minute
+  max: 1000, // 1000 requests per minute (generous for 100+ simultaneous conversations with WebSockets)
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Muitas requisições. Tente novamente mais tarde.'
+  },
+  skip: (req) => {
+    // Skip rate limiting for testing in development
+    return process.env.NODE_ENV === 'development' && req.path.includes('/test')
+  }
+})
+
+// For public routes that don't require much traffic
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute for auth routes
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -76,9 +92,10 @@ const apiLimiter = rateLimit({
   }
 })
 
+// For webhook (external WhatsApp API)
 const webhookLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 10, // 10 requests per minute for webhook
+  max: 500, // 500 requests per minute for webhook (scales with message volume)
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -93,24 +110,24 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 /**
  * API Routes
  */
-app.use('/api/auth', apiLimiter, authRoutes)
-app.use('/api/patients', apiLimiter, patientsRoutes)
-app.use('/api/conversations', apiLimiter, conversationsRoutes)
-app.use('/api/workflows', apiLimiter, workflowsRoutes)
-app.use('/api/stats', apiLimiter, statsRoutes)
-app.use('/api/users', apiLimiter, usersRoutes)
-app.use('/api/settings', apiLimiter, settingsRoutes)
-app.use('/api/appointments', apiLimiter, appointmentsRoutes)
-app.use('/api/test', testRoutes) // Test routes without auth
-app.use('/api/cobertura', apiLimiter, coverageRoutes)
-app.use('/api/permissions', apiLimiter, permissionsRoutes)
-app.use('/api/clinic', apiLimiter, clinicRoutes)
-app.use('/api/messages', apiLimiter, messagesRoutes)
-app.use('/api/templates', apiLimiter, templatesRoutes)
-app.use('/api', apiLimiter, aliasRoutes)
+app.use('/api/auth', publicLimiter, authRoutes)
+app.use('/api/patients', authenticatedLimiter, patientsRoutes)
+app.use('/api/conversations', authenticatedLimiter, conversationsRoutes)
+app.use('/api/workflows', authenticatedLimiter, workflowsRoutes)
+app.use('/api/stats', authenticatedLimiter, statsRoutes)
+app.use('/api/users', authenticatedLimiter, usersRoutes)
+app.use('/api/settings', authenticatedLimiter, settingsRoutes)
+app.use('/api/appointments', authenticatedLimiter, appointmentsRoutes)
+app.use('/api/test', testRoutes) // Test routes without rate limiting
+app.use('/api/cobertura', authenticatedLimiter, coverageRoutes)
+app.use('/api/permissions', authenticatedLimiter, permissionsRoutes)
+app.use('/api/clinic', authenticatedLimiter, clinicRoutes)
+app.use('/api/messages', authenticatedLimiter, messagesRoutes)
+app.use('/api/templates', authenticatedLimiter, templatesRoutes)
+app.use('/api', authenticatedLimiter, aliasRoutes)
 
 // Debug auth endpoint
-app.use('/api/debug/auth', apiLimiter, authMiddleware, (req: Request, res: Response) => {
+app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, res: Response) => {
   res.json({
     hasUser: !!req.user,
     user: req.user || null,
@@ -123,7 +140,7 @@ app.use('/webhook', webhookLimiter, webhookRoutes)
 /**
  * Health check
  */
-app.use(['/api/health','/health'], (req: Request, res: Response, next: NextFunction): void => {
+app.use(['/api/health', '/health'], (req: Request, res: Response, next: NextFunction): void => {
   res.status(200).json({
     success: true,
     message: 'ok',
@@ -146,7 +163,7 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
  */
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Erro global:', error)
-  
+
   if (error.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
@@ -154,14 +171,14 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
       details: error.message
     })
   }
-  
+
   if (error.name === 'UnauthorizedError') {
     return res.status(401).json({
       success: false,
       error: 'Não autorizado'
     })
   }
-  
+
   res.status(500).json({
     success: false,
     error: 'Erro interno do servidor',

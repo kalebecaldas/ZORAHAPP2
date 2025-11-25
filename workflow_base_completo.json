@@ -1,0 +1,524 @@
+{
+  "name": "Sistema de Agendamento Clínico Completo",
+  "description": "Workflow completo baseado no documento BASE WORKFLOWEDITOR - Agendamento com verificação de cadastro, seleção de convênio e procedimentos",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start",
+      "type": "START",
+      "position": { "x": 100, "y": 50 },
+      "data": {
+        "message": "Olá! Em qual unidade você gostaria de ser atendido(a)?\n\n1️⃣ Unidade Vieiralves 📍 Rua Rio Içá, 850 — Nossa Sra. das Graças\n2️⃣ Unidade São José 📍 Av. Autaz Mirim, 5773 — São José Operário\n\nResponda com 1 ou 2, ou digite o nome da unidade."
+      }
+    },
+    {
+      "id": "clinic_selection",
+      "type": "CONDITION",
+      "position": { "x": 100, "y": 150 },
+      "data": {
+        "condition": "clinic_selection",
+        "trueMessage": "Ótima escolha! Como posso ajudar você hoje?",
+        "falseMessage": "Por favor, escolha uma de nossas unidades (1 ou 2)."
+      }
+    },
+    {
+      "id": "gpt_classifier",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 100, "y": 230 },
+      "data": {
+        "systemPrompt": "Você é um classificador de intenção. Analise a mensagem do usuário e classifique em uma das opções:\n1) Informação sobre valores de procedimentos\n2) Informação sobre convênios aceitos\n3) Informação sobre localização/horários\n4) Explicação sobre procedimentos (o que é, efeitos, benefícios)\n5) Agendar consulta\n6) Falar com atendente humano\n\nResponda apenas com o número da intenção (1-6)."
+      }
+    },
+    {
+      "id": "info_values",
+      "type": "API_CALL",
+      "position": { "x": -200, "y": 350 },
+      "data": {
+        "endpoint": "get_clinic_procedures",
+        "message": "Buscando valores dos procedimentos..."
+      }
+    },
+    {
+      "id": "info_insurance",
+      "type": "API_CALL",
+      "position": { "x": 0, "y": 350 },
+      "data": {
+        "endpoint": "get_clinic_insurances",
+        "message": "Buscando convênios aceitos..."
+      }
+    },
+    {
+      "id": "info_location",
+      "type": "API_CALL",
+      "position": { "x": 200, "y": 350 },
+      "data": {
+        "endpoint": "get_clinic_location",
+        "message": "Buscando informações de localização..."
+      }
+    },
+    {
+      "id": "info_procedure_explanation",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 400, "y": 350 },
+      "data": {
+        "systemPrompt": "Você é um assistente médico. Explique o procedimento mencionado pelo usuário, incluindo:\n- O que é o procedimento\n- Para que serve\n- Efeitos e benefícios\n- Duração estimada\n- Se requer avaliação prévia\n\nSeja claro, educativo e empático."
+      }
+    },
+    {
+      "id": "check_patient_exists",
+      "type": "ACTION",
+      "position": { "x": 600, "y": 350 },
+      "data": {
+        "action": "search_patient_by_phone"
+      }
+    },
+    {
+      "id": "patient_found_decision",
+      "type": "CONDITION",
+      "position": { "x": 600, "y": 450 },
+      "data": {
+        "condition": "patient_found"
+      }
+    },
+    {
+      "id": "patient_registration",
+      "type": "COLLECT_INFO",
+      "position": { "x": 800, "y": 450 },
+      "data": {
+        "fields": ["name", "cpf", "birth_date", "phone", "email", "address", "insurance"],
+        "message": "Vou coletar seus dados para cadastro. Por favor, informe:"
+      }
+    },
+    {
+      "id": "validate_registration",
+      "type": "ACTION",
+      "position": { "x": 800, "y": 550 },
+      "data": {
+        "action": "validate_and_create_patient"
+      }
+    },
+    {
+      "id": "select_insurance",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 550 },
+      "data": {
+        "message": "💳 Qual é seu convênio?\n\nDigite o nome do convênio ou 'particular' se não tiver.\n\nVou verificar quais procedimentos estão cobertos pelo seu convênio."
+      }
+    },
+    {
+      "id": "insurance_validation",
+      "type": "CONDITION",
+      "position": { "x": 600, "y": 650 },
+      "data": {
+        "condition": "insurance_valid"
+      }
+    },
+    {
+      "id": "insurance_not_covered",
+      "type": "MESSAGE",
+      "position": { "x": 800, "y": 650 },
+      "data": {
+        "message": "⚠️ Este convênio não cobre o procedimento desejado.\n\nOpções:\n1️⃣ Agendar como particular (R$ ${valor_particular})\n2️⃣ Ver outros convênios aceitos\n3️⃣ Escolher outro procedimento"
+      }
+    },
+    {
+      "id": "list_procedures",
+      "type": "MESSAGE",
+      "position": { "x": 400, "y": 650 },
+      "data": {
+        "message": "📋 Procedimentos disponíveis para seu convênio:\n\n${procedimentos_lista}\n\nDigite o número ou nome do procedimento que deseja agendar.\n\nVocê pode selecionar múltiplos procedimentos antes de escolher data/horário."
+      }
+    },
+    {
+      "id": "procedure_selection_loop",
+      "type": "CONDITION",
+      "position": { "x": 400, "y": 750 },
+      "data": {
+        "condition": "procedure_selected"
+      }
+    },
+    {
+      "id": "add_more_procedures",
+      "type": "MESSAGE",
+      "position": { "x": 200, "y": 750 },
+      "data": {
+        "message": "✅ Procedimento adicionado!\n\nDeseja adicionar mais algum procedimento?\n\nDigite:\n- Nome ou número do próximo procedimento\n- Ou 'não' para continuar com o agendamento"
+      }
+    },
+    {
+      "id": "select_date_time",
+      "type": "MESSAGE",
+      "position": { "x": 400, "y": 850 },
+      "data": {
+        "message": "📅 Agora vamos escolher data e horário:\n\n• Qual data você prefere? (Ex: 15/12/2024)\n• Qual turno? (Manhã, Tarde ou Noite)"
+      }
+    },
+    {
+      "id": "collect_date_time",
+      "type": "COLLECT_INFO",
+      "position": { "x": 400, "y": 950 },
+      "data": {
+        "fields": ["preferred_date", "preferred_shift"],
+        "message": "Coletando informações de data e horário..."
+      }
+    },
+    {
+      "id": "check_availability",
+      "type": "ACTION",
+      "position": { "x": 400, "y": 1050 },
+      "data": {
+        "action": "check_appointment_availability"
+      }
+    },
+    {
+      "id": "availability_decision",
+      "type": "CONDITION",
+      "position": { "x": 400, "y": 1150 },
+      "data": {
+        "condition": "availability_available"
+      }
+    },
+    {
+      "id": "offer_alternatives",
+      "type": "MESSAGE",
+      "position": { "x": 200, "y": 1150 },
+      "data": {
+        "message": "⚠️ Este horário não está disponível.\n\nOpções:\n1️⃣ Outros horários disponíveis:\n${horarios_alternativos}\n\n2️⃣ Outros profissionais disponíveis\n3️⃣ Lista de espera (será avisado quando houver vaga)"
+      }
+    },
+    {
+      "id": "create_reservation",
+      "type": "ACTION",
+      "position": { "x": 600, "y": 1150 },
+      "data": {
+        "action": "create_appointment_reservation"
+      }
+    },
+    {
+      "id": "reservation_confirmation",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 1250 },
+      "data": {
+        "message": "✅ *Reserva Criada!*\n\n📋 *Resumo do Agendamento:*\n\n• Procedimento(s): ${procedimentos_agendados}\n• Data: ${data_agendamento}\n• Horário: ${horario_agendamento}\n• Unidade: ${unidade_nome}\n• Convênio: ${convenio_nome}\n\n⏰ Esta reserva ficará bloqueada por 15 minutos para confirmação.\n\nConfirme seu agendamento digitando 'confirmar'."
+      }
+    },
+    {
+      "id": "send_notifications",
+      "type": "ACTION",
+      "position": { "x": 600, "y": 1350 },
+      "data": {
+        "action": "send_confirmation_notifications"
+      }
+    },
+    {
+      "id": "appointment_success",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 1450 },
+      "data": {
+        "message": "🎉 *Agendamento Confirmado!*\n\n📧 Você receberá:\n• Confirmação por e-mail\n• Lembrete 24h antes\n• Lembrete 2h antes\n\n📍 *Localização:*\n${endereco_completo}\n\n🗺️ Mapa: ${maps_url}\n\n📋 *Documentos necessários:*\n• Documento de identidade\n• Carteirinha do convênio (se aplicável)\n• Receita médica (se necessário)\n\nObrigado por escolher nossa clínica! 🙏"
+      }
+    },
+    {
+      "id": "transfer_human",
+      "type": "TRANSFER_HUMAN",
+      "position": { "x": 1000, "y": 350 },
+      "data": {
+        "finalMessage": "🤝 Estou transferindo você para um de nossos atendentes. Por favor, aguarde um momento."
+      }
+    },
+    {
+      "id": "continue_conversation",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 1550 },
+      "data": {
+        "message": "ℹ️ Posso ajudar com mais alguma informação?\n\nDigite:\n• 'sim' para continuar\n• 'não' ou 'obrigado' para encerrar"
+      }
+    },
+    {
+      "id": "end_conversation",
+      "type": "END",
+      "position": { "x": 100, "y": 1650 },
+      "data": {
+        "finalMessage": "Obrigado por entrar em contato! Se precisar de mais alguma coisa, estarei aqui. Tenha um ótimo dia! 🙏"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "start_to_clinic",
+      "source": "start",
+      "sourcePort": "output",
+      "target": "clinic_selection",
+      "targetPort": "input"
+    },
+    {
+      "id": "clinic_to_classifier",
+      "source": "clinic_selection",
+      "sourcePort": "true",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "clinic_retry",
+      "source": "clinic_selection",
+      "sourcePort": "false",
+      "target": "start",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_values",
+      "source": "gpt_classifier",
+      "sourcePort": "1",
+      "target": "info_values",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_insurance",
+      "source": "gpt_classifier",
+      "sourcePort": "2",
+      "target": "info_insurance",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_location",
+      "source": "gpt_classifier",
+      "sourcePort": "3",
+      "target": "info_location",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_explanation",
+      "source": "gpt_classifier",
+      "sourcePort": "4",
+      "target": "info_procedure_explanation",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_appointment",
+      "source": "gpt_classifier",
+      "sourcePort": "5",
+      "target": "check_patient_exists",
+      "targetPort": "input"
+    },
+    {
+      "id": "classifier_to_human",
+      "source": "gpt_classifier",
+      "sourcePort": "6",
+      "target": "transfer_human",
+      "targetPort": "input"
+    },
+    {
+      "id": "info_values_to_classifier",
+      "source": "info_values",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "info_insurance_to_classifier",
+      "source": "info_insurance",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "info_location_to_classifier",
+      "source": "info_location",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "explanation_to_classifier",
+      "source": "info_procedure_explanation",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input"
+    },
+    {
+      "id": "check_to_decision",
+      "source": "check_patient_exists",
+      "sourcePort": "output",
+      "target": "patient_found_decision",
+      "targetPort": "input"
+    },
+    {
+      "id": "patient_found_yes",
+      "source": "patient_found_decision",
+      "sourcePort": "true",
+      "target": "select_insurance",
+      "targetPort": "input"
+    },
+    {
+      "id": "patient_found_no",
+      "source": "patient_found_decision",
+      "sourcePort": "false",
+      "target": "patient_registration",
+      "targetPort": "input"
+    },
+    {
+      "id": "registration_to_validate",
+      "source": "patient_registration",
+      "sourcePort": "output",
+      "target": "validate_registration",
+      "targetPort": "input"
+    },
+    {
+      "id": "validate_to_insurance",
+      "source": "validate_registration",
+      "sourcePort": "output",
+      "target": "select_insurance",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_to_validation",
+      "source": "select_insurance",
+      "sourcePort": "output",
+      "target": "insurance_validation",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_valid_yes",
+      "source": "insurance_validation",
+      "sourcePort": "true",
+      "target": "list_procedures",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_valid_no",
+      "source": "insurance_validation",
+      "sourcePort": "false",
+      "target": "insurance_not_covered",
+      "targetPort": "input"
+    },
+    {
+      "id": "insurance_not_covered_to_procedures",
+      "source": "insurance_not_covered",
+      "sourcePort": "output",
+      "target": "list_procedures",
+      "targetPort": "input"
+    },
+    {
+      "id": "procedures_to_loop",
+      "source": "list_procedures",
+      "sourcePort": "output",
+      "target": "procedure_selection_loop",
+      "targetPort": "input"
+    },
+    {
+      "id": "loop_add_more",
+      "source": "procedure_selection_loop",
+      "sourcePort": "add_more",
+      "target": "add_more_procedures",
+      "targetPort": "input"
+    },
+    {
+      "id": "add_more_to_list",
+      "source": "add_more_procedures",
+      "sourcePort": "output",
+      "target": "list_procedures",
+      "targetPort": "input"
+    },
+    {
+      "id": "loop_continue",
+      "source": "procedure_selection_loop",
+      "sourcePort": "continue",
+      "target": "select_date_time",
+      "targetPort": "input"
+    },
+    {
+      "id": "date_time_to_collect",
+      "source": "select_date_time",
+      "sourcePort": "output",
+      "target": "collect_date_time",
+      "targetPort": "input"
+    },
+    {
+      "id": "collect_to_check",
+      "source": "collect_date_time",
+      "sourcePort": "output",
+      "target": "check_availability",
+      "targetPort": "input"
+    },
+    {
+      "id": "check_to_decision",
+      "source": "check_availability",
+      "sourcePort": "output",
+      "target": "availability_decision",
+      "targetPort": "input"
+    },
+    {
+      "id": "availability_no",
+      "source": "availability_decision",
+      "sourcePort": "false",
+      "target": "offer_alternatives",
+      "targetPort": "input"
+    },
+    {
+      "id": "alternatives_to_date",
+      "source": "offer_alternatives",
+      "sourcePort": "output",
+      "target": "select_date_time",
+      "targetPort": "input"
+    },
+    {
+      "id": "availability_yes",
+      "source": "availability_decision",
+      "sourcePort": "true",
+      "target": "create_reservation",
+      "targetPort": "input"
+    },
+    {
+      "id": "reservation_to_confirmation",
+      "source": "create_reservation",
+      "sourcePort": "output",
+      "target": "reservation_confirmation",
+      "targetPort": "input"
+    },
+    {
+      "id": "confirmation_to_notifications",
+      "source": "reservation_confirmation",
+      "sourcePort": "output",
+      "target": "send_notifications",
+      "targetPort": "input"
+    },
+    {
+      "id": "notifications_to_success",
+      "source": "send_notifications",
+      "sourcePort": "output",
+      "target": "appointment_success",
+      "targetPort": "input"
+    },
+    {
+      "id": "success_to_continue",
+      "source": "appointment_success",
+      "sourcePort": "output",
+      "target": "continue_conversation",
+      "targetPort": "input"
+    },
+    {
+      "id": "continue_loop",
+      "source": "continue_conversation",
+      "sourcePort": "output",
+      "target": "gpt_classifier",
+      "targetPort": "input",
+      "condition": "continue"
+    },
+    {
+      "id": "continue_to_end",
+      "source": "continue_conversation",
+      "sourcePort": "output",
+      "target": "end_conversation",
+      "targetPort": "input",
+      "condition": "end"
+    },
+    {
+      "id": "human_to_end",
+      "source": "transfer_human",
+      "sourcePort": "output",
+      "target": "end_conversation",
+      "targetPort": "input"
+    }
+  ]
+}
+

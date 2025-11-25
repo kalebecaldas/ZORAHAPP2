@@ -47,9 +47,15 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (isBrowser && error.response?.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+    // Only redirect to login on 401 if the error hasn't been handled by the component
+    // This prevents redirects when fetching conversations that might have auth issues
+    if (isBrowser && error.response?.status === 401 && !error._handled) {
+      const currentPath = window.location.pathname;
+      // Don't redirect if we're on conversations page - let the component handle it
+      if (!currentPath.includes('/conversations')) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

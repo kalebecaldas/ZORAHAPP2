@@ -21,6 +21,15 @@ export function TestChat() {
   const [simulating, setSimulating] = useState(false)
   const [testRunning, setTestRunning] = useState(false)
   const [testLog, setTestLog] = useState<string[]>([])
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   const loadConversation = async () => {
     if (!phone) return
@@ -28,8 +37,18 @@ export function TestChat() {
     try {
       const res = await api.get(`/api/conversations/${phone}?limit=200`)
       setMessages(res.data.messages || [])
-    } catch (e) {
-      setMessages([])
+      if (res.data.messages && res.data.messages.length > 0) {
+        toast.success(`Carregadas ${res.data.messages.length} mensagens`)
+      }
+    } catch (e: any) {
+      if (e.response?.status === 404) {
+        setMessages([])
+        toast.info('Nenhuma conversa encontrada. Envie uma mensagem para criar uma nova conversa.')
+      } else {
+        console.error('Erro ao carregar conversa:', e)
+        toast.error('Erro ao carregar conversa: ' + (e.response?.data?.error || e.message))
+        setMessages([])
+      }
     } finally {
       setLoadingConv(false)
     }
@@ -41,7 +60,12 @@ export function TestChat() {
       const msgs: Message[] = res.data?.messages || []
       setMessages(msgs)
       return msgs
-    } catch {
+    } catch (e: any) {
+      // Se não encontrou conversa, retornar array vazio (não é erro crítico)
+      if (e.response?.status === 404) {
+        return []
+      }
+      console.error('Erro ao buscar conversa:', e)
       return []
     }
   }
@@ -80,21 +104,35 @@ export function TestChat() {
   }, [])
 
   const sendAgentMessage = async () => {
-    if (!phone || !text) return
+    if (!phone || !text) {
+      toast.error('Preencha o telefone e a mensagem')
+      return
+    }
     setSending(true)
     try {
       await api.post('/api/conversations/send', { phone, text, from: 'AGENT' })
       setText('')
+      toast.success('Mensagem enviada como agente')
       await loadConversation()
+    } catch (e: any) {
+      console.error('Erro ao enviar mensagem:', e)
+      toast.error('Erro ao enviar mensagem: ' + (e.response?.data?.error || e.message))
     } finally {
       setSending(false)
     }
   }
 
   const simulatePatientMessage = async () => {
-    if (!phone || !text) return
-    const messageText = text
+    if (!phone || !text.trim()) {
+      toast.error('Preencha o telefone e a mensagem')
+      return
+    }
+    const messageText = text.trim()
     setText('') // Clear immediately
+    setSimulating(true)
+    
+    // Adicionar log da mensagem enviada
+    setTestLog(prev => [...prev, `📤 Enviando: "${messageText}"`])
 
     const payload = {
       object: 'whatsapp_business_account',
@@ -126,10 +164,34 @@ export function TestChat() {
       ]
     }
 
-    // Send without waiting
-    api.post('/webhook', payload).then(() => {
-      loadConversation()
-    })
+    try {
+      const response = await api.post('/webhook', payload)
+      toast.success('Mensagem simulada enviada')
+      
+      // Capturar logs do workflow se disponíveis
+      if (response.data?.workflowLogs) {
+        response.data.workflowLogs.forEach((log: string) => {
+          setTestLog(prev => [...prev, `🔄 ${log}`])
+        })
+      }
+      
+      // Aguardar um pouco para o processamento
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await loadConversation()
+      
+      // Verificar última mensagem do bot para adicionar log
+      const msgs = await getConversation()
+      const lastBotMsg = [...msgs].reverse().find(m => m.from === 'BOT' && m.direction === 'SENT')
+      if (lastBotMsg) {
+        setTestLog(prev => [...prev, `🤖 Bot respondeu: "${lastBotMsg.messageText.substring(0, 50)}..."`])
+      }
+    } catch (e: any) {
+      console.error('Erro ao simular mensagem:', e)
+      toast.error('Erro ao simular mensagem: ' + (e.response?.data?.error || e.message))
+      setTestLog(prev => [...prev, `❌ Erro: ${e.response?.data?.error || e.message}`])
+    } finally {
+      setSimulating(false)
+    }
   }
 
 
@@ -282,6 +344,7 @@ export function TestChat() {
                     </div>
                   </li>
                 ))}
+                <div ref={messagesEndRef} />
               </ul>
             )}
           </div>
@@ -298,25 +361,41 @@ export function TestChat() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Mensagem</label>
-              <textarea value={text} onChange={(e) => setText(e.target.value)} className="w-full border rounded-md px-3 py-2" rows={3} placeholder="Digite a mensagem" />
+              <textarea 
+                value={text} 
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (!simulating && text.trim()) {
+                      simulatePatientMessage()
+                    }
+                  }
+                }}
+                className="w-full border rounded-md px-3 py-2" 
+                rows={3} 
+                placeholder="Digite a mensagem (Enter para enviar)" 
+              />
             </div>
 
             <div className="flex gap-2">
               <button onClick={sendAgentMessage} disabled={sending} className="px-3 py-2 rounded-md bg-blue-600 text-white disabled:opacity-50 flex items-center gap-2">
                 <Zap className="h-4 w-4" /> {sending ? 'Enviando...' : 'Enviar como Agente'}
               </button>
-              <button onClick={simulatePatientMessage} className="px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Enviar como Paciente
+              <button onClick={simulatePatientMessage} disabled={simulating} className="px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" /> {simulating ? 'Enviando...' : 'Enviar como Paciente'}
               </button>
 
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium text-gray-700">Logs do Teste</div>
-              <div className="border rounded-md p-2 h-40 overflow-auto text-xs bg-gray-50">
+              <div className="text-sm font-medium text-gray-700">Logs do Fluxo</div>
+              <div className="border rounded-md p-2 h-40 overflow-auto text-xs bg-gray-50 font-mono">
                 {testLog.length === 0 ? <div className="text-gray-400">Sem logs ainda.</div> : (
                   <ul className="space-y-1">
-                    {testLog.map((l, idx) => (<li key={idx}>{l}</li>))}
+                    {testLog.map((l, idx) => (
+                      <li key={idx} className="text-gray-700">{l}</li>
+                    ))}
                   </ul>
                 )}
               </div>

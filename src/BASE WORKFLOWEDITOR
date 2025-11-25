@@ -1,0 +1,225 @@
+Aqui está um **GUIA COMPLETO** para você criar **um fluxograma Mermaid** baseado no fluxo *correto* do seu projeto — **exatamente como você descreveu agora**.
+
+Esse guia serve tanto para você **mesmo escrever** o diagrama quanto para gerar via IA.
+
+---
+
+# 🧭 **GUIA DEFINITIVO PARA CRIAR UM FLUXOGRAMA MERMAID
+
+(Baseado no seu fluxo real de atendimento clínico)**
+
+## 📌 **1. Estrutura básica que TODO fluxograma Mermaid precisa**
+
+Sempre comece com:
+
+```mermaid
+flowchart TD
+```
+
+Ou, se preferir horizontal:
+
+```mermaid
+flowchart LR
+```
+
+* **TD = Top → Down (vertical)**
+* **LR = Left → Right (horizontal)**
+
+---
+
+# 🧱 **2. Organização das grandes fases do seu fluxo**
+
+Seu fluxo tem **4 fases principais**:
+
+1. **Escolha da unidade**
+2. **Loop de informações**
+3. **Entrada no agendamento**
+4. **Processo completo de agendamento**
+
+Então precisamos quebrar assim:
+
+```
+INÍCIO  
+→ Escolha da unidade  
+→ Loop de perguntas  
+→ Decisão: agendar?  
+→ (se sim) fluxo de agendamento  
+```
+
+---
+
+# 🔁 **3. Como mapear o LOOP de perguntas no Mermaid**
+
+O loop sempre volta para “GPT Identifica Intenção”.
+
+As intenções possíveis são:
+
+* localização da unidade
+* convênios atendidos
+* procedimentos cobertos por um convênio
+* valores particulares
+* explicação do procedimento (benefícios + pacotes + resumo)
+* perguntas livres (opcional)
+* AGENDAR
+
+Então no Mermaid criamos algo assim:
+
+```mermaid
+GPT --> Localizacao --> GPT
+GPT --> Convenios --> GPT
+GPT --> Valores --> GPT
+GPT --> ProcedimentoInfo --> GPT
+GPT --> Agendar
+```
+
+---
+
+# 🧩 **4. Regras específicas que precisam estar no fluxo**
+
+### **4.1 Escolher unidade**
+
+* paciente escolhe 1 unidade cadastrada
+* essa escolha define:
+
+  * localização a mostrar
+  * convênios disponíveis
+  * procedimentos daquela unidade
+
+### **4.2 Informações dinâmicas**
+
+Sempre puxar do banco:
+
+* para valores particulares → usar “procedimento marcado como particular”
+* ao explicar um procedimento:
+
+  * valor particular
+  * pacotes
+  * resumo + benefícios
+
+### **4.3 O loop só termina se o paciente disser que quer agendar**
+
+Isso precisa estar explícito.
+
+---
+
+# 🧾 **5. Fluxo de Agendamento (detalhado)**
+
+1. Verificar se tem cadastro
+
+   * se não, solicitar:
+
+     * nome completo
+     * data de nascimento
+     * CPF
+     * e-mail
+     * convênio
+   * confirmar cadastro (mostrar tudo de volta)
+2. Pedir procedimento (até **3**)
+3. Pedir data
+4. Pedir turno
+
+   * manhã: 07:30–12:00
+   * tarde: 13:30–17:00
+   * noite: 17:00–19:30
+5. Confirmar pré-agendamento
+6. Enviar para fila “Aguardando”
+
+---
+
+# 🧠 **6. Agora sim: modelo para você usar como “prompt padrão” para gerar Mermaid**
+
+Aqui está o **modelo completo**, pronto para copiar:
+
+---
+
+# ✅ **GUIA + TEMPLATE PARA GERAR O FLUXOGRAMA MERMAID**
+
+```markdown
+Quero gerar um fluxograma Mermaid com o seguinte fluxo:
+
+flowchart TD
+
+1) INÍCIO DO ATENDIMENTO
+- O paciente entra em contato
+- O bot exibe as unidades cadastradas
+- O paciente escolhe uma unidade
+
+2) LOOP DE INFORMAÇÕES (GPT identifica intenção)
+O bot deve voltar para o nó “GPT_Intencao” após cada resposta.
+As intenções possíveis são:
+
+A) Perguntar sobre CONVÊNIOS atendidos
+   - Buscar convênios da unidade escolhida
+   - Retornar convênios
+   - Se perguntar sobre procedimentos do convênio:
+       → retornar apenas procedimentos cobertos
+
+B) Perguntar sobre LOCALIZAÇÃO
+   - Trazer endereço da unidade escolhida
+
+C) Perguntar sobre VALORES
+   - Retornar valor PARTICULAR do procedimento
+   - Buscar procedimentos marcados como “particular”
+   - Se houver pacotes → trazer também
+
+D) Perguntar sobre um PROCEDIMENTO (ex: acupuntura)
+   - Trazer:
+       • O que é
+       • Benefícios
+       • Valores (particular)
+       • Pacotes
+       • Resumo curto
+   - Tudo numa mensagem única
+
+E) Informações gerais
+   - Responder e voltar ao loop
+
+F) AGENDAR
+   - Sai do loop
+
+3) FLUXO DE AGENDAMENTO
+
+3.1 Verificar cadastro
+   - Se tem → continuar
+   - Se não tem:
+       • Pedir Nome
+       • Data de nascimento
+       • CPF
+       • Email
+       • Convênio
+       • Confirmar cadastro mostrando os dados
+       • Após confirmar → seguir para agendamento
+
+3.2 Perguntar PROCEDIMENTOS
+   - Pode escolher até 3
+   - Pode parar antes se desejar
+
+3.3 Perguntar DATA
+   - Mostrar datas disponíveis
+   - Permitir escolher a desejada
+
+3.4 Perguntar TURNO
+   - Manhã: 07:30–12:00
+   - Tarde: 13:30–17:00
+   - Noite: 17:00–19:30
+
+3.5 Confirmar PRÉ-AGENDAMENTO
+   - Mostrar tudo:
+       • Unidade
+       • Convênio
+       • Procedimentos
+       • Data
+       • Turno
+       • Horário
+   - Se confirmar → Fila Aguardando
+
+4) FIM
+
+Com base nessas regras, gere um fluxograma Mermaid completo que:
+- tenha nós nomeados
+- mostre loops
+- mostre decisões
+- destaque claramente a transição para o agendamento
+```
+
+---

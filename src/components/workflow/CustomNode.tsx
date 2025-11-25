@@ -36,7 +36,7 @@ const colorMap: Record<NodeType, string> = {
     API_CALL: 'bg-orange-600'
 }
 
-const CustomNode = ({ data, selected }: NodeProps) => {
+const CustomNode = ({ data, selected }: NodeProps<any>) => {
     const type = data.type as NodeType
     const Icon = iconMap[type] || Settings
     const color = colorMap[type] || 'bg-gray-600'
@@ -46,30 +46,79 @@ const CustomNode = ({ data, selected }: NodeProps) => {
     const outputs = ports.filter(p => p.type === 'output')
 
     const getNodeLabel = (): React.ReactNode => {
-        if (type === 'MESSAGE' || type === 'START') return (data.text as string) || (data.message as string)
-        if (type === 'CONDITION') return (data.condition as string)
-        if (type === 'API_CALL') return (data.endpoint as string)
-        if (type === 'COLLECT_INFO') return ((data.fields as string[]) || []).join(', ')
-        if (type === 'DATA_COLLECTION') return (data.field as string)
+        // Para MESSAGE e START: buscar mensagem em vários campos possíveis
+        if (type === 'MESSAGE' || type === 'START') {
+            const message = (data.text as string) || 
+                          (data.message as string) || 
+                          (data.welcomeMessage as string) ||
+                          (data.content?.message as string) ||
+                          (data.content?.text as string) ||
+                          (data.content?.welcomeMessage as string)
+            if (message) {
+                // Limitar tamanho para exibição no card (primeiras 100 caracteres)
+                const truncated = message.length > 100 ? message.substring(0, 100) + '...' : message
+                return truncated.replace(/\n/g, ' ').trim()
+            }
+            return ''
+        }
+        
+        // Para CONDITION: mostrar a condição
+        if (type === 'CONDITION') {
+            const condition = (data.condition as string) || 
+                            (data.content?.condition as string)
+            if (condition) {
+                // Limitar tamanho para exibição
+                const truncated = condition.length > 80 ? condition.substring(0, 80) + '...' : condition
+                return truncated
+            }
+            return ''
+        }
+        
+        // Para API_CALL: mostrar endpoint
+        if (type === 'API_CALL') {
+            return (data.endpoint as string) || (data.content?.endpoint as string) || ''
+        }
+        
+        // Para COLLECT_INFO: mostrar campos
+        if (type === 'COLLECT_INFO') {
+            const fields = (data.fields as string[]) || (data.content?.fields as string[]) || []
+            return fields.join(', ')
+        }
+        
+        // Para DATA_COLLECTION: mostrar campo
+        if (type === 'DATA_COLLECTION') {
+            return (data.field as string) || (data.content?.field as string) || ''
+        }
+        
+        // Para GPT_RESPONSE: mostrar systemPrompt resumido
+        if (type === 'GPT_RESPONSE') {
+            const prompt = (data.systemPrompt as string) || (data.content?.systemPrompt as string) || ''
+            if (prompt) {
+                const truncated = prompt.length > 80 ? prompt.substring(0, 80) + '...' : prompt
+                return truncated.replace(/\n/g, ' ').trim()
+            }
+            return ''
+        }
+        
         return ''
     }
 
     return (
-        <div className={`min-w-[240px] bg-white rounded-xl shadow-md border-2 transition-all ${selected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300'}`}>
+        <div className={`min-w-[180px] max-w-[280px] bg-white rounded-lg shadow-md border-2 transition-all ${selected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-transparent hover:border-gray-300'}`}>
             {/* Header */}
-            <div className="flex items-center p-3 border-b border-gray-100">
-                <div className={`w-8 h-8 ${color} rounded-lg flex items-center justify-center mr-3 shadow-sm`}>
-                    <Icon className="w-5 h-5 text-white" />
+            <div className="flex items-center p-2 border-b border-gray-100">
+                <div className={`w-7 h-7 ${color} rounded-lg flex items-center justify-center mr-2 shadow-sm`}>
+                    <Icon className="w-4 h-4 text-white" />
                 </div>
-                <div>
-                    <div className="text-sm font-bold text-gray-800">{type.replace('_', ' ')}</div>
-                    <div className="text-[10px] text-gray-500 font-medium uppercase tracking-wider">{type}</div>
+                <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-gray-800 truncate">{type.replace('_', ' ')}</div>
+                    <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider">{type}</div>
                 </div>
             </div>
 
             {/* Body */}
-            <div className="p-3 bg-gray-50 rounded-b-xl">
-                <div className="text-xs text-gray-600 truncate font-medium">
+            <div className="p-2 bg-gray-50 rounded-b-lg">
+                <div className="text-[11px] text-gray-600 font-medium break-words line-clamp-2">
                     {getNodeLabel() || <span className="italic text-gray-400">Sem configuração</span>}
                 </div>
             </div>
@@ -81,28 +130,34 @@ const CustomNode = ({ data, selected }: NodeProps) => {
                     type="target"
                     position={Position.Top}
                     id={port.id}
-                    className="!w-4 !h-4 !bg-white !border-2 !border-gray-400 hover:!border-blue-500 hover:!bg-blue-50 transition-colors"
-                    style={{ top: -8 }}
+                    className="!w-4 !h-4 !bg-blue-500 !border-2 !border-white hover:!border-blue-600 hover:!bg-blue-600 !shadow-md transition-all hover:!scale-125"
+                    style={{ 
+                        top: -8,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                    isConnectable={true}
                 />
             ))}
 
             {/* Output Handles */}
-            <div className="absolute bottom-0 left-0 w-full flex justify-around px-2">
+            <div className="absolute bottom-0 left-0 w-full flex justify-around px-1">
                 {outputs.map((port, index) => (
                     <div key={port.id} className="relative group">
                         <Handle
                             type="source"
                             position={Position.Bottom}
                             id={port.id}
-                            className="!w-4 !h-4 !bg-white !border-2 !border-gray-400 hover:!border-blue-500 hover:!bg-blue-50 transition-colors"
+                            className="!w-4 !h-4 !bg-green-500 !border-2 !border-white hover:!border-green-600 hover:!bg-green-600 !shadow-md transition-all hover:!scale-125"
                             style={{
                                 bottom: -8,
-                                left: outputs.length > 1 ? 'auto' : '50%',
-                                transform: outputs.length > 1 ? 'none' : 'translateX(-50%)'
+                                left: outputs.length > 1 ? `${(index / (outputs.length - 1)) * 100}%` : '50%',
+                                transform: outputs.length > 1 ? 'translateX(-50%)' : 'translateX(-50%)',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
                             }}
+                            isConnectable={true}
                         />
                         {/* Tooltip for port label */}
-                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] bg-gray-800 text-white px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[9px] bg-gray-900 text-white px-2 py-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
                             {port.label}
                         </div>
                     </div>

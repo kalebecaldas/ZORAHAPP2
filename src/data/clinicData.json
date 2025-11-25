@@ -1,0 +1,445 @@
+{
+    "name": "Clínica IAAM",
+    "businessHours": {
+        "weekdays": "07:30 - 19:30",
+        "saturday": "07:30 - 12:00",
+        "sunday": "Fechado"
+    },
+    "insurance": [
+        "BRADESCO",
+        "SULAMÉRICA",
+        "MEDISERVICE",
+        "SAÚDE CAIXA",
+        "PETROBRAS",
+        "GEAP",
+        "PRO SOCIAL",
+        "POSTAL SAÚDE",
+        "CONAB",
+        "AFFEAM",
+        "AMBEP",
+        "GAMA",
+        "LIFE",
+        "NOTREDAME",
+        "OAB",
+        "CAPESAUDE",
+        "CASEMBRAPA",
+        "CULTURAL",
+        "EVIDA",
+        "FOGAS",
+        "FUSEX",
+        "PLAN-ASSITE"
+    ],
+    "discountInsurance": [
+        "ADEPOL",
+        "BEM CARE",
+        "BEMOL",
+        "CLUBSAÚDE",
+        "PRO-SAUDE",
+        "VITA"
+    ],
+    "procedures": [
+        {
+            "id": "fisioterapia_ortopedica",
+            "name": "Fisioterapia Ortopédica",
+            "description": "Tratamento focado em dores musculoesqueléticas, reabilitação pós-cirúrgica e recuperação de movimentos.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": 90,
+                "sao_jose": 45
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 800
+                    }
+                ],
+                "sao_jose": [
+                    {
+                        "sessions": 10,
+                        "price": 200
+                    }
+                ]
+            },
+            "convenios": [
+                "BRADESCO",
+                "SULAMÉRICA",
+                "MEDISERVICE",
+                "SAÚDE CAIXA",
+                "PETROBRAS",
+                "GEAP",
+                "PRO SOCIAL",
+                "POSTAL SAÚDE",
+                "CONAB",
+                "AFFEAM",
+                "AMBEP",
+                "GAMA",
+                "LIFE",
+                "NOTREDAME",
+                "OAB",
+                "CASEMBRAPA",
+                "CULTURAL",
+                "EVIDA",
+                "FOGAS",
+                "FUSEX",
+                "PLAN-ASSITE"
+            ]
+        },
+        {
+            "id": "fisioterapia_neurologica",
+            "name": "Fisioterapia Neurológica",
+            "description": "Reabilitação funcional para pacientes com limitações motoras decorrentes de AVC, neuropatias e doenças neurológicas.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": 100,
+                "sao_jose": 60
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 900
+                    }
+                ],
+                "sao_jose": [
+                    {
+                        "sessions": 10,
+                        "price": 500
+                    }
+                ]
+            },
+            "convenios": [
+                "BRADESCO",
+                "SULAMÉRICA",
+                "MEDISERVICE",
+                "SAÚDE CAIXA",
+                "PETROBRAS",
+                "GEAP",
+                "PRO SOCIAL",
+                "POSTAL SAÚDE",
+                "CONAB",
+                "AFFEAM",
+                "AMBEP",
+                "GAMA",
+                "LIFE",
+                "NOTREDAME",
+                "OAB",
+                "CASEMBRAPA",
+                "CULTURAL",
+                "EVIDA",
+                "FOGAS",
+                "FUSEX",
+                "PLAN-ASSITE"
+            ]
+        },
+        {
+            "id": "fisioterapia_respiratoria",
+            "name": "Fisioterapia Respiratória",
+            "description": "Atuação para melhorar a capacidade pulmonar, expansão torácica e facilitar a respiração.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": 100,
+                "sao_jose": 60
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 900
+                    }
+                ],
+                "sao_jose": [
+                    {
+                        "sessions": 10,
+                        "price": 500
+                    }
+                ]
+            },
+            "convenios": [
+                "PRO SOCIAL",
+                "CONAB",
+                "AFFEAM",
+                "AMBEP",
+                "GAMA",
+                "LIFE",
+                "OAB",
+                "CASEMBRAPA",
+                "CULTURAL",
+                "EVIDA",
+                "FOGAS"
+            ]
+        },
+        {
+            "id": "acupuntura",
+            "name": "Acupuntura",
+            "description": "Técnica terapêutica com agulhas que promove alívio de dores, equilíbrio corporal e relaxamento.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": 180,
+                "sao_jose": 60
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 1600
+                    }
+                ],
+                "sao_jose": [
+                    {
+                        "sessions": 10,
+                        "price": 400
+                    }
+                ]
+            },
+            "convenios": [
+                "BRADESCO",
+                "SULAMÉRICA",
+                "MEDISERVICE",
+                "SAÚDE CAIXA",
+                "PRO SOCIAL",
+                "POSTAL SAÚDE",
+                "CONAB",
+                "AFFEAM",
+                "AMBEP",
+                "GAMA",
+                "LIFE",
+                "NOTREDAME",
+                "OAB",
+                "CAPESAUDE",
+                "CULTURAL",
+                "EVIDA",
+                "FOGAS",
+                "FUSEX",
+                "PLAN-ASSITE"
+            ]
+        },
+        {
+            "id": "fisioterapia_pelvica",
+            "name": "Fisioterapia Pélvica",
+            "description": "Tratamento especializado para fortalecimento do assoalho pélvico, dor pélvica, incontinência e funções urinárias e sexuais.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves"
+            ],
+            "prices": {
+                "vieiralves": 220,
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 2000
+                    }
+                ],
+                "sao_jose": []
+            },
+            "convenios": [
+                "BRADESCO",
+                "SULAMÉRICA",
+                "MEDISERVICE",
+                "SAÚDE CAIXA",
+                "PRO SOCIAL",
+                "POSTAL SAÚDE",
+                "CONAB",
+                "AFFEAM",
+                "AMBEP",
+                "GAMA",
+                "LIFE",
+                "NOTREDAME",
+                "OAB",
+                "CASEMBRAPA",
+                "CULTURAL",
+                "FUSEX",
+                "PLAN-ASSITE"
+            ]
+        },
+        {
+            "id": "rpg",
+            "name": "RPG",
+            "description": "Método de reequilíbrio postural que atua em cadeias musculares para reduzir dores e melhorar alinhamento corporal.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": 120,
+                "sao_jose": 50
+            },
+            "packages": {
+                "vieiralves": [
+                    {
+                        "sessions": 10,
+                        "price": 1000
+                    }
+                ],
+                "sao_jose": [
+                    {
+                        "sessions": 10,
+                        "price": 350
+                    }
+                ]
+            },
+            "convenios": [
+                "BRADESCO",
+                "MEDISERVICE",
+                "PETROBRAS",
+                "PRO SOCIAL",
+                "POSTAL SAÚDE",
+                "CONAB",
+                "AMBEP",
+                "LIFE",
+                "NOTREDAME",
+                "OAB",
+                "CASEMBRAPA",
+                "CULTURAL",
+                "EVIDA",
+                "FOGAS",
+                "FUSEX",
+                "PLAN-ASSITE"
+            ]
+        },
+        {
+            "id": "pilates",
+            "name": "Pilates",
+            "description": "Prática que combina força, flexibilidade e controle muscular, ideal para postura e prevenção de lesões.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves"
+            ],
+            "prices": {
+                "vieiralves": {
+                    "twiceWeek": 39,
+                    "threeWeek": 56,
+                    "singleSession": 70
+                },
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [],
+                "sao_jose": []
+            },
+            "convenios": []
+        },
+        {
+            "id": "quiropraxia",
+            "name": "Quiropraxia",
+            "description": "Ajustes articulares e manipulações manuais para alívio de dores na coluna e restauração da mobilidade.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves"
+            ],
+            "prices": {
+                "vieiralves": 120,
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [],
+                "sao_jose": []
+            },
+            "convenios": [
+                "FUSEX"
+            ]
+        },
+        {
+            "id": "infiltracao",
+            "name": "Infiltração / Agulhamento Seco",
+            "description": "Procedimento para tratar pontos gatilho e dores musculares profundas.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": null,
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [],
+                "sao_jose": []
+            },
+            "convenios": [
+                "BRADESCO",
+                "MEDISERVICE",
+                "PRO SOCIAL",
+                "CONAB",
+                "FUSEX"
+            ]
+        },
+        {
+            "id": "ondas_choque",
+            "name": "Terapia por Ondas de Choque",
+            "description": "Tratamento para tendinites, dores crônicas e processos inflamatórios persistentes.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": null,
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [],
+                "sao_jose": []
+            },
+            "convenios": [
+                "SAÚDE CAIXA"
+            ]
+        },
+        {
+            "id": "tens",
+            "name": "Estimulação Elétrica (TENS)",
+            "description": "Aplicação de corrente elétrica para alívio da dor e relaxamento muscular.",
+            "duration": 30,
+            "availableUnits": [
+                "vieiralves",
+                "sao_jose"
+            ],
+            "prices": {
+                "vieiralves": null,
+                "sao_jose": null
+            },
+            "packages": {
+                "vieiralves": [],
+                "sao_jose": []
+            },
+            "convenios": [
+                "SULAMÉRICA",
+                "CONAB"
+            ]
+        }
+    ],
+    "units": [
+        {
+            "id": "vieiralves",
+            "name": "Unidade Vieiralves",
+            "mapsUrl": "https://maps.app.goo.gl/3FkWaZd1V3MB9TLP9",
+            "phone": "(92) 3584-2864"
+        },
+        {
+            "id": "sao_jose",
+            "name": "Unidade São José",
+            "mapsUrl": "https://maps.app.goo.gl/CdN3PYDkjkoQXzfRA",
+            "phone": "(92) 3234-5679"
+        }
+    ]
+}

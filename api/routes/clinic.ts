@@ -953,4 +953,309 @@ router.get('/clinics/:code/procedures/:procedureCode/price', readAuth, async (re
   }
 })
 
+// Sync database from infor_clinic.txt file
+router.post('/sync-from-txt', authMiddleware, requireRole('ADMIN'), async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const fs = await import('fs')
+    const path = await import('path')
+    
+    // Try multiple possible paths for the file
+    const possiblePaths = [
+      path.join(process.cwd(), 'src', 'infor_clinic.txt'),
+      path.join(process.cwd(), '..', 'src', 'infor_clinic.txt'),
+      path.join(__dirname, '..', '..', 'src', 'infor_clinic.txt'),
+    ]
+    
+    let filePath: string | null = null
+    for (const p of possiblePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          filePath = p
+          break
+        }
+      } catch {}
+    }
+    
+    if (!filePath) {
+      res.status(404).json({ 
+        success: false, 
+        error: 'Arquivo infor_clinic.txt não encontrado',
+        triedPaths: possiblePaths
+      })
+      return
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf-8')
+    
+    // Mapeamentos
+    const PROCEDURE_NAME_MAP: Record<string, string> = {
+      'Acupuntura': 'acupuntura',
+      'Consulta com Ortopedista': 'consulta-ortopedista',
+      'Consulta Ortopédica': 'consulta-ortopedista',
+      'Fisioterapia Neurológica': 'fisioterapia-neurologica',
+      'Fisioterapia Ortopédica': 'fisioterapia-ortopedica',
+      'Fisioterapia Pélvica': 'fisioterapia-pelvica',
+      'Fisioterapia Respiratória': 'fisioterapia-respiratoria',
+      'Infiltração de ponto gatilho e Agulhamento a seco': 'infiltracao-ponto-gatilho',
+      'Infiltração de ponto gatilho': 'infiltracao-ponto-gatilho',
+      'Agulhamento a Seco': 'agulhamento-seco',
+      'RPG': 'rpg',
+      'Quiropraxia': 'quiropraxia',
+      'Pilates': 'pilates-solo',
+      'Estimulação Elétrica Transcutânea': 'tens',
+      'Estimulação Elétrica Transcutânea (TENS)': 'tens',
+      'Terapias por Ondas de Choque': 'ondas-de-choque',
+    }
+    
+    const INSURANCE_NAME_MAP: Record<string, string> = {
+      'BRADESCO': 'bradesco',
+      'SULAMÉRICA': 'sulamerica',
+      'MEDISERVICE': 'mediservice',
+      'SAÚDE CAIXA': 'saude-caixa',
+      'PETROBRAS': 'petrobras',
+      'GEAP': 'geap',
+      'PRO SOCIAL': 'pro-social',
+      'POSTAL SAÚDE': 'postal-saude',
+      'CONAB': 'conab',
+      'AFFEAM': 'affeam',
+      'AMBEP': 'ambep',
+      'GAMA': 'gama',
+      'LIFE': 'life',
+      'NOTREDAME': 'notredame',
+      'OAB': 'oab',
+      'CAPESAUDE': 'capesaude',
+      'CASEMBRAPA': 'casembrapa',
+      'CULTURAL': 'cultural',
+      'EVIDA': 'evida',
+      'FOGAS': 'fogas',
+      'FUSEX': 'fusex',
+      'PLAN-ASSITE': 'plan-assite',
+    }
+    
+    interface InsuranceBlock {
+      insuranceName: string
+      clinicName: string
+      procedures: string[]
+    }
+    
+    function parseClinicSection(section: string, clinicName: string): InsuranceBlock[] {
+      const blocks: InsuranceBlock[] = []
+      const insuranceRegex = /## \*\*([A-Z\s\-]+) — (Vieiralves|São José)\*\*\s*\n([\s\S]*?)(?=---|##|$)/g
+      
+      let match
+      while ((match = insuranceRegex.exec(section)) !== null) {
+        const insuranceName = match[1].trim()
+        const proceduresText = match[3]
+        const procedures = proceduresText
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.startsWith('*'))
+          .map(line => line.replace(/^\*\s*/, '').trim())
+          .filter(Boolean)
+        
+        blocks.push({ insuranceName, clinicName, procedures })
+      }
+      return blocks
+    }
+    
+    // Parse file
+    const vieiralvesSection = content.match(/## 🟦 \*\*UNIDADE VIEIRALVES\*\*(.*?)(?=## 🟦 \*\*UNIDADE SÃO JOSÉ|$)/s)?.[1] || ''
+    const saoJoseSection = content.match(/## 🟦 \*\*UNIDADE SÃO JOSÉ\*\*(.*?)(?=# 📍|$)/s)?.[1] || ''
+    
+    const blocks: InsuranceBlock[] = [
+      ...parseClinicSection(vieiralvesSection, 'Vieiralves'),
+      ...parseClinicSection(saoJoseSection, 'São José')
+    ]
+    
+    // Ensure clinics exist
+    const clinics = [
+      {
+        code: 'vieiralves',
+        name: 'Clínica Vieiralves',
+        displayName: 'Unidade Vieiralves',
+        address: 'Rua Rio Içá, 850',
+        neighborhood: 'Nossa Sra. das Graças',
+        city: 'Manaus',
+        state: 'AM',
+        zipCode: '69053-100',
+        phone: '(92) 3234-5678',
+        email: 'vieiralves@clinicafisioterapia.com.br',
+        openingHours: {
+          'Segunda': '08:00 - 18:00',
+          'Terça': '08:00 - 18:00',
+          'Quarta': '08:00 - 18:00',
+          'Quinta': '08:00 - 18:00',
+          'Sexta': '08:00 - 18:00',
+          'Sábado': '08:00 - 12:00',
+          'Domingo': 'Fechado'
+        },
+        specialties: ['Fisioterapia Ortopédica', 'Fisioterapia Pélvica', 'Acupuntura', 'Pilates'],
+        parkingAvailable: true,
+        accessibility: ['Acesso para cadeirantes', 'Elevador', 'Banheiro adaptado'],
+        isActive: true
+      },
+      {
+        code: 'sao-jose',
+        name: 'Clínica São José',
+        displayName: 'Unidade São José',
+        address: 'Av. Autaz Mirim, 5773',
+        neighborhood: 'São José Operário',
+        city: 'Manaus',
+        state: 'AM',
+        zipCode: '69085-000',
+        phone: '(92) 3234-5679',
+        email: 'saojose@clinicafisioterapia.com.br',
+        openingHours: {
+          'Segunda': '07:00 - 19:00',
+          'Terça': '07:00 - 19:00',
+          'Quarta': '07:00 - 19:00',
+          'Quinta': '07:00 - 19:00',
+          'Sexta': '07:00 - 19:00',
+          'Sábado': '08:00 - 14:00',
+          'Domingo': 'Fechado'
+        },
+        specialties: ['Fisioterapia Ortopédica', 'RPG', 'Pilates', 'Acupuntura'],
+        parkingAvailable: false,
+        accessibility: ['Acesso para cadeirantes', 'Rampa de acesso'],
+        isActive: true
+      }
+    ]
+    
+    let stats = { clinics: 0, procedures: 0, insurances: 0, links: 0, coverage: 0 }
+    
+    for (const clinicData of clinics) {
+      const existing = await prismaAny.clinic.findUnique({ where: { code: clinicData.code } })
+      if (existing) {
+        await prismaAny.clinic.update({ where: { code: clinicData.code }, data: clinicData })
+      } else {
+        await prismaAny.clinic.create({ data: clinicData })
+        stats.clinics++
+      }
+    }
+    
+    // Ensure procedures exist
+    const procedures = [
+      { code: 'acupuntura', name: 'Acupuntura', description: 'Tratamento com acupuntura', basePrice: 180, duration: 45, requiresEvaluation: true, categories: ['acupuntura'] },
+      { code: 'consulta-ortopedista', name: 'Consulta com Ortopedista', description: 'Consulta médica ortopédica', basePrice: 400, duration: 30, requiresEvaluation: false, categories: ['consulta'] },
+      { code: 'fisioterapia-neurologica', name: 'Fisioterapia Neurológica', description: 'Tratamento neurológico', basePrice: 100, duration: 60, requiresEvaluation: true, categories: ['fisioterapia'] },
+      { code: 'fisioterapia-ortopedica', name: 'Fisioterapia Ortopédica', description: 'Tratamento ortopédico', basePrice: 90, duration: 60, requiresEvaluation: true, categories: ['fisioterapia'] },
+      { code: 'fisioterapia-pelvica', name: 'Fisioterapia Pélvica', description: 'Tratamento pélvico', basePrice: 220, duration: 60, requiresEvaluation: true, categories: ['fisioterapia'] },
+      { code: 'fisioterapia-respiratoria', name: 'Fisioterapia Respiratória', description: 'Tratamento respiratório', basePrice: 100, duration: 60, requiresEvaluation: true, categories: ['fisioterapia'] },
+      { code: 'infiltracao-ponto-gatilho', name: 'Infiltração de Ponto Gatilho', description: 'Infiltração de ponto gatilho', basePrice: 0, duration: 30, requiresEvaluation: true, categories: ['terapia-complementar'] },
+      { code: 'agulhamento-seco', name: 'Agulhamento a Seco', description: 'Agulhamento a seco', basePrice: 0, duration: 30, requiresEvaluation: true, categories: ['terapia-complementar'] },
+      { code: 'rpg', name: 'RPG', description: 'Reeducação Postural Global', basePrice: 120, duration: 60, requiresEvaluation: true, categories: ['postura'] },
+      { code: 'quiropraxia', name: 'Quiropraxia', description: 'Técnicas de ajuste articular', basePrice: 120, duration: 45, requiresEvaluation: false, categories: ['terapia-complementar'] },
+      { code: 'tens', name: 'Estimulação Elétrica Transcutânea (TENS)', description: 'Terapia com estimulação transcutânea', basePrice: 80, duration: 20, requiresEvaluation: false, categories: ['terapia-complementar'] },
+      { code: 'ondas-de-choque', name: 'Terapias por Ondas de Choque', description: 'Terapia por ondas', basePrice: 0, duration: 30, requiresEvaluation: true, categories: ['terapia-complementar'] },
+    ]
+    
+    for (const proc of procedures) {
+      const existing = await prismaAny.procedure.findUnique({ where: { code: proc.code } })
+      if (existing) {
+        await prismaAny.procedure.update({ where: { code: proc.code }, data: proc })
+      } else {
+        await prismaAny.procedure.create({ data: proc })
+        stats.procedures++
+      }
+    }
+    
+    // Sync insurance procedures
+    for (const block of blocks) {
+      const insuranceCode = INSURANCE_NAME_MAP[block.insuranceName.toUpperCase()] || block.insuranceName.toLowerCase().replace(/\s+/g, '-')
+      const clinicCode = block.clinicName === 'Vieiralves' ? 'vieiralves' : 'sao-jose'
+      
+      const clinic = await prismaAny.clinic.findUnique({ where: { code: clinicCode } })
+      if (!clinic) continue
+      
+      const insurance = await prismaAny.insuranceCompany.findUnique({ where: { code: insuranceCode } })
+      if (!insurance) {
+        // Create insurance if doesn't exist
+        await prismaAny.insuranceCompany.create({
+          data: {
+            code: insuranceCode,
+            name: block.insuranceName,
+            displayName: block.insuranceName,
+            isActive: true
+          }
+        })
+        stats.insurances++
+      }
+      
+      // Link insurance to clinic
+      const clinicInsurance = await prismaAny.clinicInsurance.findFirst({
+        where: { clinicId: clinic.id, insuranceCode }
+      })
+      if (!clinicInsurance) {
+        await prismaAny.clinicInsurance.create({
+          data: { clinicId: clinic.id, insuranceCode, isActive: true }
+        })
+        stats.links++
+      }
+      
+      // Process procedures
+      const procedureCodes: string[] = []
+      for (const procName of block.procedures) {
+        const procCode = PROCEDURE_NAME_MAP[procName] || procName.toLowerCase().replace(/\s+/g, '-')
+        const procedure = await prismaAny.procedure.findUnique({ where: { code: procCode } })
+        if (!procedure) continue
+        
+        procedureCodes.push(procCode)
+        
+        const existing = await prismaAny.clinicInsuranceProcedure.findFirst({
+          where: { clinicId: clinic.id, insuranceCode, procedureCode: procedure.code }
+        })
+        
+        if (existing) {
+          if (!existing.isActive) {
+            await prismaAny.clinicInsuranceProcedure.update({
+              where: { id: existing.id },
+              data: { isActive: true }
+            })
+            stats.coverage++
+          }
+        } else {
+          await prismaAny.clinicInsuranceProcedure.create({
+            data: {
+              clinicId: clinic.id,
+              insuranceCode,
+              procedureCode: procedure.code,
+              price: procedure.basePrice || 0,
+              isActive: true
+            }
+          })
+          stats.coverage++
+        }
+      }
+      
+      // Deactivate procedures not in list
+      const allCIPs = await prismaAny.clinicInsuranceProcedure.findMany({
+        where: { clinicId: clinic.id, insuranceCode, isActive: true }
+      })
+      
+      for (const cip of allCIPs) {
+        if (!procedureCodes.includes(cip.procedureCode)) {
+          await prismaAny.clinicInsuranceProcedure.update({
+            where: { id: cip.id },
+            data: { isActive: false }
+          })
+        }
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      message: 'Sincronização concluída com sucesso',
+      stats,
+      filePath
+    })
+  } catch (error: any) {
+    console.error('Sync error:', error)
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro ao sincronizar dados',
+      details: String(error?.message || error)
+    })
+  }
+})
+
 export default router

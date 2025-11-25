@@ -12,3 +12,87 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Fix para garantir que edges do ReactFlow sejam renderizadas */
+.react-flow__edge {
+  pointer-events: visibleStroke !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+.react-flow__edge-path {
+  stroke-width: 3 !important;
+  stroke: #64748b !important;
+  fill: none !important;
+  pointer-events: stroke !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: #3b82f6 !important;
+  stroke-width: 4 !important;
+}
+
+.react-flow__edge-text {
+  font-size: 10px;
+  fill: #64748b;
+}
+
+.react-flow__edge.selected .react-flow__edge-text {
+  fill: #3b82f6;
+}
+
+/* Garantir que handles sejam visíveis e clicáveis */
+.react-flow__handle {
+  width: 12px !important;
+  height: 12px !important;
+  border: 2px solid white !important;
+  background: #10b981 !important;
+  border-radius: 50% !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 10 !important;
+}
+
+.react-flow__handle-top {
+  top: -6px !important;
+  background: #3b82f6 !important;
+}
+
+.react-flow__handle-bottom {
+  bottom: -6px !important;
+  background: #10b981 !important;
+}
+
+.react-flow__handle:hover {
+  width: 16px !important;
+  height: 16px !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Garantir que o viewport não corte as edges */
+.react-flow__viewport {
+  overflow: visible !important;
+}
+
+.react-flow__renderer {
+  overflow: visible !important;
+}
+
+/* Garantir que nodes não cubram as edges */
+.react-flow__node {
+  z-index: 1 !important;
+}
+
+.react-flow__node.selected {
+  z-index: 2 !important;
+}
+
+/* Garantir que edges fiquem acima do background mas abaixo dos nodes */
+.react-flow__edges {
+  z-index: 0 !important;
+}
+
+.react-flow__edge {
+  z-index: 0 !important;
+}

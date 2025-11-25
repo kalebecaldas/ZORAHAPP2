@@ -316,12 +316,28 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">R$ {procedure.price.toFixed(2)}</p>
-                      {procedure.requiresPreparation && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
-                          Requer preparação
-                        </span>
-                      )}
+                      {(() => {
+                        const clinicCode = selectedLocation || 'vieiralves';
+                        const normalizedClinic = clinicCode.replace(/-/g, '_');
+                        const price = procedure.prices?.[normalizedClinic];
+                        if (price !== null && price !== undefined) {
+                          if (typeof price === 'object' && price !== null) {
+                            const prices = price as any;
+                            return (
+                              <div>
+                                {prices.singleSession && (
+                                  <p className="font-semibold text-gray-900">R$ {prices.singleSession.toFixed(2)}</p>
+                                )}
+                                {prices.twiceWeek && (
+                                  <p className="text-xs text-gray-600">2x/sem: R$ {prices.twiceWeek.toFixed(2)}</p>
+                                )}
+                              </div>
+                            );
+                          }
+                          return <p className="font-semibold text-gray-900">R$ {Number(price).toFixed(2)}</p>;
+                        }
+                        return <p className="text-sm text-gray-600">Consultar</p>;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -343,7 +359,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
             </div>
 
             <div className="grid gap-4">
-              {clinicData.locations.map((location) => (
+              {clinicData.units.map((location) => (
                 <div
                   key={location.id}
                   onClick={() => setSelectedLocation(location.id)}
@@ -357,7 +373,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                     <MapPin className="w-5 h-5 text-gray-400 mr-3 mt-1" />
                     <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{location.name}</h4>
-                      <p className="text-sm text-gray-600 mt-1">{location.address}</p>
+                      <p className="text-sm text-gray-600 mt-1">{location.mapsUrl ? 'Ver no Maps' : 'Endereço não disponível'}</p>
                       <div className="mt-2 text-sm text-gray-500">
                         <p>Telefone: {location.phone}</p>
                         <p>Horário: Seg-Sex 8h-18h, Sáb 8h-12h</p>
@@ -472,12 +488,12 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                 </div>
               </button>
 
-              {clinicData.insuranceCompanies.map((insurance) => (
+              {[...clinicData.insurance, ...clinicData.discountInsurance].map((insurance) => (
                 <button
-                  key={insurance.id}
-                  onClick={() => setSelectedInsurance(insurance.id)}
+                  key={insurance}
+                  onClick={() => setSelectedInsurance(insurance)}
                   className={`w-full p-4 border rounded-lg text-left transition-colors ${
-                    selectedInsurance === insurance.id
+                    selectedInsurance === insurance
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
@@ -486,11 +502,13 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                     <div className="flex items-center">
                       <CreditCard className="w-5 h-5 text-gray-400 mr-3" />
                       <div>
-                        <p className="font-medium text-gray-900">{insurance.name}</p>
-                        <p className="text-sm text-gray-600">{insurance.description}</p>
+                        <p className="font-medium text-gray-900">{insurance}</p>
+                        {clinicData.discountInsurance.includes(insurance) && (
+                          <p className="text-sm text-gray-600">Convênio com desconto</p>
+                        )}
                       </div>
                     </div>
-                    {selectedInsurance === insurance.id && (
+                    {selectedInsurance === insurance && (
                       <CheckCircle className="w-5 h-5 text-blue-600" />
                     )}
                   </div>
@@ -516,8 +534,8 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
 
       case 5: // Confirmation
         const selectedProcedureData = clinicData.procedures.find(p => p.id === selectedProcedure);
-        const selectedLocationData = clinicData.locations.find(l => l.id === selectedLocation);
-        const selectedInsuranceData = clinicData.insuranceCompanies.find(i => i.id === selectedInsurance);
+        const selectedLocationData = clinicData.units.find(l => l.id === selectedLocation);
+        const selectedInsuranceName = selectedInsurance || 'Particular';
 
         return (
           <motion.div
@@ -551,7 +569,7 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                 <MapPin className="w-5 h-5 text-gray-400 mr-3" />
                 <div>
                   <p className="font-medium text-gray-900">{selectedLocationData?.name}</p>
-                  <p className="text-sm text-gray-600">{selectedLocationData?.address}</p>
+                  <p className="text-sm text-gray-600">{selectedLocationData?.mapsUrl ? 'Ver no Maps' : 'Endereço não disponível'}</p>
                 </div>
               </div>
 
@@ -569,13 +587,29 @@ export const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                 <CreditCard className="w-5 h-5 text-gray-400 mr-3" />
                 <div>
                   <p className="font-medium text-gray-900">
-                    {selectedInsuranceData ? selectedInsuranceData.name : 'Particular'}
+                    {selectedInsuranceName}
                   </p>
-                  {selectedProcedureData && (
-                    <p className="text-sm text-gray-600">
-                      Valor: R$ {selectedProcedureData.price.toFixed(2)}
-                    </p>
-                  )}
+                  {selectedProcedureData && (() => {
+                    const clinicCode = selectedLocation || 'vieiralves';
+                    const normalizedClinic = clinicCode.replace(/-/g, '_');
+                    const price = selectedProcedureData.prices?.[normalizedClinic];
+                    if (price !== null && price !== undefined) {
+                      if (typeof price === 'object' && price !== null) {
+                        const prices = price as any;
+                        return prices.singleSession ? (
+                          <p className="text-sm text-gray-600">
+                            Valor: R$ {prices.singleSession.toFixed(2)}
+                          </p>
+                        ) : null;
+                      }
+                      return (
+                        <p className="text-sm text-gray-600">
+                          Valor: R$ {Number(price).toFixed(2)}
+                        </p>
+                      );
+                    }
+                    return <p className="text-sm text-gray-600">Valor: Consultar</p>;
+                  })()}
                 </div>
               </div>
 

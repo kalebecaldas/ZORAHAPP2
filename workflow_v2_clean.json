@@ -1,0 +1,338 @@
+{
+  "name": "Sistema Completo v2 - Refatorado",
+  "description": "Workflow limpo e otimizado com arquitetura modular",
+  "isActive": true,
+  "nodes": [
+    {
+      "id": "start",
+      "type": "START",
+      "position": { "x": 100, "y": 50 },
+      "data": {
+        "message": "Olá! Bem-vindo às nossas clínicas! 🏥\n\nTemos duas unidades:\n1️⃣ Unidade Vieiralves 📍 Rua Rio Içá, 850\n2️⃣ Unidade São José 📍 Av. Autaz Mirim, 5773\n\nEm qual você gostaria de ser atendido(a)? Responda com 1 ou 2."
+      }
+    },
+    {
+      "id": "clinic_selection",
+      "type": "CONDITION",
+      "position": { "x": 100, "y": 180 },
+      "data": {
+        "condition": "clinic_selection",
+        "trueMessage": "",
+        "falseMessage": "Por favor, escolha uma de nossas unidades (1 ou 2)."
+      }
+    },
+    {
+      "id": "unidade_vieiralves",
+      "type": "MESSAGE",
+      "position": { "x": -100, "y": 310 },
+      "data": {
+        "message": "✅ Você escolheu a Unidade Vieiralves!\n\n🏥 **Unidade Vieiralves**\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n💰 Saber sobre valores\n🏥 Ver convênios\n📍 Localização\n📝 Procedimentos\n📅 Agendar consulta"
+      }
+    },
+    {
+      "id": "unidade_sao_jose",
+      "type": "MESSAGE",
+      "position": { "x": 300, "y": 310 },
+      "data": {
+        "message": "✅ Você escolheu a Unidade São José!\n\n🏥 **Unidade São José**\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n💰 Saber sobre valores\n🏥 Ver convênios\n📍 Localização\n📝 Procedimentos\n📅 Agendar consulta"
+      }
+    },
+    {
+      "id": "gpt_classifier",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 100, "y": 440 },
+      "data": {
+        "systemPrompt": "Você é um classificador de intenção para clínica de fisioterapia. Analise a mensagem do usuário e classifique em UMA das opções:\n\n1) VALORES - perguntas sobre preços, valores particulares, pacotes\n2) CONVÊNIOS - perguntas sobre convênios aceitos, planos de saúde, cobertura\n3) LOCALIZAÇÃO - perguntas sobre endereço, como chegar, horários, contato\n4) PROCEDIMENTO - perguntas sobre o que é um procedimento, benefícios, duração, indicações\n5) AGENDAR - desejo de marcar consulta, agendar, marcar horário (ex: \"quero agendar\", \"quero gendar\", \"marcar consulta\")\n6) ATENDENTE - pedido para falar com humano, atendente, pessoa\n\nIMPORTANTE: \"quero agendar\", \"quero gendar\" (com erro de digitação), \"marcar\", \"agendar consulta\" = SEMPRE porta 5 (AGENDAR).\n\nResponda APENAS com JSON no formato {\"intent_port\":\"<1|2|3|4|5|6>\",\"brief\":\"<mensagem curta>\",\"confidence\":<0..1>}."
+      }
+    },
+    {
+      "id": "info_valores",
+      "type": "API_CALL",
+      "position": { "x": -300, "y": 600 },
+      "data": {
+        "endpoint": "get_clinic_procedures",
+        "message": "Consultando valores..."
+      }
+    },
+    {
+      "id": "info_convenios",
+      "type": "API_CALL",
+      "position": { "x": -100, "y": 600 },
+      "data": {
+        "endpoint": "get_clinic_insurances",
+        "message": "Consultando convênios..."
+      }
+    },
+    {
+      "id": "info_localizacao",
+      "type": "API_CALL",
+      "position": { "x": 100, "y": 600 },
+      "data": {
+        "endpoint": "get_clinic_location",
+        "message": "Consultando localização..."
+      }
+    },
+    {
+      "id": "check_patient",
+      "type": "ACTION",
+      "position": { "x": 500, "y": 600 },
+      "data": {
+        "action": "search_patient_by_phone"
+      }
+    },
+    {
+      "id": "patient_decision",
+      "type": "CONDITION",
+      "position": { "x": 500, "y": 730 },
+      "data": {
+        "condition": "patient_found"
+      }
+    },
+    {
+      "id": "msg_paciente_encontrado",
+      "type": "MESSAGE",
+      "position": { "x": 350, "y": 860 },
+      "data": {
+        "message": "✅ Encontrei seu cadastro!\n\nVamos prosseguir com seu agendamento."
+      }
+    },
+    {
+      "id": "msg_solicita_cadastro",
+      "type": "MESSAGE",
+      "position": { "x": 650, "y": 860 },
+      "data": {
+        "message": "📋 Para agendar, preciso coletar alguns dados.\n\nVamos começar?"
+      }
+    },
+    {
+      "id": "collect_nome",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 650, "y": 990 },
+      "data": {
+        "field": "name",
+        "prompt": "📝 Qual é seu nome completo?",
+        "errorMessage": "❌ Nome inválido. Informe seu nome completo (nome e sobrenome)."
+      }
+    },
+    {
+      "id": "collect_cpf",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 650, "y": 1120 },
+      "data": {
+        "field": "cpf",
+        "prompt": "📄 Agora, seu CPF (apenas números):",
+        "errorMessage": "❌ CPF inválido. Informe um CPF válido com 11 dígitos."
+      }
+    },
+    {
+      "id": "collect_nascimento",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 650, "y": 1250 },
+      "data": {
+        "field": "birth_date",
+        "prompt": "🎂 Data de nascimento (DD/MM/AAAA):",
+        "errorMessage": "❌ Data inválida. Use o formato DD/MM/AAAA (ex: 15/08/1990)."
+      }
+    },
+    {
+      "id": "collect_email",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 650, "y": 1380 },
+      "data": {
+        "field": "email",
+        "prompt": "📧 Seu e-mail:",
+        "errorMessage": "❌ E-mail inválido. Informe um e-mail válido (ex: seu@email.com)."
+      }
+    },
+    {
+      "id": "collect_convenio",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 650, "y": 1510 },
+      "data": {
+        "field": "insurance",
+        "prompt": "💳 Qual seu convênio?\n(ou digite 'particular' se for pagar particular)",
+        "errorMessage": "❌ Convênio inválido. Digite o nome do convênio ou 'particular'."
+      }
+    },
+    {
+      "id": "confirma_cadastro",
+      "type": "MESSAGE",
+      "position": { "x": 650, "y": 1640 },
+      "data": {
+        "message": "📋 **Confirme seus dados:**\n\n👤 Nome: ${paciente.nome}\n📄 CPF: ${paciente.cpf}\n🎂 Nascimento: ${paciente.nascimento}\n📧 E-mail: ${paciente.email}\n💳 Convênio: ${paciente.convenio}\n📱 Telefone: ${paciente.telefone}\n\n✅ Está tudo correto?\n(responda 'sim' para confirmar ou 'não' para corrigir)"
+      }
+    },
+    {
+      "id": "validate_cadastro",
+      "type": "CONDITION",
+      "position": { "x": 650, "y": 1770 },
+      "data": {
+        "condition": "sim|confirmar|ok|correto|yes|está certo|tudo certo",
+        "trueMessage": "",
+        "falseMessage": "📝 Para corrigir, vamos recomeçar o cadastro."
+      }
+    },
+    {
+      "id": "create_patient",
+      "type": "ACTION",
+      "position": { "x": 550, "y": 1900 },
+      "data": {
+        "action": "create_patient_profile"
+      }
+    },
+    {
+      "id": "msg_cadastro_sucesso",
+      "type": "MESSAGE",
+      "position": { "x": 550, "y": 2030 },
+      "data": {
+        "message": "✅ Cadastro realizado com sucesso!\n\nAgora vamos prosseguir com seu agendamento."
+      }
+    },
+    {
+      "id": "ask_procedimentos",
+      "type": "MESSAGE",
+      "position": { "x": 450, "y": 2160 },
+      "data": {
+        "message": "🩺 **Procedimentos Disponíveis:**\n\n${procedimentos_disponiveis}\n\nQual procedimento você deseja agendar?"
+      }
+    },
+    {
+      "id": "collect_proc_1",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 450, "y": 2290 },
+      "data": {
+        "field": "procedure_1",
+        "prompt": "Digite o nome do procedimento:",
+        "errorMessage": "❌ Procedimento inválido. Digite o nome do procedimento desejado."
+      }
+    },
+    {
+      "id": "generate_dates",
+      "type": "ACTION",
+      "position": { "x": 450, "y": 2420 },
+      "data": {
+        "action": "generate_available_dates"
+      }
+    },
+    {
+      "id": "show_dates",
+      "type": "MESSAGE",
+      "position": { "x": 450, "y": 2550 },
+      "data": {
+        "message": "📅 **Datas Disponíveis:**\n\nEscolha uma data para seu agendamento:"
+      }
+    },
+    {
+      "id": "collect_date",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 450, "y": 2680 },
+      "data": {
+        "field": "preferred_date",
+        "prompt": "📅 Data desejada (DD/MM/AAAA ou 'hoje', 'amanhã'):",
+        "errorMessage": "❌ Data inválida. Use DD/MM/AAAA ou palavras como 'hoje', 'amanhã'."
+      }
+    },
+    {
+      "id": "ask_turno",
+      "type": "MESSAGE",
+      "position": { "x": 450, "y": 2810 },
+      "data": {
+        "message": "🕐 **Turno Preferido:**\n\n☀️ Manhã\n☀️ Tarde\n🌙 Noite\n\nQual turno você prefere?"
+      }
+    },
+    {
+      "id": "collect_turno",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 450, "y": 2940 },
+      "data": {
+        "field": "preferred_shift",
+        "prompt": "Escolha: manhã, tarde ou noite",
+        "errorMessage": "❌ Turno inválido. Escolha: manhã, tarde ou noite."
+      }
+    },
+    {
+      "id": "resumo_agendamento",
+      "type": "MESSAGE",
+      "position": { "x": 450, "y": 3070 },
+      "data": {
+        "message": "📋 **RESUMO DO PRÉ-AGENDAMENTO**\n\n🏥 **Unidade:** ${unidade_nome}\n\n👤 **Paciente:**\n• Nome: ${paciente.nome}\n• CPF: ${paciente.cpf}\n• Convênio: ${paciente.convenio}\n\n🩺 **Procedimento:** ${procedimento_1}\n\n📅 **Data:** ${data_escolhida}\n🕐 **Turno:** ${turno}\n\n✅ **Confirmar agendamento?**\n(responda 'sim' para confirmar)"
+      }
+    },
+    {
+      "id": "confirma_agendamento",
+      "type": "CONDITION",
+      "position": { "x": 450, "y": 3200 },
+      "data": {
+        "condition": "sim|confirmar|agendar|ok",
+        "trueMessage": "",
+        "falseMessage": "Agendamento cancelado."
+      }
+    },
+    {
+      "id": "create_appointment",
+      "type": "ACTION",
+      "position": { "x": 350, "y": 3330 },
+      "data": {
+        "action": "book_appointment"
+      }
+    },
+    {
+      "id": "msg_sucesso",
+      "type": "END",
+      "position": { "x": 350, "y": 3460 },
+      "data": {
+        "message": "✅ **PRÉ-AGENDAMENTO REALIZADO COM SUCESSO!**\n\n🎯 Seu agendamento foi enviado!\n\n📞 Nossa equipe entrará em contato em até 2 horas úteis.\n\nObrigado por escolher ${unidade_nome}! 🏥"
+      }
+    },
+    {
+      "id": "transfer_human",
+      "type": "TRANSFER_HUMAN",
+      "position": { "x": 700, "y": 600 },
+      "data": {
+        "message": "👤 Transferindo para atendimento humano..."
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "clinic_selection", "data": { "port": "main" } },
+    { "id": "e2", "source": "clinic_selection", "target": "unidade_vieiralves", "data": { "port": "true" } },
+    { "id": "e3", "source": "clinic_selection", "target": "unidade_sao_jose", "data": { "port": "false" } },
+    { "id": "e4", "source": "unidade_vieiralves", "target": "gpt_classifier", "data": { "port": "main" } },
+    { "id": "e5", "source": "unidade_sao_jose", "target": "gpt_classifier", "data": { "port": "main" } },
+    { "id": "e6", "source": "gpt_classifier", "target": "info_valores", "data": { "port": "1" } },
+    { "id": "e7", "source": "gpt_classifier", "target": "info_convenios", "data": { "port": "2" } },
+    { "id": "e8", "source": "gpt_classifier", "target": "info_localizacao", "data": { "port": "3" } },
+    { "id": "e9", "source": "gpt_classifier", "target": "check_patient", "data": { "port": "5" } },
+    { "id": "e10", "source": "gpt_classifier", "target": "transfer_human", "data": { "port": "6" } },
+    { "id": "e11", "source": "info_valores", "target": "gpt_classifier", "data": { "port": "main" } },
+    { "id": "e12", "source": "info_convenios", "target": "gpt_classifier", "data": { "port": "main" } },
+    { "id": "e13", "source": "info_localizacao", "target": "gpt_classifier", "data": { "port": "main" } },
+    { "id": "e14", "source": "check_patient", "target": "patient_decision", "data": { "port": "main" } },
+    { "id": "e15", "source": "patient_decision", "target": "msg_paciente_encontrado", "data": { "port": "true" } },
+    { "id": "e16", "source": "patient_decision", "target": "msg_solicita_cadastro", "data": { "port": "false" } },
+    { "id": "e17", "source": "msg_paciente_encontrado", "target": "ask_procedimentos", "data": { "port": "main" } },
+    { "id": "e18", "source": "msg_solicita_cadastro", "target": "collect_nome", "data": { "port": "main" } },
+    { "id": "e19", "source": "collect_nome", "target": "collect_cpf", "data": { "port": "main" } },
+    { "id": "e20", "source": "collect_cpf", "target": "collect_nascimento", "data": { "port": "main" } },
+    { "id": "e21", "source": "collect_nascimento", "target": "collect_email", "data": { "port": "main" } },
+    { "id": "e22", "source": "collect_email", "target": "collect_convenio", "data": { "port": "main" } },
+    { "id": "e23", "source": "collect_convenio", "target": "confirma_cadastro", "data": { "port": "main" } },
+    { "id": "e24", "source": "confirma_cadastro", "target": "validate_cadastro", "data": { "port": "main" } },
+    { "id": "e25", "source": "validate_cadastro", "target": "create_patient", "data": { "port": "true" } },
+    { "id": "e26", "source": "validate_cadastro", "target": "collect_nome", "data": { "port": "false" } },
+    { "id": "e27", "source": "create_patient", "target": "msg_cadastro_sucesso", "data": { "port": "main" } },
+    { "id": "e28", "source": "msg_cadastro_sucesso", "target": "ask_procedimentos", "data": { "port": "main" } },
+    { "id": "e29", "source": "ask_procedimentos", "target": "collect_proc_1", "data": { "port": "main" } },
+    { "id": "e30", "source": "collect_proc_1", "target": "generate_dates", "data": { "port": "main" } },
+    { "id": "e31", "source": "generate_dates", "target": "show_dates", "data": { "port": "main" } },
+    { "id": "e32", "source": "show_dates", "target": "collect_date", "data": { "port": "main" } },
+    { "id": "e33", "source": "collect_date", "target": "ask_turno", "data": { "port": "main" } },
+    { "id": "e34", "source": "ask_turno", "target": "collect_turno", "data": { "port": "main" } },
+    { "id": "e35", "source": "collect_turno", "target": "resumo_agendamento", "data": { "port": "main" } },
+    { "id": "e36", "source": "resumo_agendamento", "target": "confirma_agendamento", "data": { "port": "main" } },
+    { "id": "e37", "source": "confirma_agendamento", "target": "create_appointment", "data": { "port": "true" } },
+    { "id": "e38", "source": "confirma_agendamento", "target": "gpt_classifier", "data": { "port": "false" } },
+    { "id": "e39", "source": "create_appointment", "target": "msg_sucesso", "data": { "port": "main" } }
+  ]
+}
+

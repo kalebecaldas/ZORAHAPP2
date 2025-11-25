@@ -41,6 +41,9 @@ const Patients: React.FC = () => {
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedPatientForHistory, setSelectedPatientForHistory] = useState<Patient | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalPatients, setTotalPatients] = useState(0);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -52,9 +55,24 @@ const Patients: React.FC = () => {
     address: ''
   });
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (page: number = 1, search: string = '') => {
     try {
-      const response = await api.get('/api/patients');
+      setLoading(true);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: '20',
+        ...(search && { search })
+      });
+      
+      console.log(`🔍 fetchPatients - Fetching page ${page}, search: "${search}"`);
+      const response = await api.get(`/api/patients?${params.toString()}`);
+      
+      console.log(`🔍 fetchPatients - Response:`, {
+        patientsCount: response.data?.patients?.length || 0,
+        total: response.data?.pagination?.total || 0,
+        page: response.data?.pagination?.page || 1
+      });
+      
       const list = (response.data?.patients || []).map((p: any) => ({
         id: p.id,
         name: p.name,
@@ -70,8 +88,18 @@ const Patients: React.FC = () => {
         updatedAt: p.updatedAt,
         interactionsCount: (p.interactionsCount ?? (p.conversations ? p.conversations.length : 0)) || 0,
         lastInteractionAt: p.conversations && p.conversations[0]?.lastTimestamp ? p.conversations[0].lastTimestamp : null,
-      }))
+      }));
+      
+      console.log(`🔍 fetchPatients - Mapped patients:`, list.map(p => ({ name: p.name, phone: p.phone, insurance: p.insuranceCompany })));
+      
       setPatients(list);
+      
+      // Update pagination info
+      if (response.data?.pagination) {
+        setTotalPages(response.data.pagination.pages || 1);
+        setTotalPatients(response.data.pagination.total || 0);
+        console.log(`🔍 fetchPatients - Pagination: page ${response.data.pagination.page}, total: ${response.data.pagination.total}, pages: ${response.data.pagination.pages}`);
+      }
     } catch (error) {
       console.error('Error fetching patients:', error);
       toast.error('Erro ao carregar pacientes');
@@ -81,8 +109,21 @@ const Patients: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchPatients();
-  }, []);
+    fetchPatients(currentPage, searchTerm);
+  }, [currentPage]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (currentPage === 1) {
+        fetchPatients(1, searchTerm);
+      } else {
+        setCurrentPage(1);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,12 +184,8 @@ const Patients: React.FC = () => {
     }
   };
 
-  const filteredPatients = patients.filter(patient =>
-    patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.phone.includes(searchTerm) ||
-    patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    patient.insuranceCompany?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // No need for local filtering - search is done on backend via API
+  const filteredPatients = patients;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
@@ -317,6 +354,58 @@ const Patients: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {/* Pagination */}
+        {!loading && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Mostrando {((currentPage - 1) * 20) + 1} a {Math.min(currentPage * 20, totalPatients)} de {totalPatients} pacientes
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-3 py-2 border rounded-md text-sm font-medium ${
+                        currentPage === pageNum
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próxima
+              </button>
+            </div>
           </div>
         )}
       </div>

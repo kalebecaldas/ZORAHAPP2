@@ -617,7 +617,7 @@ Obtém as configurações atuais do sistema.
     "webhookVerifyToken": "webhook-token-seguro"
   },
   "openai": {
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o",
     "maxTokens": 500,
     "temperature": 0.7
   },
@@ -685,7 +685,7 @@ Testa a conexão com OpenAI.
   "success": true,
   "message": "Conexão OpenAI testada com sucesso",
   "modelInfo": {
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o",
     "available": true
   }
 }

@@ -1,0 +1,964 @@
+{
+  "name": "Assistente Completo - Atendimento e Agendamento",
+  "description": "Workflow completo com loop de informações e fluxo de agendamento - Todas as mensagens configuradas com placeholders dinâmicos",
+  "isActive": false,
+  "type": "CONSULTATION",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "START",
+      "position": { "x": 400, "y": 50 },
+      "data": {
+        "welcomeMessage": "Olá! Bem-vindo às nossas clínicas! 🏥\n\nTemos duas unidades:\n\n1️⃣ Unidade Vieiralves\n📍 Rua Rio Içá, 850 — Nossa Sra. das Graças\n\n2️⃣ Unidade São José\n📍 Av. Autaz Mirim, 5773 — São José Operário\n\nEm qual você gostaria de ser atendido(a)?\nResponda com 1 ou 2."
+      }
+    },
+    {
+      "id": "clinic_selection",
+      "type": "CONDITION",
+      "position": { "x": 400, "y": 180 },
+      "data": {
+        "condition": "clinic_selection"
+      }
+    },
+    {
+      "id": "unidade_vieiralves",
+      "type": "MESSAGE",
+      "position": { "x": 200, "y": 300 },
+      "data": {
+        "message": "✅ Você escolheu a Unidade Vieiralves!\n\n🏥 Unidade Vieiralves\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n\nVocê pode:\n💰 Saber sobre valores\n🏥 Ver convênios atendidos\n📍 Localização e horários\n📝 Explicação sobre procedimentos\n📅 Agendar consulta"
+      }
+    },
+    {
+      "id": "unidade_sao_jose",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 300 },
+      "data": {
+        "message": "✅ Você escolheu a Unidade São José!\n\n🏥 Unidade São José\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n\nVocê pode:\n💰 Saber sobre valores\n🏥 Ver convênios atendidos\n📍 Localização e horários\n📝 Explicação sobre procedimentos\n📅 Agendar consulta"
+      }
+    },
+    {
+      "id": "gpt_classifier",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 400, "y": 450 },
+      "data": {
+        "systemPrompt": "Você é um classificador de intenção para clínica de fisioterapia. Analise a mensagem do usuário e classifique em UMA das opções:\n\n1) VALORES - perguntas sobre preços, valores particulares, pacotes\n2) CONVÊNIOS - perguntas sobre convênios aceitos, planos de saúde, cobertura\n3) LOCALIZAÇÃO - perguntas sobre endereço, como chegar, horários, contato\n4) PROCEDIMENTO - perguntas sobre o que é um procedimento, benefícios, duração, indicações\n5) AGENDAR - desejo de marcar consulta, agendar, marcar horário\n6) ATENDENTE - pedido para falar com humano, atendente, pessoa\n\nResponda APENAS com o número (1-6)."
+      }
+    },
+    {
+      "id": "branch_valores",
+      "type": "CONDITION",
+      "position": { "x": -200, "y": 620 },
+      "data": {
+        "condition": "fisioterapia|ortopédica|ortopedica|pélvica|pelvica|neurológica|neurologica|respiratória|respiratoria|acupuntura|rpg|pilates|quiropraxia|consulta|ortopedista"
+      }
+    },
+    {
+      "id": "valor_fisio_ortopedica",
+      "type": "MESSAGE",
+      "position": { "x": -400, "y": 750 },
+      "data": {
+        "message": "🏃‍♀️ Fisioterapia Ortopédica - ${unidade_nome}\n\n💰 Valores:\n• Particular: R$ 90,00/sessão\n• Bradesco/SulAmérica: R$ 85,00/sessão\n• Outros convênios com desconto: R$ 75,00/sessão\n\n📦 Pacote 10 sessões: valor especial!\n⏱️ Duração: 45 minutos\n\nℹ️ Indicado para: reabilitação pós-cirurgia, lesões esportivas, dores musculares, problemas articulares\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_fisio_pelvica",
+      "type": "MESSAGE",
+      "position": { "x": -200, "y": 750 },
+      "data": {
+        "message": "🌸 Fisioterapia Pélvica - ${unidade_nome}\n\n⚠️ Disponível apenas na Unidade Vieiralves\n\n💰 Valores:\n• Particular: R$ 95,00/sessão\n• Avaliação obrigatória: R$ 220,00\n• Convênios: R$ 85-90,00/sessão\n\n📦 Pacote 10 sessões com desconto!\n⏱️ Duração: 50 minutos\n\nℹ️ Indicado para: incontinência urinária, pós-parto, disfunções sexuais, preparação para o parto\n\n⚠️ Requer avaliação prévia obrigatória\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_fisio_neurologica",
+      "type": "MESSAGE",
+      "position": { "x": 0, "y": 750 },
+      "data": {
+        "message": "🧠 Fisioterapia Neurológica - ${unidade_nome}\n\n💰 Valores:\n• Particular: R$ 95,00/sessão\n• Convênios: R$ 80-90,00/sessão\n\n📦 Pacote 10 sessões disponível!\n⏱️ Duração: 50 minutos\n\nℹ️ Indicado para: AVC, Parkinson, paralisia cerebral, esclerose múltipla, neuropatias\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_acupuntura",
+      "type": "MESSAGE",
+      "position": { "x": 200, "y": 750 },
+      "data": {
+        "message": "💉 Acupuntura - ${unidade_nome}\n\n💰 Valores:\n• Particular: R$ 180,00/sessão\n• Avaliação: R$ 200,00 (obrigatória primeira vez)\n• Convênios: R$ 140-160,00/sessão\n\n📦 Pacote 10 sessões: desconto especial incluindo avaliação!\n⏱️ Duração: 45 minutos\n\nℹ️ Indicado para: dores crônicas, enxaqueca, ansiedade, insônia, stress\n\n⚠️ Requer avaliação prévia obrigatória\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_rpg",
+      "type": "MESSAGE",
+      "position": { "x": 400, "y": 750 },
+      "data": {
+        "message": "🧘 RPG (Reeducação Postural Global) - ${unidade_nome}\n\n💰 Valores:\n• Particular: R$ 100,00/sessão\n• Convênios: R$ 85-95,00/sessão\n\n📦 Pacote 10 sessões disponível!\n⏱️ Duração: 50 minutos\n\nℹ️ Indicado para: correção postural, hérnias de disco, escoliose, dores na coluna\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_pilates",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 750 },
+      "data": {
+        "message": "🤸 Pilates - ${unidade_nome}\n\n⚠️ Disponível apenas na Unidade Vieiralves\n\n💰 Valores:\n• Particular: R$ 110,00/sessão\n• Pilates Solo (grupo): R$ 80,00/sessão\n\n📦 Pacotes mensais disponíveis!\n⏱️ Duração: 50 minutos (individual) ou 60 minutos (grupo)\n\nℹ️ Indicado para: fortalecimento, flexibilidade, reabilitação, condicionamento físico\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_quiropraxia",
+      "type": "MESSAGE",
+      "position": { "x": 800, "y": 750 },
+      "data": {
+        "message": "💆 Quiropraxia - ${unidade_nome}\n\n⚠️ Disponível apenas na Unidade Vieiralves\n\n💰 Valores:\n• Particular: R$ 130,00/sessão\n• Avaliação: R$ 150,00 (primeira vez)\n\n📦 Pacote 10 sessões com desconto!\n⏱️ Duração: 40 minutos\n\nℹ️ Indicado para: dores na coluna, hérnias, cervicalgia, lombalgia, torcicolo\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "valor_consulta",
+      "type": "MESSAGE",
+      "position": { "x": 1000, "y": 750 },
+      "data": {
+        "message": "👨‍⚕️ Consulta com Ortopedista - ${unidade_nome}\n\n💰 Valores:\n• Particular: R$ 250,00\n• Convênios: conforme tabela do convênio\n\n⏱️ Duração: 30-40 minutos\n\nℹ️ Atendimento especializado para diagnóstico e tratamento de problemas ortopédicos\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "info_convenios",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 620 },
+      "data": {
+        "message": "🏥 Convênios Atendidos - ${unidade_nome}\n\n✅ Atendemos os seguintes convênios:\n\n🔵 Principais:\n• Bradesco Saúde\n• SulAmérica\n• Mediservice\n• Saúde Caixa\n• Petrobras (Geap Autogestão)\n\n🔵 Outros convênios:\n• Pro Social\n• Postal Saúde\n• GEAP\n• Conab\n• AFFEAM\n• AMBEP\n• Gama Saúde\n• Life Empresarial\n• NotreDame Intermédica\n• OAB Saúde\n• ADEPOL\n• Bemol Saúde\n• E muitos outros!\n\n💡 Quer saber quais procedimentos seu convênio cobre?\nMe diga o nome do seu convênio!"
+      }
+    },
+    {
+      "id": "ask_convenio_procedimentos",
+      "type": "CONDITION",
+      "position": { "x": 100, "y": 770 },
+      "data": {
+        "condition": "bradesco|sulamerica|mediservice|saude caixa|petrobras|geap|pro social|postal|conab|affeam|ambep|gama|life|notredame|oab|adepol|bemol"
+      }
+    },
+    {
+      "id": "convenio_bradesco",
+      "type": "MESSAGE",
+      "position": { "x": -100, "y": 900 },
+      "data": {
+        "message": "🔵 Bradesco Saúde - ${unidade_nome}\n\n✅ Procedimentos cobertos:\n\n• Acupuntura\n• Consulta com Ortopedista\n• Fisioterapia Neurológica\n• Fisioterapia Ortopédica\n• Fisioterapia Pélvica (só Vieiralves)\n• Infiltração de ponto gatilho e Agulhamento a seco\n• RPG (Reeducação Postural Global)\n\n💰 Valores: conforme tabela do convênio (geralmente entre R$ 85-140)\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "convenio_sulamerica",
+      "type": "MESSAGE",
+      "position": { "x": 100, "y": 900 },
+      "data": {
+        "message": "🔵 SulAmérica Saúde - ${unidade_nome}\n\n✅ Procedimentos cobertos:\n\n• Acupuntura\n• Estimulação Elétrica Transcutânea (TENS)\n• Fisioterapia Neurológica\n• Fisioterapia Ortopédica\n• Fisioterapia Pélvica (só Vieiralves)\n\n💰 Valores: conforme tabela do convênio (geralmente entre R$ 80-140)\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "convenio_outros",
+      "type": "MESSAGE",
+      "position": { "x": 300, "y": 900 },
+      "data": {
+        "message": "🏥 ${convenio_x} - ${unidade_nome}\n\n✅ Principais procedimentos cobertos:\n\n• ${procedimento_1}\n• ${procedimento_2}\n• ${procedimento_3}\n\n💰 Valores: conforme tabela do convênio\n\n💡 Para informações mais detalhadas sobre cobertura e valores específicos, entre em contato com nossa recepção:\n📞 ${telefone}\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "info_localizacao",
+      "type": "MESSAGE",
+      "position": { "x": 400, "y": 620 },
+      "data": {
+        "message": "📍 Localização - ${unidade_nome}\n\n🏥 ${unidade_nome}\n📍 Endereço: ${endereco}\n🗺️ Google Maps: ${maps_url}\n\n📞 Contato:\nTelefone: ${telefone}\n\n⏰ Horário de Atendimento:\n${horario_atendimento}\n\n🚗 Informações de acesso:\n✅ Estacionamento disponível\n✅ Acessibilidade para cadeirantes\n✅ Recepção climatizada\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "info_procedimento_explicacao",
+      "type": "CONDITION",
+      "position": { "x": 700, "y": 620 },
+      "data": {
+        "condition": "fisioterapia|acupuntura|rpg|pilates|quiropraxia|ortopedista|pelvica|neurologica|ortopedica|respiratoria"
+      }
+    },
+    {
+      "id": "explicacao_fisio_ortopedica",
+      "type": "MESSAGE",
+      "position": { "x": 600, "y": 770 },
+      "data": {
+        "message": "🏃‍♀️ **Fisioterapia Ortopédica**\n\n📖 **O que é:**\nTratamento especializado para problemas do sistema musculoesquelético (ossos, músculos, articulações e ligamentos).\n\n✨ **Benefícios:**\n• Redução de dores musculares e articulares\n• Recuperação de movimentos\n• Reabilitação pós-cirúrgica\n• Melhora da força e flexibilidade\n• Prevenção de lesões\n\n🎯 **Indicado para:**\n• Dores na coluna\n• Lesões esportivas\n• Pós-operatório ortopédico\n• Tendinites e bursites\n• Artrose\n\n💰 **Valores:**\n• Particular: R$ 90,00/sessão\n• Convênios: R$ 75-85,00/sessão\n• Pacote 10 sessões com desconto\n\n⏱️ Duração: 45 minutos\n\n📅 Quer agendar?"
+      }
+    },
+    {
+      "id": "explicacao_acupuntura",
+      "type": "MESSAGE",
+      "position": { "x": 800, "y": 770 },
+      "data": {
+        "message": "💉 **Acupuntura**\n\n📖 **O que é:**\nTécnica milenar da medicina chinesa que utiliza agulhas finas em pontos específicos do corpo para equilibrar a energia vital.\n\n✨ **Benefícios:**\n• Alívio de dores crônicas\n• Redução de enxaquecas\n• Tratamento de ansiedade e stress\n• Melhora do sono\n• Equilíbrio emocional\n• Fortalecimento do sistema imunológico\n\n🎯 **Indicado para:**\n• Dores de cabeça e enxaqueca\n• Dores musculares crônicas\n• Insônia\n• Ansiedade e depressão\n• Problemas digestivos\n\n💰 **Valores:**\n• Particular: R$ 180,00/sessão\n• Avaliação: R$ 200,00 (obrigatória)\n• Convênios: R$ 140-160,00/sessão\n• Pacote 10 sessões com desconto especial\n\n⏱️ Duração: 45 minutos\n⚠️ Requer avaliação prévia\n\n📅 Quer agendar?"
+      }
+    },
+    {
+      "id": "explicacao_rpg",
+      "type": "MESSAGE",
+      "position": { "x": 1000, "y": 770 },
+      "data": {
+        "message": "🧘 **RPG - Reeducação Postural Global**\n\n📖 **O que é:**\nMétodo terapêutico que trabalha o corpo de forma global através de posturas de alongamento ativo.\n\n✨ **Benefícios:**\n• Correção de desvios posturais\n• Alívio de dores na coluna\n• Melhora da respiração\n• Aumento da flexibilidade\n• Equilíbrio muscular\n• Consciência corporal\n\n🎯 **Indicado para:**\n• Escoliose\n• Hiperlordose/Hipercifose\n• Hérnias de disco\n• Dores crônicas na coluna\n• Problemas respiratórios\n\n💰 **Valores:**\n• Particular: R$ 100,00/sessão\n• Convênios: R$ 85-95,00/sessão\n• Pacote 10 sessões disponível\n\n⏱️ Duração: 50 minutos\n\n📅 Quer agendar?"
+      }
+    },
+    {
+      "id": "check_patient",
+      "type": "ACTION",
+      "position": { "x": 1000, "y": 620 },
+      "data": {
+        "action": "search_patient_by_phone"
+      }
+    },
+    {
+      "id": "patient_exists",
+      "type": "CONDITION",
+      "position": { "x": 1000, "y": 750 },
+      "data": {
+        "condition": "patient_found"
+      }
+    },
+    {
+      "id": "msg_paciente_encontrado",
+      "type": "MESSAGE",
+      "position": { "x": 900, "y": 900 },
+      "data": {
+        "message": "✅ Encontrei seu cadastro!\n\n👤 ${paciente.nome}\n💳 Convênio: ${paciente.convenio}\n\nVamos prosseguir com o agendamento!"
+      }
+    },
+    {
+      "id": "msg_solicita_cadastro",
+      "type": "MESSAGE",
+      "position": { "x": 1100, "y": 900 },
+      "data": {
+        "message": "📝 Vou precisar de alguns dados para seu cadastro.\n\nVamos começar?"
+      }
+    },
+    {
+      "id": "collect_nome",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 1100, "y": 1030 },
+      "data": {
+        "field": "name",
+        "message": "Nome completo:"
+      }
+    },
+    {
+      "id": "collect_cpf",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 1100, "y": 1160 },
+      "data": {
+        "field": "cpf",
+        "message": "Agora, seu **CPF** (apenas números):"
+      }
+    },
+    {
+      "id": "collect_nascimento",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 1100, "y": 1290 },
+      "data": {
+        "field": "birth_date",
+        "message": "Data de **nascimento** (DD/MM/AAAA):"
+      }
+    },
+    {
+      "id": "collect_email",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 1100, "y": 1420 },
+      "data": {
+        "field": "email",
+        "message": "Seu **e-mail**:"
+      }
+    },
+    {
+      "id": "collect_convenio",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 1100, "y": 1550 },
+      "data": {
+        "field": "insurance",
+        "message": "Qual seu **convênio**?\n(ou digite 'particular' se for pagar particular)"
+      }
+    },
+    {
+      "id": "confirma_cadastro",
+      "type": "MESSAGE",
+      "position": { "x": 1100, "y": 1680 },
+      "data": {
+        "message": "📋 **Confirme seus dados:**\n\n👤 Nome: ${paciente.nome}\n📄 CPF: ${paciente.cpf}\n🎂 Nascimento: ${paciente.data_nascimento}\n📧 E-mail: ${paciente.email}\n💳 Convênio: ${paciente.convenio}\n📱 Telefone: ${paciente.telefone}\n\n✅ Está tudo correto?\n(responda 'sim' para confirmar ou 'não' para corrigir)"
+      }
+    },
+    {
+      "id": "validate_confirmacao",
+      "type": "CONDITION",
+      "position": { "x": 1100, "y": 1810 },
+      "data": {
+        "condition": "sim|confirmar|correto|ok|yes|está certo|tudo certo"
+      }
+    },
+    {
+      "id": "create_patient",
+      "type": "ACTION",
+      "position": { "x": 1000, "y": 1940 },
+      "data": {
+        "action": "create_patient_profile"
+      }
+    },
+    {
+      "id": "msg_cadastro_sucesso",
+      "type": "MESSAGE",
+      "position": { "x": 1000, "y": 2070 },
+      "data": {
+        "message": "✅ Cadastro realizado com sucesso!\n\nAgora vamos prosseguir com seu agendamento."
+      }
+    },
+    {
+      "id": "corrigir_cadastro",
+      "type": "MESSAGE",
+      "position": { "x": 1200, "y": 1940 },
+      "data": {
+        "message": "📝 Qual informação você gostaria de corrigir?\n\nDigite:\n1️⃣ Nome\n2️⃣ CPF\n3️⃣ Nascimento\n4️⃣ E-mail\n5️⃣ Convênio"
+      }
+    },
+    {
+      "id": "ask_procedimentos",
+      "type": "MESSAGE",
+      "position": { "x": 950, "y": 2200 },
+      "data": {
+        "message": "🩺 **Escolha os procedimentos**\n\nVocê pode escolher até 3 procedimentos para agendar.\n\nProcedimentos disponíveis na ${unidade_nome}:\n${procedimentos_disponiveis}\n\nDigite o nome do **primeiro procedimento**:"
+      }
+    },
+    {
+      "id": "collect_proc_1",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 950, "y": 2330 },
+      "data": {
+        "field": "procedure_1",
+        "message": "Primeiro procedimento:"
+      }
+    },
+    {
+      "id": "ask_proc_2",
+      "type": "MESSAGE",
+      "position": { "x": 950, "y": 2460 },
+      "data": {
+        "message": "✅ ${procedimento_1} anotado!\n\nDeseja adicionar um **segundo procedimento**?\n(responda 'sim' ou 'não')"
+      }
+    },
+    {
+      "id": "condition_proc_2",
+      "type": "CONDITION",
+      "position": { "x": 950, "y": 2590 },
+      "data": {
+        "condition": "sim|quero|adicionar|segundo|mais"
+      }
+    },
+    {
+      "id": "collect_proc_2",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 850, "y": 2720 },
+      "data": {
+        "field": "procedure_2",
+        "message": "Segundo procedimento:"
+      }
+    },
+    {
+      "id": "ask_proc_3",
+      "type": "MESSAGE",
+      "position": { "x": 850, "y": 2850 },
+      "data": {
+        "message": "✅ ${procedimento_2} anotado!\n\nDeseja adicionar um **terceiro procedimento**?\n(responda 'sim' ou 'não')"
+      }
+    },
+    {
+      "id": "condition_proc_3",
+      "type": "CONDITION",
+      "position": { "x": 850, "y": 2980 },
+      "data": {
+        "condition": "sim|quero|adicionar|terceiro|mais"
+      }
+    },
+    {
+      "id": "collect_proc_3",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 750, "y": 3110 },
+      "data": {
+        "field": "procedure_3",
+        "message": "Terceiro procedimento:"
+      }
+    },
+    {
+      "id": "show_dates",
+      "type": "MESSAGE",
+      "position": { "x": 900, "y": 3240 },
+      "data": {
+        "message": "📅 **Escolha a data**\n\nDatas disponíveis para agendamento:\n\n${datas_disponiveis}\n\nDigite a data desejada (ex: 15/12 ou 15/12/2024):"
+      }
+    },
+    {
+      "id": "collect_date",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 900, "y": 3370 },
+      "data": {
+        "field": "preferred_date",
+        "message": "Data desejada:"
+      }
+    },
+    {
+      "id": "ask_turno",
+      "type": "MESSAGE",
+      "position": { "x": 900, "y": 3500 },
+      "data": {
+        "message": "🕐 **Escolha o turno**\n\nTurnos disponíveis:\n\n🌅 **Manhã** (07:30 às 12:00)\n🌤️ **Tarde** (13:30 às 17:00)\n🌙 **Noite** (17:00 às 19:30)\n\nDigite: manhã, tarde ou noite"
+      }
+    },
+    {
+      "id": "collect_turno",
+      "type": "DATA_COLLECTION",
+      "position": { "x": 900, "y": 3630 },
+      "data": {
+        "field": "preferred_shift",
+        "message": "Turno desejado:"
+      }
+    },
+    {
+      "id": "resumo_agendamento",
+      "type": "MESSAGE",
+      "position": { "x": 900, "y": 3760 },
+      "data": {
+        "message": "📋 **RESUMO DO PRÉ-AGENDAMENTO**\n\n🏥 **Unidade:** ${unidade_nome}\n📍 ${endereco}\n\n👤 **Paciente:**\n• Nome: ${paciente.nome}\n• CPF: ${paciente.cpf}\n• Convênio: ${paciente.convenio}\n• Telefone: ${paciente.telefone}\n\n🩺 **Procedimentos:**\n1. ${procedimento_1}\n2. ${procedimento_2}\n3. ${procedimento_3}\n\n📅 **Data:** ${data_escolhida}\n🕐 **Turno:** ${turno}\n\n💡 **Importante:**\n• Chegue 15 minutos antes\n• Traga documento com foto\n• Traga carteirinha do convênio (se aplicável)\n\n✅ **Confirmar agendamento?**\n(responda 'sim' para confirmar)"
+      }
+    },
+    {
+      "id": "confirma_agendamento",
+      "type": "CONDITION",
+      "position": { "x": 900, "y": 3890 },
+      "data": {
+        "condition": "sim|confirmar|agendar|ok"
+      }
+    },
+    {
+      "id": "create_appointment",
+      "type": "ACTION",
+      "position": { "x": 800, "y": 4020 },
+      "data": {
+        "action": "book_appointment"
+      }
+    },
+    {
+      "id": "fila_aguardando",
+      "type": "MESSAGE",
+      "position": { "x": 800, "y": 4150 },
+      "data": {
+        "message": "✅ **PRÉ-AGENDAMENTO REALIZADO COM SUCESSO!**\n\n🎯 Seu agendamento foi enviado para nossa equipe!\n\n📌 **Status:** AGUARDANDO CONFIRMAÇÃO\n\n📞 **Próximos passos:**\nNossa equipe entrará em contato em até 2 horas úteis para:\n• Confirmar disponibilidade\n• Definir horário exato\n• Passar orientações finais\n\n📱 **Você receberá:**\n✅ Ligação de confirmação\n✅ SMS com detalhes\n✅ E-mail com instruções\n\n💡 **Dúvidas?**\nLigue: ${telefone}\n\nObrigado por escolher ${unidade_nome}! 🏥"
+      }
+    },
+    {
+      "id": "cancelar_agendamento",
+      "type": "MESSAGE",
+      "position": { "x": 1000, "y": 4020 },
+      "data": {
+        "message": "❌ Agendamento cancelado.\n\nSe quiser agendar depois, é só falar comigo!\n\nPosso ajudar com mais alguma informação?"
+      }
+    },
+    {
+      "id": "end_success",
+      "type": "END",
+      "position": { "x": 800, "y": 4280 },
+      "data": {
+        "finalMessage": "Até logo! Qualquer dúvida, estou aqui para ajudar! 👋"
+      }
+    },
+    {
+      "id": "transfer_human",
+      "type": "TRANSFER_HUMAN",
+      "position": { "x": 1300, "y": 620 },
+      "data": {
+        "finalMessage": "🤝 **Transferindo para atendente humano...**\n\nAguarde um momento que nossa equipe já vai te atender!\n\nTempo médio de espera: 2-5 minutos"
+      }
+    },
+    {
+      "id": "gpt_faq",
+      "type": "GPT_RESPONSE",
+      "position": { "x": 1100, "y": 450 },
+      "data": {
+        "systemPrompt": "Você é um assistente de atendimento de clínica de fisioterapia. Responda perguntas gerais de forma educada e informativa sobre:\n- Horários de funcionamento\n- Formas de pagamento (aceitamos dinheiro, cartão, PIX)\n- Política de cancelamento (avisar com 24h de antecedência)\n- Documentos necessários (RG, carteirinha do convênio)\n- Como funciona primeira consulta\n- Tempo de sessão\n- Dúvidas gerais\n\nSeja breve, claro e sempre termine perguntando se pode ajudar com mais alguma coisa."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_start_clinic",
+      "source": "start",
+      "target": "clinic_selection",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_clinic_vieiralves",
+      "source": "clinic_selection",
+      "target": "unidade_vieiralves",
+      "data": { "port": "true", "condition": "1|vieiralves" }
+    },
+    {
+      "id": "e_clinic_sao_jose",
+      "source": "clinic_selection",
+      "target": "unidade_sao_jose",
+      "data": { "port": "true", "condition": "2|são josé|sao jose" }
+    },
+    {
+      "id": "e_vieiralves_gpt",
+      "source": "unidade_vieiralves",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_sao_jose_gpt",
+      "source": "unidade_sao_jose",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_gpt_valores",
+      "source": "gpt_classifier",
+      "target": "branch_valores",
+      "data": { "port": "1" }
+    },
+    {
+      "id": "e_gpt_convenios",
+      "source": "gpt_classifier",
+      "target": "info_convenios",
+      "data": { "port": "2" }
+    },
+    {
+      "id": "e_gpt_localizacao",
+      "source": "gpt_classifier",
+      "target": "info_localizacao",
+      "data": { "port": "3" }
+    },
+    {
+      "id": "e_gpt_procedimento",
+      "source": "gpt_classifier",
+      "target": "info_procedimento_explicacao",
+      "data": { "port": "4" }
+    },
+    {
+      "id": "e_gpt_agendar",
+      "source": "gpt_classifier",
+      "target": "check_patient",
+      "data": { "port": "5" }
+    },
+    {
+      "id": "e_gpt_transfer",
+      "source": "gpt_classifier",
+      "target": "transfer_human",
+      "data": { "port": "6" }
+    },
+    {
+      "id": "e_branch_fisio_ortopedica",
+      "source": "branch_valores",
+      "target": "valor_fisio_ortopedica",
+      "data": { "port": "main", "condition": "ortopédica|ortopedica" }
+    },
+    {
+      "id": "e_branch_fisio_pelvica",
+      "source": "branch_valores",
+      "target": "valor_fisio_pelvica",
+      "data": { "port": "main", "condition": "pélvica|pelvica" }
+    },
+    {
+      "id": "e_branch_fisio_neurologica",
+      "source": "branch_valores",
+      "target": "valor_fisio_neurologica",
+      "data": { "port": "main", "condition": "neurológica|neurologica" }
+    },
+    {
+      "id": "e_branch_acupuntura",
+      "source": "branch_valores",
+      "target": "valor_acupuntura",
+      "data": { "port": "main", "condition": "acupuntura" }
+    },
+    {
+      "id": "e_branch_rpg",
+      "source": "branch_valores",
+      "target": "valor_rpg",
+      "data": { "port": "main", "condition": "rpg" }
+    },
+    {
+      "id": "e_branch_pilates",
+      "source": "branch_valores",
+      "target": "valor_pilates",
+      "data": { "port": "main", "condition": "pilates" }
+    },
+    {
+      "id": "e_branch_quiropraxia",
+      "source": "branch_valores",
+      "target": "valor_quiropraxia",
+      "data": { "port": "main", "condition": "quiropraxia" }
+    },
+    {
+      "id": "e_branch_consulta",
+      "source": "branch_valores",
+      "target": "valor_consulta",
+      "data": { "port": "main", "condition": "consulta|ortopedista" }
+    },
+    {
+      "id": "e_valor_ortopedica_gpt",
+      "source": "valor_fisio_ortopedica",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_pelvica_gpt",
+      "source": "valor_fisio_pelvica",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_neurologica_gpt",
+      "source": "valor_fisio_neurologica",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_acupuntura_gpt",
+      "source": "valor_acupuntura",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_rpg_gpt",
+      "source": "valor_rpg",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_pilates_gpt",
+      "source": "valor_pilates",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_quiropraxia_gpt",
+      "source": "valor_quiropraxia",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_valor_consulta_gpt",
+      "source": "valor_consulta",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_convenios_ask",
+      "source": "info_convenios",
+      "target": "ask_convenio_procedimentos",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_ask_bradesco",
+      "source": "ask_convenio_procedimentos",
+      "target": "convenio_bradesco",
+      "data": { "port": "main", "condition": "bradesco" }
+    },
+    {
+      "id": "e_ask_sulamerica",
+      "source": "ask_convenio_procedimentos",
+      "target": "convenio_sulamerica",
+      "data": { "port": "main", "condition": "sulamerica" }
+    },
+    {
+      "id": "e_ask_outros",
+      "source": "ask_convenio_procedimentos",
+      "target": "convenio_outros",
+      "data": { "port": "main", "condition": "outros" }
+    },
+    {
+      "id": "e_convenio_bradesco_gpt",
+      "source": "convenio_bradesco",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_convenio_sulamerica_gpt",
+      "source": "convenio_sulamerica",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_convenio_outros_gpt",
+      "source": "convenio_outros",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_localizacao_gpt",
+      "source": "info_localizacao",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_explicacao_fisio_ortopedica",
+      "source": "info_procedimento_explicacao",
+      "target": "explicacao_fisio_ortopedica",
+      "data": { "port": "main", "condition": "ortopédica|ortopedica" }
+    },
+    {
+      "id": "e_explicacao_acupuntura",
+      "source": "info_procedimento_explicacao",
+      "target": "explicacao_acupuntura",
+      "data": { "port": "main", "condition": "acupuntura" }
+    },
+    {
+      "id": "e_explicacao_rpg",
+      "source": "info_procedimento_explicacao",
+      "target": "explicacao_rpg",
+      "data": { "port": "main", "condition": "rpg" }
+    },
+    {
+      "id": "e_info_faq",
+      "source": "info_procedimento_explicacao",
+      "target": "gpt_faq",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_explicacao_ortopedica_gpt",
+      "source": "explicacao_fisio_ortopedica",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_explicacao_acupuntura_gpt",
+      "source": "explicacao_acupuntura",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_explicacao_rpg_gpt",
+      "source": "explicacao_rpg",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_faq_gpt",
+      "source": "gpt_faq",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_check_patient_condition",
+      "source": "check_patient",
+      "target": "patient_exists",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_patient_found",
+      "source": "patient_exists",
+      "target": "msg_paciente_encontrado",
+      "data": { "port": "true" }
+    },
+    {
+      "id": "e_patient_not_found",
+      "source": "patient_exists",
+      "target": "msg_solicita_cadastro",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_found_ask_proc",
+      "source": "msg_paciente_encontrado",
+      "target": "ask_procedimentos",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_solicita_nome",
+      "source": "msg_solicita_cadastro",
+      "target": "collect_nome",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_nome_cpf",
+      "source": "collect_nome",
+      "target": "collect_cpf",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_cpf_nascimento",
+      "source": "collect_cpf",
+      "target": "collect_nascimento",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_nascimento_email",
+      "source": "collect_nascimento",
+      "target": "collect_email",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_email_convenio",
+      "source": "collect_email",
+      "target": "collect_convenio",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_convenio_confirma",
+      "source": "collect_convenio",
+      "target": "confirma_cadastro",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_confirma_validate",
+      "source": "confirma_cadastro",
+      "target": "validate_confirmacao",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_validate_ok",
+      "source": "validate_confirmacao",
+      "target": "create_patient",
+      "data": { "port": "true" }
+    },
+    {
+      "id": "e_validate_corrigir",
+      "source": "validate_confirmacao",
+      "target": "corrigir_cadastro",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_create_success",
+      "source": "create_patient",
+      "target": "msg_cadastro_sucesso",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_success_ask_proc",
+      "source": "msg_cadastro_sucesso",
+      "target": "ask_procedimentos",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_corrigir_nome",
+      "source": "corrigir_cadastro",
+      "target": "collect_nome",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_ask_proc_1",
+      "source": "ask_procedimentos",
+      "target": "collect_proc_1",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_proc1_ask2",
+      "source": "collect_proc_1",
+      "target": "ask_proc_2",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_ask2_condition2",
+      "source": "ask_proc_2",
+      "target": "condition_proc_2",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_condition2_yes",
+      "source": "condition_proc_2",
+      "target": "collect_proc_2",
+      "data": { "port": "true" }
+    },
+    {
+      "id": "e_condition2_no",
+      "source": "condition_proc_2",
+      "target": "show_dates",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_proc2_ask3",
+      "source": "collect_proc_2",
+      "target": "ask_proc_3",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_ask3_condition3",
+      "source": "ask_proc_3",
+      "target": "condition_proc_3",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_condition3_yes",
+      "source": "condition_proc_3",
+      "target": "collect_proc_3",
+      "data": { "port": "true" }
+    },
+    {
+      "id": "e_condition3_no",
+      "source": "condition_proc_3",
+      "target": "show_dates",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_proc3_dates",
+      "source": "collect_proc_3",
+      "target": "show_dates",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_dates_collect",
+      "source": "show_dates",
+      "target": "collect_date",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_date_turno",
+      "source": "collect_date",
+      "target": "ask_turno",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_turno_collect",
+      "source": "ask_turno",
+      "target": "collect_turno",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_turno_resumo",
+      "source": "collect_turno",
+      "target": "resumo_agendamento",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_resumo_confirma",
+      "source": "resumo_agendamento",
+      "target": "confirma_agendamento",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_confirma_create",
+      "source": "confirma_agendamento",
+      "target": "create_appointment",
+      "data": { "port": "true" }
+    },
+    {
+      "id": "e_confirma_cancel",
+      "source": "confirma_agendamento",
+      "target": "cancelar_agendamento",
+      "data": { "port": "false" }
+    },
+    {
+      "id": "e_create_fila",
+      "source": "create_appointment",
+      "target": "fila_aguardando",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_fila_end",
+      "source": "fila_aguardando",
+      "target": "end_success",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_cancel_gpt",
+      "source": "cancelar_agendamento",
+      "target": "gpt_classifier",
+      "data": { "port": "main" }
+    },
+    {
+      "id": "e_transfer_end",
+      "source": "transfer_human",
+      "target": "end_success",
+      "data": { "port": "main" }
+    }
+  ]
+}

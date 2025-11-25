@@ -98,6 +98,12 @@ fi
 
 echo -e "${GREEN}✅ Banco de dados verificado!${NC}"
 
+# Sync active workflow with local file (if available)
+if [ -f "workflow_completo_definitivo.json" ]; then
+    echo -e "${GREEN}🔄 Sincronizando workflow ativo com arquivo local...${NC}"
+    npx tsx scripts/import_workflow_definitivo.ts || echo -e "${YELLOW}⚠️ Falha ao importar workflow. Verifique DATABASE_URL e Prisma.${NC}"
+fi
+
 # Start the system
 echo -e "${GREEN}🎯 Iniciando servidor e cliente...${NC}"
 echo -e "${GREEN}📡 Servidor: http://localhost:$SERVER_PORT${NC}"

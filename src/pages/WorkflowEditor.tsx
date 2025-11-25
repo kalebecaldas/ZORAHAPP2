@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '../lib/utils'
 import { WorkflowEditorBeta } from '../components/WorkflowEditorBeta'
-import { BackendWorkflow, BackendNode } from '../utils/workflowUtils'
+import { BackendWorkflow, BackendNode, ensureRequiredEdges } from '../utils/workflowUtils'
 
 export const WorkflowEditor: React.FC = () => {
     const navigate = useNavigate()
@@ -97,6 +97,7 @@ export const WorkflowEditor: React.FC = () => {
 
     const handleSave = async (wfData: BackendWorkflow) => {
         try {
+            wfData = ensureRequiredEdges(wfData)
             if (workflow.id && id !== 'new') {
                 // Update existing workflow
                 await api.put(`/api/workflows/${workflow.id}`, {
