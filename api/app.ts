@@ -43,6 +43,36 @@ dotenv.config()
 
 const app: express.Application = express()
 
+/**
+ * Health check - DEVE ser a primeira rota para garantir que sempre funcione
+ * Mesmo se outros middlewares falharem, o health check deve responder
+ */
+app.get('/api/health', (req: Request, res: Response): void => {
+  res.status(200).json({
+    success: true,
+    status: 'healthy',
+    message: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    version: process.version,
+    environment: process.env.NODE_ENV || 'development'
+  })
+})
+
+app.get('/health', (req: Request, res: Response): void => {
+  res.status(200).json({
+    success: true,
+    status: 'healthy',
+    message: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    version: process.version,
+    environment: process.env.NODE_ENV || 'development'
+  })
+})
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for development
@@ -136,20 +166,6 @@ app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, 
   })
 })
 app.use('/webhook', webhookLimiter, webhookRoutes)
-
-/**
- * Health check
- */
-app.use(['/api/health', '/health'], (req: Request, res: Response, next: NextFunction): void => {
-  res.status(200).json({
-    success: true,
-    message: 'ok',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    version: process.version
-  })
-})
 
 const clientDistPath = path.resolve(__dirname, '../dist')
 app.use(express.static(clientDistPath))

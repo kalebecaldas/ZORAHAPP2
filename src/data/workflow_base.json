@@ -1,0 +1,363 @@
+{
+    "name": "Fluxo Base - Clínica IAAM",
+    "description": "Fluxo principal de atendimento baseado no modelo visual aprovado.",
+    "type": "CONSULTATION",
+    "isActive": true,
+    "config": {
+        "nodes": [
+            {
+                "id": "start",
+                "type": "START",
+                "position": {
+                    "x": 0,
+                    "y": 0
+                },
+                "data": {
+                    "welcomeMessage": "Olá! Bem-vindo à Clínica IAAM. Para começar, em qual unidade você gostaria de ser atendido?"
+                }
+            },
+            {
+                "id": "unit_selection",
+                "type": "CONDITION",
+                "position": {
+                    "x": 250,
+                    "y": 0
+                },
+                "data": {
+                    "condition": "unit_selection",
+                    "variable": "selectedUnit",
+                    "options": [
+                        "vieiralves",
+                        "sao_jose"
+                    ]
+                }
+            },
+            {
+                "id": "main_loop_entry",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 500,
+                    "y": 0
+                },
+                "data": {
+                    "message": "Ótimo! Como posso ajudar você hoje? (Valores, Convênios, Localização, Procedimentos ou Agendar)"
+                }
+            },
+            {
+                "id": "gpt_intent_classifier",
+                "type": "GPT_RESPONSE",
+                "position": {
+                    "x": 750,
+                    "y": 0
+                },
+                "data": {
+                    "systemPrompt": "Classifique a intenção do usuário: LOCALIZACAO, CONVENIOS, VALORES, PROCEDIMENTO_INFO, AGENDAR. Responda com JSON.",
+                    "variable": "intent"
+                }
+            },
+            {
+                "id": "intent_router",
+                "type": "CONDITION",
+                "position": {
+                    "x": 1000,
+                    "y": 0
+                },
+                "data": {
+                    "condition": "intent_router"
+                }
+            },
+            {
+                "id": "info_location",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 1000,
+                    "y": -200
+                },
+                "data": {
+                    "dynamicContent": "location_info"
+                }
+            },
+            {
+                "id": "info_insurance",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 1000,
+                    "y": -100
+                },
+                "data": {
+                    "dynamicContent": "insurance_info"
+                }
+            },
+            {
+                "id": "info_values",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 1000,
+                    "y": 100
+                },
+                "data": {
+                    "dynamicContent": "values_info"
+                }
+            },
+            {
+                "id": "info_procedure",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 1000,
+                    "y": 200
+                },
+                "data": {
+                    "dynamicContent": "procedure_info"
+                }
+            },
+            {
+                "id": "schedule_flow_start",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 1000,
+                    "y": 300
+                },
+                "data": {
+                    "message": "Vamos agendar! Primeiro, você já tem cadastro conosco?"
+                }
+            },
+            {
+                "id": "check_registration",
+                "type": "CONDITION",
+                "position": {
+                    "x": 1250,
+                    "y": 300
+                },
+                "data": {
+                    "condition": "check_registration"
+                }
+            },
+            {
+                "id": "collect_data",
+                "type": "DATA_COLLECTION",
+                "position": {
+                    "x": 1500,
+                    "y": 400
+                },
+                "data": {
+                    "fields": [
+                        "name",
+                        "birthDate",
+                        "cpf",
+                        "email",
+                        "insurance"
+                    ],
+                    "message": "Por favor, informe seus dados para cadastro."
+                }
+            },
+            {
+                "id": "select_procedure",
+                "type": "DATA_COLLECTION",
+                "position": {
+                    "x": 1750,
+                    "y": 300
+                },
+                "data": {
+                    "field": "procedure",
+                    "message": "Qual procedimento deseja agendar?"
+                }
+            },
+            {
+                "id": "select_date",
+                "type": "DATA_COLLECTION",
+                "position": {
+                    "x": 2000,
+                    "y": 300
+                },
+                "data": {
+                    "field": "date",
+                    "message": "Para qual data?"
+                }
+            },
+            {
+                "id": "select_shift",
+                "type": "DATA_COLLECTION",
+                "position": {
+                    "x": 2250,
+                    "y": 300
+                },
+                "data": {
+                    "field": "shift",
+                    "options": [
+                        "Manhã",
+                        "Tarde",
+                        "Noite"
+                    ],
+                    "message": "Qual turno prefere? (Manhã, Tarde ou Noite)"
+                }
+            },
+            {
+                "id": "confirm_schedule",
+                "type": "MESSAGE",
+                "position": {
+                    "x": 2500,
+                    "y": 300
+                },
+                "data": {
+                    "dynamicContent": "schedule_summary",
+                    "message": "Confirma o agendamento?"
+                }
+            },
+            {
+                "id": "finalize_schedule",
+                "type": "ACTION",
+                "position": {
+                    "x": 2750,
+                    "y": 300
+                },
+                "data": {
+                    "action": "create_appointment"
+                }
+            },
+            {
+                "id": "end",
+                "type": "END",
+                "position": {
+                    "x": 3000,
+                    "y": 300
+                },
+                "data": {
+                    "finalMessage": "Agendamento realizado! Aguarde a confirmação."
+                }
+            }
+        ],
+        "edges": [
+            {
+                "id": "e1",
+                "source": "start",
+                "target": "unit_selection"
+            },
+            {
+                "id": "e2",
+                "source": "unit_selection",
+                "target": "main_loop_entry"
+            },
+            {
+                "id": "e3",
+                "source": "main_loop_entry",
+                "target": "gpt_intent_classifier"
+            },
+            {
+                "id": "e4",
+                "source": "gpt_intent_classifier",
+                "target": "intent_router"
+            },
+            {
+                "id": "e_loc",
+                "source": "intent_router",
+                "target": "info_location",
+                "data": {
+                    "condition": "LOCALIZACAO"
+                }
+            },
+            {
+                "id": "e_ins",
+                "source": "intent_router",
+                "target": "info_insurance",
+                "data": {
+                    "condition": "CONVENIOS"
+                }
+            },
+            {
+                "id": "e_val",
+                "source": "intent_router",
+                "target": "info_values",
+                "data": {
+                    "condition": "VALORES"
+                }
+            },
+            {
+                "id": "e_proc",
+                "source": "intent_router",
+                "target": "info_procedure",
+                "data": {
+                    "condition": "PROCEDIMENTO_INFO"
+                }
+            },
+            {
+                "id": "e_sched",
+                "source": "intent_router",
+                "target": "schedule_flow_start",
+                "data": {
+                    "condition": "AGENDAR"
+                }
+            },
+            {
+                "id": "e_ret_loc",
+                "source": "info_location",
+                "target": "gpt_intent_classifier"
+            },
+            {
+                "id": "e_ret_ins",
+                "source": "info_insurance",
+                "target": "gpt_intent_classifier"
+            },
+            {
+                "id": "e_ret_val",
+                "source": "info_values",
+                "target": "gpt_intent_classifier"
+            },
+            {
+                "id": "e_ret_proc",
+                "source": "info_procedure",
+                "target": "gpt_intent_classifier"
+            },
+            {
+                "id": "e_sched_1",
+                "source": "schedule_flow_start",
+                "target": "check_registration"
+            },
+            {
+                "id": "e_sched_new",
+                "source": "check_registration",
+                "target": "collect_data",
+                "data": {
+                    "condition": "false"
+                }
+            },
+            {
+                "id": "e_sched_exist",
+                "source": "check_registration",
+                "target": "select_procedure",
+                "data": {
+                    "condition": "true"
+                }
+            },
+            {
+                "id": "e_sched_2",
+                "source": "collect_data",
+                "target": "select_procedure"
+            },
+            {
+                "id": "e_sched_3",
+                "source": "select_procedure",
+                "target": "select_date"
+            },
+            {
+                "id": "e_sched_4",
+                "source": "select_date",
+                "target": "select_shift"
+            },
+            {
+                "id": "e_sched_5",
+                "source": "select_shift",
+                "target": "confirm_schedule"
+            },
+            {
+                "id": "e_sched_6",
+                "source": "confirm_schedule",
+                "target": "finalize_schedule"
+            },
+            {
+                "id": "e_sched_7",
+                "source": "finalize_schedule",
+                "target": "end"
+            }
+        ]
+    }
+}
