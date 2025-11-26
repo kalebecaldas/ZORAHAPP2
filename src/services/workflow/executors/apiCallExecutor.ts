@@ -113,7 +113,7 @@ async function getClinicProcedures(context: WorkflowExecutionContext): Promise<s
     // ALWAYS check clinicData.ts FIRST (primary source)
     if (specificProcedure) {
       console.log(`🔧 getClinicProcedures - User asked about specific procedure, checking clinicData.ts (PRIMARY)...`);
-      const procedureInfo = getProcedureInfoForGPT(specificProcedure, clinicCode);
+      const procedureInfo = await getProcedureInfoForGPT(specificProcedure, clinicCode);
       if (procedureInfo) {
         console.log(`🔧 getClinicProcedures - ✅ Found procedure info from clinicData.ts (PRIMARY SOURCE)`);
         return procedureInfo;

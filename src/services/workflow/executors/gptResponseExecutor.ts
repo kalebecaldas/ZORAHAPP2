@@ -89,7 +89,7 @@ export async function executeGPTResponseNode(
     
     if (mentionedProcedure && (mentionedPrice || normalizedMessage.includes('qual') || normalizedMessage.includes('quanto'))) {
       // User asking about specific procedure price/info
-      const procedureInfo = getProcedureInfoForGPT(mentionedProcedure, clinicCode);
+      const procedureInfo = await getProcedureInfoForGPT(mentionedProcedure, clinicCode);
       if (procedureInfo) {
         specializedContext = `\n\n📋 INFORMAÇÃO ESPECÍFICA DO PROCEDIMENTO:\n${procedureInfo}`;
       }

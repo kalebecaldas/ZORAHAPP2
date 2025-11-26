@@ -311,7 +311,7 @@ EXEMPLOS CORRETOS:
         if (port === '1' || port === '4') { // VALUES or PROCEDURE_INFO
           // Use complete info from formatter (includes packages, insurances, etc.)
           const { getProcedureInfoForGPT } = await import('../utils/clinicDataFormatter');
-          const completeInfo = getProcedureInfoForGPT(detectedProcedure.name, clinicCode);
+          const completeInfo = await getProcedureInfoForGPT(detectedProcedure.name, clinicCode);
           
           if (completeInfo) {
             conversationalResponse = completeInfo;

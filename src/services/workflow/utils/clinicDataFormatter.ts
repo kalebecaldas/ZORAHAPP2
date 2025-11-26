@@ -105,8 +105,9 @@ ${insurancesText}
 
 /**
  * Gets specific procedure information for GPT
+ * Now uses templates from database (editable in Settings > Templates)
  */
-export function getProcedureInfoForGPT(procedureName: string, clinicCode?: string): string | null {
+export async function getProcedureInfoForGPT(procedureName: string, clinicCode?: string): Promise<string | null> {
   const normalizedName = procedureName.toLowerCase().trim();
   const selectedClinic = clinicCode || 'vieiralves';
   
