@@ -155,9 +155,9 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
     normalizedClinicForPrice = 'sao_jose';
   }
   
-  let info = `💉 *${procedure.name}*\n\n`;
-  info += `📝 *Descrição:*\n${procedure.description || 'Procedimento disponível'}\n\n`;
-  info += `⏱️ *Duração:* ${procedure.duration} minutos\n\n`;
+  let info = `💉 *${procedure.name}*\n`;
+  info += `📝 *Descrição:*\n${procedure.description || 'Procedimento disponível'}\n`;
+  info += `⏱️ *Duração:* ${procedure.duration} minutos\n`;
   
   // Get price for selected clinic
   const clinicPrice = procedure.prices?.[normalizedClinicForPrice];
@@ -179,7 +179,7 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
   // Get packages for selected clinic
   const clinicPackages = procedure.packages?.[normalizedClinicForPrice] || [];
   if (clinicPackages.length > 0) {
-    info += `\n🎁 *Pacotes Disponíveis:*\n`;
+    info += `🎁 *Pacotes Disponíveis:*\n`;
     clinicPackages.forEach((pkg: any) => {
       const pricePerSession = pkg.price / pkg.sessions;
       info += `• Pacote de ${pkg.sessions} sessões: R$ ${pkg.price.toFixed(2)} (R$ ${pricePerSession.toFixed(2)} por sessão)\n`;
@@ -189,20 +189,20 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
   // Get insurance info from procedure.convenios
   const acceptedInsurances = procedure.convenios || [];
   if (acceptedInsurances.length > 0) {
-    info += `\n💳 *Aceita os seguintes convênios:*\n`;
+    info += `💳 *Aceita os seguintes convênios:*\n`;
     info += acceptedInsurances.slice(0, 10).map((ins: string) => `• ${ins}`).join('\n');
     if (acceptedInsurances.length > 10) {
       info += `\n... e mais ${acceptedInsurances.length - 10} convênios`;
     }
-    info += `\n\n💡 Valores com convênio podem variar. Consulte nossa equipe para valores específicos do seu plano.`;
+    info += `\n💡 Valores com convênio podem variar. Consulte nossa equipe para valores específicos do seu plano.`;
   } else {
-    info += `\n\n💡 Consulte nossa equipe para informações sobre convênios aceitos.`;
+    info += `💡 Consulte nossa equipe para informações sobre convênios aceitos.`;
   }
   
-  info += `\n\n📞 *Próximos passos:*\n`;
+  info += `\n📞 *Próximos passos:*\n`;
   info += `Para agendar uma sessão, entre em contato conosco ou use o comando de agendamento!`;
   
-  // Format for WhatsApp with proper line breaks
+  // Format for WhatsApp with proper line breaks (reduced spacing)
   return formatMessageForWhatsApp(info);
 }
 
