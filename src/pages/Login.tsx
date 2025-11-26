@@ -28,7 +28,7 @@ export function Login() {
             <MessageSquare className="h-8 w-8 text-white" />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            ClinicBot AI
+            ZoraH
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Sistema de Agendamento Inteligente

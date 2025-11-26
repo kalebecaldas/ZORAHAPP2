@@ -171,7 +171,7 @@ const Sidebar: React.FC = () => {
               <Bot className="h-6 w-6 text-white" />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <h1 className="text-xl font-bold text-gray-400 whitespace-nowrap">ClinicAI</h1>
+              <h1 className="text-xl font-bold text-gray-400 whitespace-nowrap">ZoraH</h1>
               <p className="text-xs text-gray-500 whitespace-nowrap">WhatsApp + IA</p>
             </div>
           </div>
