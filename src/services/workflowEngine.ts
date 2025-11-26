@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import { TemplateService } from './templateService.js'
 import type { TemplateContext } from '../types/templates.js'
 import { clinicLocations, clinicDataService } from '../../api/data/clinicData.js'
+import { formatMessageForWhatsApp } from './workflow/utils/messageFormatter.js'
 
 export interface WorkflowNode {
   id: string;
