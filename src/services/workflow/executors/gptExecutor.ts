@@ -364,21 +364,8 @@ EXEMPLOS CORRETOS:
     }
     
     // Format response with proper line breaks for WhatsApp
-    // WhatsApp needs consistent \n\n between sections for proper spacing
-    let formattedResponse = conversationalResponse
-      // First, normalize all line breaks
-      .replace(/\r\n/g, '\n') // Windows line breaks
-      .replace(/\r/g, '\n') // Mac line breaks
-      // Ensure sections have proper spacing (at least one blank line between major sections)
-      .replace(/(\*\*[^*]+\*\*)\n([^\n])/g, '$1\n\n$2') // Add space after bold headers
-      .replace(/([.!?])\n([A-Z])/g, '$1\n\n$2') // Add space after sentences
-      // Clean up excessive newlines (more than 2 consecutive)
-      .replace(/\n{3,}/g, '\n\n')
-      // Ensure list items have proper spacing
-      .replace(/(• [^\n]+)\n(• [^\n]+)/g, '$1\n$2') // Keep single line between list items
-      .replace(/(• [^\n]+)\n\n(• [^\n]+)/g, '$1\n$2') // Remove double line between list items
-      // Final cleanup
-      .trim();
+    const { formatMessageForWhatsApp } = await import('../utils/messageFormatter');
+    let formattedResponse = formatMessageForWhatsApp(conversationalResponse);
     
     return {
       nextNodeId: shouldSkipNextNode ? undefined : nextNodeId, // Skip next node if we generated complete response

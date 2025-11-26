@@ -1,4 +1,5 @@
 import { clinicData } from '../../../data/clinicData.js';
+import { formatMessageForWhatsApp } from './messageFormatter.js';
 
 /**
  * Formats clinic data for GPT context
@@ -201,7 +202,8 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
   info += `\n\n📞 *Próximos passos:*\n`;
   info += `Para agendar uma sessão, entre em contato conosco ou use o comando de agendamento!`;
   
-  return info;
+  // Format for WhatsApp with proper line breaks
+  return formatMessageForWhatsApp(info);
 }
 
 /**
