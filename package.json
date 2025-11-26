@@ -25,7 +25,8 @@
     "test:coverage": "vitest --coverage",
     "migrate:procedures": "tsx scripts/migrate_procedure_general_to_ortopedica.ts",
     "cleanup:workflows": "tsx scripts/delete_unused_workflows.ts",
-    "update:workflow:railway": "tsx scripts/update_workflow_railway.ts"
+    "update:workflow:railway": "tsx scripts/update_workflow_railway.ts",
+    "sync:workflow:railway": "tsx scripts/sync_workflow_to_railway.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

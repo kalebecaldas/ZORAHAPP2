@@ -1,0 +1,1393 @@
+{
+  "id": "cmidioe4q0000xg3s8bwjl2rg",
+  "name": "Sistema Completo v2 - Refatorado",
+  "description": "Workflow limpo e otimizado com arquitetura modular",
+  "isActive": true,
+  "config": {
+    "edges": [
+      {
+        "id": "e1",
+        "data": {
+          "port": "main"
+        },
+        "source": "start",
+        "target": "clinic_selection"
+      },
+      {
+        "id": "e2",
+        "data": {
+          "port": "true"
+        },
+        "source": "clinic_selection",
+        "target": "unidade_vieiralves"
+      },
+      {
+        "id": "e3",
+        "data": {
+          "port": "false"
+        },
+        "source": "clinic_selection",
+        "target": "unidade_sao_jose"
+      },
+      {
+        "id": "e4",
+        "data": {
+          "port": "main"
+        },
+        "source": "unidade_vieiralves",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "e5",
+        "data": {
+          "port": "main"
+        },
+        "source": "unidade_sao_jose",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "e6",
+        "data": {
+          "port": "1"
+        },
+        "source": "gpt_classifier",
+        "target": "info_valores"
+      },
+      {
+        "id": "e7",
+        "data": {
+          "port": "2"
+        },
+        "source": "gpt_classifier",
+        "target": "info_convenios"
+      },
+      {
+        "id": "e8",
+        "data": {
+          "port": "3"
+        },
+        "source": "gpt_classifier",
+        "target": "info_localizacao"
+      },
+      {
+        "id": "e9",
+        "data": {
+          "port": "5"
+        },
+        "source": "gpt_classifier",
+        "target": "check_patient"
+      },
+      {
+        "id": "e10",
+        "data": {
+          "port": "6"
+        },
+        "source": "gpt_classifier",
+        "target": "transfer_human"
+      },
+      {
+        "id": "e14",
+        "data": {
+          "port": "main"
+        },
+        "source": "check_patient",
+        "target": "patient_decision"
+      },
+      {
+        "id": "e15",
+        "data": {
+          "port": "true"
+        },
+        "source": "patient_decision",
+        "target": "msg_paciente_encontrado"
+      },
+      {
+        "id": "e16",
+        "data": {
+          "port": "false"
+        },
+        "source": "patient_decision",
+        "target": "msg_solicita_cadastro"
+      },
+      {
+        "id": "e18",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_solicita_cadastro",
+        "target": "collect_nome"
+      },
+      {
+        "id": "e19",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_nome",
+        "target": "collect_cpf"
+      },
+      {
+        "id": "e20",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_cpf",
+        "target": "collect_nascimento"
+      },
+      {
+        "id": "e21",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_nascimento",
+        "target": "collect_email"
+      },
+      {
+        "id": "e22",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_email",
+        "target": "collect_convenio"
+      },
+      {
+        "id": "e23",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_convenio",
+        "target": "confirma_cadastro"
+      },
+      {
+        "id": "e24",
+        "data": {
+          "port": "main"
+        },
+        "source": "confirma_cadastro",
+        "target": "validate_cadastro"
+      },
+      {
+        "id": "e25",
+        "data": {
+          "port": "true"
+        },
+        "source": "validate_cadastro",
+        "target": "create_patient"
+      },
+      {
+        "id": "e26",
+        "data": {
+          "port": "false"
+        },
+        "source": "validate_cadastro",
+        "target": "collect_nome"
+      },
+      {
+        "id": "e27",
+        "data": {
+          "port": "main"
+        },
+        "source": "create_patient",
+        "target": "msg_cadastro_sucesso"
+      },
+      {
+        "id": "info_valores_to_msg_valores",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_valores",
+        "target": "msg_valores_formatado"
+      },
+      {
+        "id": "msg_valores_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_valores_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "info_convenios_to_msg_convenios",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_convenios",
+        "target": "msg_convenios_formatado"
+      },
+      {
+        "id": "msg_convenios_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_convenios_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "info_localizacao_to_msg_localizacao",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_localizacao",
+        "target": "msg_localizacao_formatado"
+      },
+      {
+        "id": "msg_localizacao_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_localizacao_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "msg_cadastro_sucesso_action_get_procedimentos_insurance",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_cadastro_sucesso",
+        "target": "action_get_procedimentos_insurance"
+      },
+      {
+        "id": "action_get_procedimentos_insurance_msg_procedimentos_insurance",
+        "data": {
+          "port": "main"
+        },
+        "source": "action_get_procedimentos_insurance",
+        "target": "msg_procedimentos_insurance"
+      },
+      {
+        "id": "msg_procedimentos_insurance_transfer_to_queue",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_procedimentos_insurance",
+        "target": "transfer_to_queue"
+      },
+      {
+        "id": "msg_paciente_encontrado_action_get_procedimentos_insurance_encontrado",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_paciente_encontrado",
+        "target": "action_get_procedimentos_insurance_encontrado"
+      },
+      {
+        "id": "action_get_procedimentos_insurance_encontrado_msg_procedimentos_insurance_encontrado",
+        "data": {
+          "port": "main"
+        },
+        "source": "action_get_procedimentos_insurance_encontrado",
+        "target": "msg_procedimentos_insurance_encontrado"
+      },
+      {
+        "id": "msg_procedimentos_insurance_encontrado_transfer_to_queue_encontrado",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_procedimentos_insurance_encontrado",
+        "target": "transfer_to_queue_encontrado"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "start",
+        "type": "START",
+        "content": {
+          "type": "START",
+          "label": "START",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "Olá! Bem-vindo às nossas clínicas! 🏥\n\nTemos duas unidades:\n1️⃣ Unidade Vieiralves 📍 Rua Rio Içá, 850\n2️⃣ Unidade São José 📍 Av. Autaz Mirim, 5773\n\nEm qual você gostaria de ser atendido(a)? Responda com 1 ou 2."
+        },
+        "position": {
+          "x": 100,
+          "y": 50
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "clinic_selection"
+          }
+        ]
+      },
+      {
+        "id": "clinic_selection",
+        "type": "CONDITION",
+        "content": {
+          "type": "CONDITION",
+          "label": "CONDITION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "true",
+              "type": "output",
+              "label": "Verdadeiro",
+              "position": "bottom"
+            },
+            {
+              "id": "false",
+              "type": "output",
+              "label": "Falso",
+              "position": "bottom"
+            }
+          ],
+          "condition": "clinic_selection",
+          "trueMessage": "",
+          "falseMessage": "Por favor, escolha uma de nossas unidades (1 ou 2)."
+        },
+        "position": {
+          "x": 100,
+          "y": 180
+        },
+        "connections": [
+          {
+            "port": "true",
+            "targetId": "unidade_vieiralves"
+          },
+          {
+            "port": "false",
+            "targetId": "unidade_sao_jose"
+          }
+        ]
+      },
+      {
+        "id": "unidade_vieiralves",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "✅ Você escolheu a Unidade Vieiralves!\n\n🏥 **Unidade Vieiralves**\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n💰 Saber sobre valores\n🏥 Ver convênios\n📍 Localização\n📝 Procedimentos\n📅 Agendar consulta"
+        },
+        "position": {
+          "x": -315,
+          "y": 255
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "gpt_classifier"
+          }
+        ]
+      },
+      {
+        "id": "unidade_sao_jose",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "✅ Você escolheu a Unidade São José!\n\n🏥 **Unidade São José**\n📍 ${endereco}\n🗺️ Maps: ${maps_url}\n📞 ${telefone}\n⏰ ${horario_atendimento}\n\nComo posso ajudar você hoje?\n💰 Saber sobre valores\n🏥 Ver convênios\n📍 Localização\n📝 Procedimentos\n📅 Agendar consulta"
+        },
+        "position": {
+          "x": 585,
+          "y": 165
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "gpt_classifier"
+          }
+        ]
+      },
+      {
+        "id": "gpt_classifier",
+        "type": "GPT_RESPONSE",
+        "content": {
+          "type": "GPT_RESPONSE",
+          "label": "GPT_RESPONSE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "1",
+              "type": "output",
+              "label": "Valores",
+              "position": "bottom"
+            },
+            {
+              "id": "2",
+              "type": "output",
+              "label": "Convênios",
+              "position": "bottom"
+            },
+            {
+              "id": "3",
+              "type": "output",
+              "label": "Localização",
+              "position": "bottom"
+            },
+            {
+              "id": "4",
+              "type": "output",
+              "label": "Explicação",
+              "position": "bottom"
+            },
+            {
+              "id": "5",
+              "type": "output",
+              "label": "Agendar",
+              "position": "bottom"
+            },
+            {
+              "id": "6",
+              "type": "output",
+              "label": "Humano",
+              "position": "bottom"
+            }
+          ],
+          "systemPrompt": "Você é um classificador de intenção para clínica de fisioterapia. Analise a mensagem do usuário e classifique em UMA das opções:\n\n1) VALORES - perguntas sobre preços, valores particulares, pacotes\n2) CONVÊNIOS - perguntas sobre convênios aceitos, planos de saúde, cobertura\n3) LOCALIZAÇÃO - perguntas sobre endereço, como chegar, horários, contato\n4) PROCEDIMENTO - perguntas sobre o que é um procedimento, benefícios, duração, indicações\n5) AGENDAR - desejo de marcar consulta, agendar, marcar horário (ex: \"quero agendar\", \"quero gendar\", \"marcar consulta\")\n6) ATENDENTE - pedido para falar com humano, atendente, pessoa\n\nIMPORTANTE: \"quero agendar\", \"quero gendar\" (com erro de digitação), \"marcar\", \"agendar consulta\" = SEMPRE porta 5 (AGENDAR).\n\nResponda APENAS com JSON no formato {\"intent_port\":\"<1|2|3|4|5|6>\",\"brief\":\"<mensagem curta>\",\"confidence\":<0..1>}."
+        },
+        "position": {
+          "x": 195,
+          "y": 390
+        },
+        "connections": [
+          {
+            "port": "1",
+            "targetId": "info_valores"
+          },
+          {
+            "port": "2",
+            "targetId": "info_convenios"
+          },
+          {
+            "port": "3",
+            "targetId": "info_localizacao"
+          },
+          {
+            "port": "5",
+            "targetId": "check_patient"
+          },
+          {
+            "port": "6",
+            "targetId": "transfer_human"
+          }
+        ]
+      },
+      {
+        "id": "info_valores",
+        "type": "API_CALL",
+        "content": {
+          "type": "API_CALL",
+          "label": "API_CALL",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "Consultando valores...",
+          "endpoint": "get_clinic_procedures"
+        },
+        "position": {
+          "x": -450,
+          "y": 540
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_valores_formatado"
+          }
+        ]
+      },
+      {
+        "id": "info_convenios",
+        "type": "API_CALL",
+        "content": {
+          "type": "API_CALL",
+          "label": "API_CALL",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "Consultando convênios...",
+          "endpoint": "get_clinic_insurances"
+        },
+        "position": {
+          "x": -45,
+          "y": 750
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_convenios_formatado"
+          }
+        ]
+      },
+      {
+        "id": "info_localizacao",
+        "type": "API_CALL",
+        "content": {
+          "type": "API_CALL",
+          "label": "API_CALL",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "Consultando localização...",
+          "endpoint": "get_clinic_location"
+        },
+        "position": {
+          "x": 100,
+          "y": 600
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_localizacao_formatado"
+          }
+        ]
+      },
+      {
+        "id": "check_patient",
+        "type": "ACTION",
+        "content": {
+          "type": "ACTION",
+          "label": "ACTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "action": "search_patient_by_phone"
+        },
+        "position": {
+          "x": 600,
+          "y": 645
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "patient_decision"
+          }
+        ]
+      },
+      {
+        "id": "patient_decision",
+        "type": "CONDITION",
+        "content": {
+          "type": "CONDITION",
+          "label": "CONDITION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "true",
+              "type": "output",
+              "label": "Verdadeiro",
+              "position": "bottom"
+            },
+            {
+              "id": "false",
+              "type": "output",
+              "label": "Falso",
+              "position": "bottom"
+            }
+          ],
+          "condition": "patient_found"
+        },
+        "position": {
+          "x": 500,
+          "y": 730
+        },
+        "connections": [
+          {
+            "port": "true",
+            "targetId": "msg_paciente_encontrado"
+          },
+          {
+            "port": "false",
+            "targetId": "msg_solicita_cadastro"
+          }
+        ]
+      },
+      {
+        "id": "msg_paciente_encontrado",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "✅ Encontrei seu cadastro!\n\nVamos prosseguir com seu agendamento."
+        },
+        "position": {
+          "x": 350,
+          "y": 860
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "action_get_procedimentos_insurance_encontrado"
+          }
+        ]
+      },
+      {
+        "id": "msg_solicita_cadastro",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "📋 Para agendar, preciso coletar alguns dados.\n\nVamos começar?"
+        },
+        "position": {
+          "x": 650,
+          "y": 860
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "collect_nome"
+          }
+        ]
+      },
+      {
+        "id": "collect_nome",
+        "type": "DATA_COLLECTION",
+        "content": {
+          "type": "DATA_COLLECTION",
+          "field": "name",
+          "label": "DATA_COLLECTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "prompt": "📝 Qual é seu nome completo?",
+          "errorMessage": "❌ Nome inválido. Informe seu nome completo (nome e sobrenome)."
+        },
+        "position": {
+          "x": 650,
+          "y": 990
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "collect_cpf"
+          }
+        ]
+      },
+      {
+        "id": "collect_cpf",
+        "type": "DATA_COLLECTION",
+        "content": {
+          "type": "DATA_COLLECTION",
+          "field": "cpf",
+          "label": "DATA_COLLECTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "prompt": "📄 Agora, seu CPF (apenas números):",
+          "errorMessage": "❌ CPF inválido. Informe um CPF válido com 11 dígitos."
+        },
+        "position": {
+          "x": 650,
+          "y": 1120
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "collect_nascimento"
+          }
+        ]
+      },
+      {
+        "id": "collect_nascimento",
+        "type": "DATA_COLLECTION",
+        "content": {
+          "type": "DATA_COLLECTION",
+          "field": "birth_date",
+          "label": "DATA_COLLECTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "prompt": "🎂 Data de nascimento (DD/MM/AAAA):",
+          "errorMessage": "❌ Data inválida. Use o formato DD/MM/AAAA (ex: 15/08/1990)."
+        },
+        "position": {
+          "x": 650,
+          "y": 1250
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "collect_email"
+          }
+        ]
+      },
+      {
+        "id": "collect_email",
+        "type": "DATA_COLLECTION",
+        "content": {
+          "type": "DATA_COLLECTION",
+          "field": "email",
+          "label": "DATA_COLLECTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "prompt": "📧 Seu e-mail:",
+          "errorMessage": "❌ E-mail inválido. Informe um e-mail válido (ex: seu@email.com)."
+        },
+        "position": {
+          "x": 650,
+          "y": 1380
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "collect_convenio"
+          }
+        ]
+      },
+      {
+        "id": "collect_convenio",
+        "type": "DATA_COLLECTION",
+        "content": {
+          "type": "DATA_COLLECTION",
+          "field": "insurance",
+          "label": "DATA_COLLECTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "prompt": "💳 Qual seu convênio?\n(ou digite 'particular' se for pagar particular)",
+          "errorMessage": "❌ Convênio inválido. Digite o nome do convênio ou 'particular'."
+        },
+        "position": {
+          "x": 650,
+          "y": 1510
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "confirma_cadastro"
+          }
+        ]
+      },
+      {
+        "id": "confirma_cadastro",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "📋 **Confirme seus dados:**\n\n👤 Nome: ${paciente.nome}\n📄 CPF: ${paciente.cpf}\n🎂 Nascimento: ${paciente.nascimento}\n📧 E-mail: ${paciente.email}\n💳 Convênio: ${paciente.convenio}\n📱 Telefone: ${paciente.telefone}\n\n✅ Está tudo correto?\n(responda 'sim' para confirmar ou 'não' para corrigir)"
+        },
+        "position": {
+          "x": 650,
+          "y": 1640
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "validate_cadastro"
+          }
+        ]
+      },
+      {
+        "id": "validate_cadastro",
+        "type": "CONDITION",
+        "content": {
+          "type": "CONDITION",
+          "label": "CONDITION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "true",
+              "type": "output",
+              "label": "Verdadeiro",
+              "position": "bottom"
+            },
+            {
+              "id": "false",
+              "type": "output",
+              "label": "Falso",
+              "position": "bottom"
+            }
+          ],
+          "condition": "sim|confirmar|ok|correto|yes|está certo|tudo certo",
+          "trueMessage": "",
+          "falseMessage": "📝 Para corrigir, vamos recomeçar o cadastro."
+        },
+        "position": {
+          "x": 650,
+          "y": 1770
+        },
+        "connections": [
+          {
+            "port": "true",
+            "targetId": "create_patient"
+          },
+          {
+            "port": "false",
+            "targetId": "collect_nome"
+          }
+        ]
+      },
+      {
+        "id": "create_patient",
+        "type": "ACTION",
+        "content": {
+          "type": "ACTION",
+          "label": "ACTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "action": "create_patient_profile"
+        },
+        "position": {
+          "x": 550,
+          "y": 1900
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_cadastro_sucesso"
+          }
+        ]
+      },
+      {
+        "id": "msg_cadastro_sucesso",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "✅ Cadastro realizado com sucesso!\n\nAgora vamos prosseguir com seu agendamento."
+        },
+        "position": {
+          "x": 550,
+          "y": 2030
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "action_get_procedimentos_insurance"
+          }
+        ]
+      },
+      {
+        "id": "transfer_human",
+        "type": "TRANSFER_HUMAN",
+        "content": {
+          "type": "TRANSFER_HUMAN",
+          "label": "TRANSFER_HUMAN",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "👤 Transferindo para atendimento humano..."
+        },
+        "position": {
+          "x": 750,
+          "y": 540
+        },
+        "connections": []
+      },
+      {
+        "id": "msg_valores_formatado",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "💰 **Informações sobre Valores**\n\n${resposta_valores}\n\n💡 Para saber o valor de um procedimento específico, pergunte: \"qual o valor da acupuntura?\""
+        },
+        "position": {
+          "x": -510,
+          "y": 750
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "gpt_classifier"
+          }
+        ]
+      },
+      {
+        "id": "msg_convenios_formatado",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "🏥 **Convênios Aceitos**\n\n${resposta_convenios}\n\n💡 Consulte procedimentos cobertos pelo seu convênio."
+        },
+        "position": {
+          "x": -150,
+          "y": 975
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "gpt_classifier"
+          }
+        ]
+      },
+      {
+        "id": "msg_localizacao_formatado",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "📍 **Localização e Horários**\n\n${resposta_localizacao}\n\n💡 Estamos prontos para atendê-lo(a)!"
+        },
+        "position": {
+          "x": 300,
+          "y": 615
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "gpt_classifier"
+          }
+        ]
+      },
+      {
+        "id": "action_get_procedimentos_insurance",
+        "type": "ACTION",
+        "content": {
+          "type": "ACTION",
+          "label": "ACTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "action": "get_procedures_by_insurance"
+        },
+        "position": {
+          "x": 1000,
+          "y": 2200
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_procedimentos_insurance"
+          }
+        ]
+      },
+      {
+        "id": "msg_procedimentos_insurance",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "🩺 **Procedimentos disponíveis para ${paciente.convenio}:**\n\n${procedimentos_lista}\n\n💡 Você pode informar quais procedimentos deseja agendar enquanto aguarda o atendimento."
+        },
+        "position": {
+          "x": 1000,
+          "y": 2330
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "transfer_to_queue"
+          }
+        ]
+      },
+      {
+        "id": "transfer_to_queue",
+        "type": "TRANSFER_HUMAN",
+        "content": {
+          "type": "TRANSFER_HUMAN",
+          "label": "TRANSFER_HUMAN",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "finalMessage": "⏳ **Você foi encaminhado para um de nossos atendentes!**\n\nEnquanto aguarda, você pode informar quais procedimentos deseja agendar.\nNossa equipe entrará em contato em breve para finalizar seu agendamento."
+        },
+        "position": {
+          "x": 1000,
+          "y": 2460
+        },
+        "connections": []
+      },
+      {
+        "id": "action_get_procedimentos_insurance_encontrado",
+        "type": "ACTION",
+        "content": {
+          "type": "ACTION",
+          "label": "ACTION",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "action": "get_procedures_by_insurance"
+        },
+        "position": {
+          "x": 315,
+          "y": 1020
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "msg_procedimentos_insurance_encontrado"
+          }
+        ]
+      },
+      {
+        "id": "msg_procedimentos_insurance_encontrado",
+        "type": "MESSAGE",
+        "content": {
+          "type": "MESSAGE",
+          "label": "MESSAGE",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "message": "🩺 **Procedimentos disponíveis para ${paciente.convenio}:**\n\n${procedimentos_lista}\n\n💡 Você pode informar quais procedimentos deseja agendar enquanto aguarda o atendimento."
+        },
+        "position": {
+          "x": 285,
+          "y": 1170
+        },
+        "connections": [
+          {
+            "port": "main",
+            "targetId": "transfer_to_queue_encontrado"
+          }
+        ]
+      },
+      {
+        "id": "transfer_to_queue_encontrado",
+        "type": "TRANSFER_HUMAN",
+        "content": {
+          "type": "TRANSFER_HUMAN",
+          "label": "TRANSFER_HUMAN",
+          "ports": [
+            {
+              "id": "input",
+              "type": "input",
+              "label": "Entrada",
+              "position": "top"
+            },
+            {
+              "id": "main",
+              "type": "output",
+              "label": "Saída",
+              "position": "bottom"
+            }
+          ],
+          "finalMessage": "⏳ **Você foi encaminhado para um de nossos atendentes!**\n\nEnquanto aguarda, você pode informar quais procedimentos deseja agendar.\nNossa equipe entrará em contato em breve para finalizar seu agendamento."
+        },
+        "position": {
+          "x": 300,
+          "y": 1350
+        },
+        "connections": []
+      }
+    ]
+  }
+}
