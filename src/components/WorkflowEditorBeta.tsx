@@ -357,13 +357,10 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                     color: '#64748b',
                                     width: 20,
                                     height: 20
-                                },
-                                // Estilo quando edge está selecionada
-                                selected: true
+                                }
                             }}
                             edgesReconnectable={true} // Permite reconectar edges
                             edgesFocusable={true} // Permite focar nas edges
-                            edgesUpdatable={true} // Permite atualizar edges
                             selectNodesOnDrag={false} // Não seleciona nós ao arrastar
                             connectionLineStyle={{
                                 strokeWidth: 3,
