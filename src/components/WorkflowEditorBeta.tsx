@@ -454,16 +454,16 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
 
                                             {selectedNode.data.type === 'CONDITION' && (
                                                 <div className="space-y-3">
-                                                    <div className="space-y-1">
-                                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Condição</label>
-                                                        <input
-                                                            type="text"
-                                                            value={selectedNode.data.condition as string || ''}
-                                                            onChange={(e) => updateNodeData('condition', e.target.value)}
-                                                            className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                <div className="space-y-1">
+                                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Condição</label>
+                                                    <input
+                                                        type="text"
+                                                        value={selectedNode.data.condition as string || ''}
+                                                        onChange={(e) => updateNodeData('condition', e.target.value)}
+                                                        className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                                                             placeholder="ex: sim|confirmar|ok|correto|yes|está certo"
-                                                        />
-                                                        <p className="text-xs text-gray-500">Use | para separar múltiplas saídas.</p>
+                                                    />
+                                                    <p className="text-xs text-gray-500">Use | para separar múltiplas saídas.</p>
                                                     </div>
                                                     
                                                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">

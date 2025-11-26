@@ -29,31 +29,36 @@ npm run sync:workflow:railway
 
 Isso cria o arquivo `workflow_to_sync.json` com o workflow local (31 nós, 35 conexões).
 
-### Passo 2: Fazer Upload via Railway Dashboard
+### Passo 2: Fazer Upload via Railway SSH
 
-**IMPORTANTE**: Use o Railway Shell do **Dashboard**, não o CLI!
+**IMPORTANTE**: Use `railway ssh` para acessar o shell DENTRO do container!
 
-1. **Acesse o Railway Dashboard**
-   - Vá em: https://railway.app
-   - Faça login
-   - Selecione seu projeto
+1. **Fazer Login no Railway**
+   ```bash
+   railway login
+   ```
 
-2. **Abra o Shell do Serviço**
-   - Clique no **serviço** (não no banco de dados)
-   - Procure por **"Shell"** ou **"Terminal"** no menu
-   - Isso abre um terminal **DENTRO do ambiente Railway**
+2. **Conectar ao Projeto (se ainda não fez)**
+   ```bash
+   railway link
+   ```
 
-3. **Execute o Script**
+3. **Acessar o Shell do Container**
+   ```bash
+   railway ssh
+   ```
+
+4. **Dentro do Shell do Container, Execute**
    ```bash
    npm run sync:workflow:railway:upload
    ```
 
-### Por que não funciona com `railway shell` do CLI?
+### Por que usar `railway ssh`?
 
-- `railway shell` apenas injeta variáveis de ambiente
-- Ainda executa na sua máquina local
-- O hostname `postgres.railway.internal` só funciona dentro do container
-- O Railway Shell do Dashboard executa **dentro do container**, então funciona
+- `railway ssh` conecta DENTRO do container Railway
+- O hostname `postgres.railway.internal` funciona dentro do container
+- Você executa comandos diretamente no ambiente Railway
+- É a forma oficial de acessar o shell do container
 
 ## 📋 Exemplo de Saída Esperada
 
@@ -102,8 +107,8 @@ Após executar, verifique:
 ## 🐛 Troubleshooting
 
 ### Erro: "Can't reach database server at postgres.railway.internal"
-- ✅ **Solução**: Use Railway Shell do Dashboard (não CLI)
-- ❌ **Não use**: `railway shell` do CLI localmente
+- ✅ **Solução**: Use `railway ssh` para acessar o container
+- ❌ **Não use**: `railway shell` ou executar localmente
 
 ### Erro: "Arquivo workflow_to_sync.json não encontrado"
 - Execute primeiro: `npm run sync:workflow:railway` (localmente)
@@ -116,10 +121,10 @@ Após executar, verifique:
 ## 📝 Resumo
 
 1. ✅ **Local**: `npm run sync:workflow:railway` (prepara arquivo)
-2. ✅ **Railway Dashboard Shell**: `npm run sync:workflow:railway:upload` (faz upload)
+2. ✅ **Railway SSH**: `railway ssh` → `npm run sync:workflow:railway:upload` (faz upload)
 3. ✅ **Verificar**: Workflow atualizado no editor
 
 ---
 
-**IMPORTANTE**: Use Railway Shell do **Dashboard**, não `railway shell` do CLI!
+**IMPORTANTE**: Use `railway ssh` para acessar o container Railway!
 
