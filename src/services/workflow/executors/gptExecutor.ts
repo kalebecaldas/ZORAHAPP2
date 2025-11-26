@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { WorkflowNode, WorkflowExecutionContext, ConnectionMap, NodeExecutionResult } from '../core/types';
+import { clinicDataService } from '../../clinicDataService';
 
 /**
  * Executes a GPT_RESPONSE node
@@ -250,18 +251,24 @@ EXEMPLOS CORRETOS:
       
       // Get procedures list for better responses
       const clinicCode = context.userData.selectedClinic || 'vieiralves';
-      const clinicInfo = clinicDataService.getClinicInfo(clinicCode);
-      const mainProcedures = (clinicInfo.procedures || []).slice(0, 5).map((p: any) => {
-        const price = p.prices?.[clinicCode];
-        const priceText = typeof price === 'number' ? `R$ ${price},00` : 'consultar';
+      const allProcedures = clinicDataService.getProcedures();
+      const mainProcedures = allProcedures.slice(0, 5).map((p: any) => {
+        const price = clinicDataService.getPrice(p.id, clinicCode);
+        const priceText = typeof price === 'number' ? `R$ ${price},00` : 
+                         typeof price === 'string' ? price : 'consultar';
         return `- ${p.name} (${priceText})`;
       }).join('\n');
+      
+      const allInsurances = clinicDataService.getInsurances();
       
       // Generate better response based on intent WITH REAL DATA
       const conversationalMap: Record<string, string> = {
         '1': `Entendi que você quer saber sobre valores! 💰\n\nNossos principais procedimentos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
-        '2': `Legal! Você quer saber sobre convênios. 🏥\n\nAceitamos: ${(clinicInfo.acceptedInsurance || []).slice(0, 5).join(', ')} e outros.\n\nQual convênio você tem?`,
-        '3': `Vou te passar nossa localização! 📍\n\n${clinicLocations[clinicCode].name}\n${clinicLocations[clinicCode].address}\n${clinicLocations[clinicCode].phone}\n\nPrecisa saber como chegar?`,
+        '2': `Legal! Você quer saber sobre convênios. 🏥\n\nAceitamos: ${allInsurances.slice(0, 5).join(', ')} e outros.\n\nQual convênio você tem?`,
+        '3': (() => {
+          const unit = clinicDataService.getUnitById(clinicCode) || clinicDataService.getUnits()[0];
+          return `Vou te passar nossa localização! 📍\n\n${unit.name}\n${unit.mapsUrl ? `📍 ${unit.mapsUrl}\n` : ''}📞 ${unit.phone}\n\nPrecisa saber como chegar?`;
+        })(),
         '4': `Você quer saber sobre procedimentos! 📝\n\nOferecemos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
         '5': `Ótimo! Vamos agendar sua consulta! 📅\n\nTemos disponíveis:\n${mainProcedures}\n\nPara qual procedimento você precisa agendar?`,
         '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
