@@ -2162,8 +2162,10 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
     const updatedContext = engine.getContext()
     console.log(`🔄 Updating conversation state - currentNodeId: ${updatedContext.currentNodeId}, userData:`, updatedContext.userData)
 
-    // Check if we just executed msg_paciente_encontrado or msg_cadastro_sucesso
-    // by checking the last bot message from the database (more reliable than context history)
+    // DISABLED: Check if we just executed msg_paciente_encontrado or msg_cadastro_sucesso
+    // This code was bypassing the workflow nodes (action_get_procedimentos_insurance, msg_procedimentos_insurance, transfer_to_queue)
+    // Now the workflow handles this through explicit TRANSFER_HUMAN nodes
+    // Only transfer if the message already contains the queue message (meaning TRANSFER_HUMAN node was executed)
     try {
       const lastBotMessage = await prisma.message.findFirst({
         where: {
@@ -2176,26 +2178,17 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
         }
       });
 
-      console.log(`🔄 Last bot message from DB:`, lastBotMessage?.messageText?.substring(0, 100));
-
       if (lastBotMessage) {
         const messageContent = (lastBotMessage.messageText || '').toLowerCase();
-        const isPatientFoundMessage = messageContent.includes('encontrei seu cadastro') ||
-          messageContent.includes('encontrei seu cadastro!') ||
-          messageContent.includes('encontrei seu cadastro') ||
-          messageContent.includes('encontrei seu cadastro! vamos prosseguir');
-        const isRegistrationSuccessMessage = messageContent.includes('cadastro realizado com sucesso') ||
-          messageContent.includes('cadastro realizado') ||
-          messageContent.includes('cadastro realizado com sucesso!');
+        // Only check for queue message - if it's there, the TRANSFER_HUMAN node already executed
         const hasQueueMessage = messageContent.includes('foi encaminhado para um de nossos atendentes') ||
           messageContent.includes('encaminhado para um de nossos atendentes') ||
           messageContent.includes('aguarda o atendimento');
 
-        console.log(`🔄 Checking message - isPatientFound: ${isPatientFoundMessage}, isRegistrationSuccess: ${isRegistrationSuccessMessage}, hasQueueMessage: ${hasQueueMessage}`);
-        console.log(`🔄 Message content (first 200 chars): ${messageContent.substring(0, 200)}`);
-
-        if (isPatientFoundMessage || isRegistrationSuccessMessage || hasQueueMessage) {
-          console.log(`🔄 ✅ Detected patient found/registration success/queue message, transferring to PRINCIPAL queue`);
+        // Only transfer if queue message is present (TRANSFER_HUMAN node executed)
+        // Don't transfer just because of registration success message
+        if (hasQueueMessage) {
+          console.log(`🔄 ✅ Detected queue message, transferring to PRINCIPAL queue`);
           await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
           console.log(`🔄 ✅ Transfer completed`);
         }
@@ -2296,14 +2289,20 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
         // Workflow completed
         return
       }
-      // Transfer to human queue when showing registration success or patient found message
+      // DISABLED: Transfer to human queue when showing registration success or patient found message
+      // This code was bypassing the workflow nodes (action_get_procedimentos_insurance, msg_procedimentos_insurance, transfer_to_queue)
+      // Now the workflow handles this through explicit TRANSFER_HUMAN nodes
+      /*
       if (currentNode?.id === 'msg_cadastro_sucesso' || currentNode?.id === 'msg_paciente_encontrado') {
         console.log(`🔄 Transferring conversation to PRINCIPAL queue after ${currentNode.id}`);
         await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
       }
+      */
     }
 
-    // Also check if the last executed node was one of these messages (in case currentNodeId wasn't updated yet)
+    // DISABLED: Also check if the last executed node was one of these messages
+    // This was also bypassing the workflow nodes
+    /*
     if (result.shouldStop) {
       const lastExecutedNode = nodes.find(n => {
         // Check if this node's message was just sent
@@ -2323,6 +2322,7 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
         await transferToHuman(conversation, 'Paciente cadastrado/encontrado - aguardando agendamento');
       }
     }
+    */
 
     // Continue execution if there's a next node and we shouldn't stop
     if (result.nextNodeId && !result.shouldStop) {
