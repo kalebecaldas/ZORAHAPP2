@@ -18,7 +18,7 @@ import {
 import '@xyflow/react/dist/style.css'
 
 import { toast } from 'sonner'
-import { Save, X, ZoomIn, ZoomOut, LayoutGrid, Play, Pause, CheckCircle2 } from 'lucide-react'
+import { Save, X, ZoomIn, ZoomOut, LayoutGrid, Play, Pause, CheckCircle2, AlertCircle } from 'lucide-react'
 import { io } from 'socket.io-client'
 import { api } from '../lib/utils'
 
@@ -165,6 +165,13 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
     const onPaneClick = useCallback(() => {
         setSelectedNode(null)
     }, [])
+    
+    const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+        event.stopPropagation()
+        if (confirm('Deseja remover esta conexão?')) {
+            setEdges((edges) => edges.filter((e) => e.id !== edge.id))
+        }
+    }, [setEdges])
 
     const handleSave = () => {
         const updatedWorkflow = reactFlowToWorkflow(nodes, edges, workflow)
@@ -298,6 +305,19 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                     <WorkflowSidebar />
 
                     <div className="flex-1 h-full relative overflow-visible" ref={reactFlowWrapper} style={{ zIndex: 0 }}>
+                        <style>{`
+                            .react-flow__edge.selected .react-flow__edge-path {
+                                stroke: #ef4444 !important;
+                                stroke-width: 4px !important;
+                            }
+                            .react-flow__edge:hover .react-flow__edge-path {
+                                stroke: #3b82f6 !important;
+                                stroke-width: 4px !important;
+                            }
+                            .react-flow__edge .react-flow__edge-path {
+                                cursor: pointer;
+                            }
+                        `}</style>
                         <ReactFlow
                             nodes={nodes}
                             edges={edges}
@@ -315,7 +335,9 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                             onDragOver={onDragOver}
                             onNodeClick={onNodeClick}
                             onPaneClick={onPaneClick}
+                            onEdgeClick={onEdgeClick}
                             nodeTypes={nodeTypes}
+                            deleteKeyCode="Delete" // Permite deletar com tecla Delete
                             fitView
                             fitViewOptions={{ padding: 0.2 }}
                             attributionPosition="bottom-right"
@@ -327,15 +349,22 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                 style: { 
                                     strokeWidth: 3, 
                                     stroke: '#64748b',
-                                    pointerEvents: 'visibleStroke'
+                                    pointerEvents: 'stroke', // Permite clicar nas edges
+                                    cursor: 'pointer'
                                 },
                                 markerEnd: {
                                     type: 'arrowclosed',
                                     color: '#64748b',
                                     width: 20,
                                     height: 20
-                                }
+                                },
+                                // Estilo quando edge está selecionada
+                                selected: true
                             }}
+                            edgesReconnectable={true} // Permite reconectar edges
+                            edgesFocusable={true} // Permite focar nas edges
+                            edgesUpdatable={true} // Permite atualizar edges
+                            selectNodesOnDrag={false} // Não seleciona nós ao arrastar
                             connectionLineStyle={{
                                 strokeWidth: 3,
                                 stroke: '#3b82f6'
@@ -352,6 +381,34 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                 maskColor="rgba(241, 245, 249, 0.7)"
                                 className="bg-white shadow-md border border-gray-200 rounded-lg overflow-hidden"
                             />
+                            
+                            {/* Help Panel */}
+                            <Panel position="bottom-left" className="m-4">
+                                <div className="bg-white rounded-lg shadow-md border border-gray-200 p-3 max-w-xs">
+                                    <div className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                                        <AlertCircle className="w-4 h-4 text-blue-600" />
+                                        Atalhos e Dicas
+                                    </div>
+                                    <div className="space-y-1.5 text-xs text-gray-600">
+                                        <div className="flex items-center gap-2">
+                                            <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px] font-mono">Delete</kbd>
+                                            <span>Deletar nó/conexão selecionada</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 bg-red-600 rounded"></div>
+                                            <span>Botão lixeira no nó</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-0.5 bg-blue-500"></div>
+                                            <span>Clique na conexão para deletar</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-3 h-3 bg-gray-300 border-2 border-gray-600 rounded-full"></div>
+                                            <span>Arraste das bolinhas para conectar</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Panel>
 
                             {/* Properties Panel */}
                             {selectedNode && (
@@ -399,16 +456,57 @@ const WorkflowEditorContent: React.FC<WorkflowEditorBetaProps> = ({ workflow, on
                                             )}
 
                                             {selectedNode.data.type === 'CONDITION' && (
-                                                <div className="space-y-1">
-                                                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Condição</label>
-                                                    <input
-                                                        type="text"
-                                                        value={selectedNode.data.condition as string || ''}
-                                                        onChange={(e) => updateNodeData('condition', e.target.value)}
-                                                        className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                                        placeholder="ex: continue|end"
-                                                    />
-                                                    <p className="text-xs text-gray-500">Use | para separar múltiplas saídas.</p>
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1">
+                                                        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Condição</label>
+                                                        <input
+                                                            type="text"
+                                                            value={selectedNode.data.condition as string || ''}
+                                                            onChange={(e) => updateNodeData('condition', e.target.value)}
+                                                            className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                            placeholder="ex: sim|confirmar|ok|correto|yes|está certo"
+                                                        />
+                                                        <p className="text-xs text-gray-500">Use | para separar múltiplas saídas.</p>
+                                                    </div>
+                                                    
+                                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                                                        <div className="text-xs font-semibold text-blue-900 uppercase tracking-wide flex items-center gap-1">
+                                                            <AlertCircle className="w-3.5 h-3.5" />
+                                                            Portas de Saída
+                                                        </div>
+                                                        <div className="space-y-1.5 text-xs">
+                                                            {((selectedNode.data.condition as string) || '').split('|').filter(Boolean).map((cond: string, idx: number) => (
+                                                                <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded border border-blue-200">
+                                                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                                    <span className="font-mono text-gray-700">{cond.trim()}</span>
+                                                                </div>
+                                                            ))}
+                                                            {((selectedNode.data.condition as string) || '').split('|').length === 0 && (
+                                                                <div className="text-gray-500 italic text-center py-2">Nenhuma porta configurada</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="pt-2 border-t border-blue-200 text-xs text-blue-700">
+                                                            💡 <strong>Dica:</strong> Cada palavra separada por | cria uma saída diferente. A mensagem do usuário será comparada com essas palavras para decidir qual caminho seguir.
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                                        <div className="text-xs font-semibold text-amber-900 uppercase tracking-wide mb-2">Exemplos de Uso</div>
+                                                        <div className="space-y-2 text-xs text-amber-800">
+                                                            <div>
+                                                                <div className="font-mono bg-white p-1.5 rounded border border-amber-200 mb-1">sim|yes|confirmar|ok</div>
+                                                                <div className="text-gray-600">→ Aceita múltiplas formas de confirmação</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-mono bg-white p-1.5 rounded border border-amber-200 mb-1">1|2|3</div>
+                                                                <div className="text-gray-600">→ Aceita números como opções</div>
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-mono bg-white p-1.5 rounded border border-amber-200 mb-1">vieiralves|são josé</div>
+                                                                <div className="text-gray-600">→ Aceita nomes específicos</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
 

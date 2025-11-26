@@ -287,6 +287,55 @@ export async function executeActionNode(
         }
         break;
       
+      case 'get_procedures_by_insurance': {
+        // Get procedures available for patient's insurance
+        let finalInsurance = 'Particular';
+        
+        if (context.userData.patientId) {
+          try {
+            const { getPatientById } = await import('../../patientDataService');
+            const patient = await getPatientById(context.userData.patientId);
+            
+            if (patient) {
+              finalInsurance = patient.insuranceCompany || 'Particular';
+              console.log(`🔧 ACTION get_procedures_by_insurance - ✅ Fetched patient from DB: ${patient.name}, Insurance: "${finalInsurance}"`);
+            } else {
+              console.log(`🔧 ACTION get_procedures_by_insurance - ⚠️ Patient not found in DB, falling back to context`);
+              finalInsurance = context.userData.patientInsurance ||
+                context.userData.collectedData?.insurance ||
+                'Particular';
+            }
+          } catch (error) {
+            console.error(`🔧 ACTION get_procedures_by_insurance - ❌ Error fetching patient from DB:`, error);
+            finalInsurance = context.userData.patientInsurance ||
+              context.userData.collectedData?.insurance ||
+              'Particular';
+          }
+        } else {
+          console.log(`🔧 ACTION get_procedures_by_insurance - ⚠️ No patientId, using context values`);
+          finalInsurance = context.userData.patientInsurance ||
+            context.userData.collectedData?.insurance ||
+            'Particular';
+        }
+        
+        console.log(`🔧 ACTION get_procedures_by_insurance - Final insurance to use: "${finalInsurance}"`);
+        
+        // Import insurance formatter
+        const { formatProceduresForInsurance, getProceduresForInsurance } = await import('../../insuranceNormalizer');
+        
+        // Get procedures message
+        const proceduresMessage = formatProceduresForInsurance(finalInsurance);
+        console.log(`🔧 ACTION get_procedures_by_insurance - Procedures message generated (first 200 chars): "${proceduresMessage.substring(0, 200)}"`);
+        
+        // Store procedures list in context for interpolation
+        const insuranceProcedures = getProceduresForInsurance(finalInsurance);
+        context.userData.procedimentosLista = insuranceProcedures.map((p, index) => `${index + 1}. ${p}`).join('\n');
+        context.userData.procedimentosDisponiveis = insuranceProcedures.map(p => `• ${p}`).join('\n');
+        
+        console.log(`🔧 ACTION get_procedures_by_insurance - Stored ${insuranceProcedures.length} procedures in context`);
+        break;
+      }
+      
       default:
         console.log(`🔧 ACTION - Unknown action: "${action}"`);
     }

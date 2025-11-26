@@ -76,127 +76,25 @@ export async function executeMessageNode(
     };
   }
 
-  // Special case: msg_cadastro_sucesso - show procedures for insurance and transfer to queue
+  // DISABLED: Special case for msg_cadastro_sucesso - now handled by workflow nodes
+  // The workflow now has explicit nodes for:
+  // 1. action_get_procedimentos_insurance (ACTION) - fetches procedures
+  // 2. msg_procedimentos_insurance (MESSAGE) - shows procedures
+  // 3. transfer_to_queue (TRANSFER_HUMAN) - transfers to queue
+  // This allows the workflow to be properly represented in the editor
+  /*
   if (node.id === 'msg_cadastro_sucesso') {
-    // CRITICAL FIX: Always fetch patient from database to get the correct normalized insurance
-    // Context values might be stale or incorrect
-    let finalInsurance = 'Particular';
-
-    if (context.userData.patientId) {
-      try {
-        // Import patient service to fetch from database
-        const { getPatientById } = await import('../../patientDataService');
-        const patient = await getPatientById(context.userData.patientId);
-
-        if (patient) {
-          finalInsurance = patient.insuranceCompany || 'Particular';
-          console.log(`🔧 MESSAGE node ${node.id} - ✅ Fetched patient from DB: ${patient.name}, Insurance: "${finalInsurance}"`);
-        } else {
-          console.log(`🔧 MESSAGE node ${node.id} - ⚠️ Patient not found in  DB, falling back to context`);
-          finalInsurance = context.userData.patientInsurance ||
-            context.userData.collectedData?.insurance ||
-            'Particular';
-        }
-      } catch (error) {
-        console.error(`🔧 MESSAGE node ${node.id} - ❌ Error fetching patient from DB:`, error);
-        // Fallback to context values
-        finalInsurance = context.userData.patientInsurance ||
-          context.userData.collectedData?.insurance ||
-          'Particular';
-      }
-    } else {
-      // No patientId, use context values  
-      console.log(`🔧 MESSAGE node ${node.id} - ⚠️ No patientId, using context values`);
-      finalInsurance = context.userData.patientInsurance ||
-        context.userData.collectedData?.insurance ||
-        'Particular';
-    }
-
-    console.log(`🔧 MESSAGE node ${node.id} - Final insurance to use: "${finalInsurance}"`);
-
-    // Import insurance formatter
-    const { formatProceduresForInsurance } = await import('../../insuranceNormalizer');
-
-    // Build complete message
-    let completeMessage = message;
-
-    // Add procedures available for the insurance (pass the DB value directly - it's already normalized)
-    console.log(`🔧 MESSAGE node ${node.id} - Calling formatProceduresForInsurance with: "${finalInsurance}"`);
-    const proceduresMessage = formatProceduresForInsurance(finalInsurance);
-    console.log(`🔧 MESSAGE node ${node.id} - Procedures message (first 200 chars): "${proceduresMessage.substring(0, 200)}"`);
-    completeMessage += `\n\n${proceduresMessage}`;
-
-    // Add queue message
-    completeMessage += `\n\n⏳ **Você foi encaminhado para um de nossos atendentes!**\n\n`;
-    completeMessage += `Enquanto aguarda, você pode informar quais procedimentos deseja agendar.\n`;
-    completeMessage += `Nossa equipe entrará em contato em breve para finalizar seu agendamento.`;
-
-    console.log(`🔧 MESSAGE node ${node.id} - Complete message generated with insurance: "${finalInsurance}"`);
-
-    return {
-      nextNodeId: undefined, // Stop here - patient is in queue
-      response: completeMessage,
-      shouldStop: true,
-      shouldSaveNextNode: false
-    };
+    // ... código hardcoded removido - agora é feito pelos nós do workflow
   }
+  */
 
-  // Special case: msg_paciente_encontrado  - show procedures for insurance
+  // DISABLED: Special case for msg_paciente_encontrado - now handled by workflow nodes
+  // The workflow now has explicit nodes for procedures and queue transfer
+  /*
   if (node.id === 'msg_paciente_encontrado') {
-    // CRITICAL FIX: Always fetch patient from database to get the correct normalized insurance
-    let finalInsurance = 'Particular';
-
-    if (context.userData.patientId) {
-      try {
-        const { getPatientById } = await import('../../patientDataService');
-        const patient = await getPatientById(context.userData.patientId);
-
-        if (patient) {
-          finalInsurance = patient.insuranceCompany || 'Particular';
-          console.log(`🔧 MESSAGE node ${node.id} - ✅ Fetched patient from DB: ${patient.name}, Insurance: "${finalInsurance}"`);
-        } else {
-          console.log(`🔧 MESSAGE node ${node.id} - ⚠️ Patient not found in DB, falling back to context`);
-          finalInsurance = context.userData.patientInsurance ||
-            context.userData.collectedData?.insurance ||
-            'Particular';
-        }
-      } catch (error) {
-        console.error(`🔧 MESSAGE node ${node.id} - ❌ Error fetching patient from DB:`, error);
-        finalInsurance = context.userData.patientInsurance ||
-          context.userData.collectedData?.insurance ||
-          'Particular';
-      }
-    } else {
-      console.log(`🔧 MESSAGE node ${node.id} - ⚠️ No patientId, using context values`);
-      finalInsurance = context.userData.patientInsurance ||
-        context.userData.collectedData?.insurance ||
-        'Particular';
-    }
-
-    // Import insurance formatter
-    const { formatProceduresForInsurance } = await import('../../insuranceNormalizer');
-
-    // Build complete message
-    let completeMessage = message;
-
-    // Add procedures available for the insurance
-    const proceduresMessage = formatProceduresForInsurance(finalInsurance);
-    completeMessage += `\n\n${proceduresMessage}`;
-
-    // Add queue message
-    completeMessage += `\n\n⏳ **Você foi encaminhado para um de nossos atendentes!**\n\n`;
-    completeMessage += `Enquanto aguarda, você pode informar quais procedimentos deseja agendar.\n`;
-    completeMessage += `Nossa equipe entrará em contato em breve para finalizar seu agendamento.`;
-
-    console.log(`🔧 MESSAGE node ${node.id} - Showing procedures for insurance: ${finalInsurance}`);
-
-    return {
-      nextNodeId: undefined, // Stop here - patient is in queue
-      response: completeMessage,
-      shouldStop: true,
-      shouldSaveNextNode: false
-    };
+    // ... código hardcoded removido - agora é feito pelos nós do workflow
   }
+  */
 
   // Special case: msg_solicita_cadastro should continue automatically
   const shouldAutoAdvance = node.id === 'msg_solicita_cadastro';

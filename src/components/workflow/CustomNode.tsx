@@ -1,8 +1,8 @@
 import React, { memo } from 'react'
-import { Handle, Position, NodeProps } from '@xyflow/react'
+import { Handle, Position, NodeProps, useReactFlow } from '@xyflow/react'
 import {
     Play, MessageSquare, AlertCircle, Settings, Bot, ClipboardList,
-    Users, Clock, CheckCircle, Link2, Webhook as WebhookIcon
+    Users, Clock, CheckCircle, Link2, Webhook as WebhookIcon, Trash2
 } from 'lucide-react'
 import { NodeType, Port } from '../../utils/workflowUtils'
 
@@ -36,7 +36,8 @@ const colorMap: Record<NodeType, string> = {
     API_CALL: 'bg-orange-600'
 }
 
-const CustomNode = ({ data, selected }: NodeProps<any>) => {
+const CustomNode = ({ data, selected, id }: NodeProps<any>) => {
+    const { setNodes, setEdges } = useReactFlow()
     const type = data.type as NodeType
     const Icon = iconMap[type] || Settings
     const color = colorMap[type] || 'bg-gray-600'
@@ -44,6 +45,20 @@ const CustomNode = ({ data, selected }: NodeProps<any>) => {
 
     const inputs = ports.filter(p => p.type === 'input')
     const outputs = ports.filter(p => p.type === 'output')
+    
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (type === 'START') {
+            alert('Não é possível deletar o nó START')
+            return
+        }
+        if (confirm('Tem certeza que deseja deletar este nó?')) {
+            // Remove o nó
+            setNodes((nodes) => nodes.filter((node) => node.id !== id))
+            // Remove todas as conexões relacionadas a este nó
+            setEdges((edges) => edges.filter((edge) => edge.source !== id && edge.target !== id))
+        }
+    }
 
     const getNodeLabel = (): React.ReactNode => {
         // Para MESSAGE e START: buscar mensagem em vários campos possíveis
@@ -114,6 +129,16 @@ const CustomNode = ({ data, selected }: NodeProps<any>) => {
                     <div className="text-xs font-bold text-gray-800 truncate">{type.replace('_', ' ')}</div>
                     <div className="text-[9px] text-gray-500 font-medium uppercase tracking-wider">{type}</div>
                 </div>
+                {/* Delete button */}
+                {type !== 'START' && (
+                    <button
+                        onClick={handleDelete}
+                        className="ml-1 p-1 hover:bg-red-50 rounded transition-colors group"
+                        title="Deletar nó"
+                    >
+                        <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600" />
+                    </button>
+                )}
             </div>
 
             {/* Body */}

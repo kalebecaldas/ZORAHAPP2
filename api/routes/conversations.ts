@@ -935,13 +935,13 @@ export async function processIncomingMessage(
           workflowLogs.push(...logs)
         } else {
           console.warn(`⚠️ Nenhum workflow ativo encontrado, usando fallback hardcoded`)
-          // Fallback para conversas sem workflow mas ainda na fila do bot
-          const handled = await handleAppointmentFlow(conversation, patient, text)
-          if (!handled) {
-            if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
-              await processWithAI(conversation, message, patient)
-            } else {
-              await sendAutoResponse(conversation, patient)
+      // Fallback para conversas sem workflow mas ainda na fila do bot
+      const handled = await handleAppointmentFlow(conversation, patient, text)
+      if (!handled) {
+        if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
+          await processWithAI(conversation, message, patient)
+        } else {
+          await sendAutoResponse(conversation, patient)
             }
           }
         }

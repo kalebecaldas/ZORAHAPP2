@@ -94,6 +94,12 @@ export async function interpolateMessage(
       output = output.replace(/\$\{procedimentos_disponiveis\}/g, proceduresList);
     }
     
+    // Replace procedimentos_lista placeholder (from ACTION node)
+    if (output.includes('${procedimentos_lista}')) {
+      const procedimentosLista = context.userData.procedimentosLista || context.userData.procedimentosDisponiveis || '• Consulte nossos procedimentos disponíveis';
+      output = output.replace(/\$\{procedimentos_lista\}/g, procedimentosLista);
+    }
+    
   } catch (error) {
     console.error('Error interpolating message:', error);
   }
