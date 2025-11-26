@@ -1,6 +1,48 @@
 import OpenAI from 'openai';
 import { WorkflowNode, WorkflowExecutionContext, ConnectionMap, NodeExecutionResult } from '../core/types';
-import { clinicDataService } from '../../clinicDataService';
+import { clinicDataService, Procedure } from '../../clinicDataService';
+
+/**
+ * Detects if user message mentions a specific procedure
+ * Returns the procedure info if found, undefined otherwise
+ */
+function detectProcedureInMessage(message: string): Procedure | undefined {
+  const normalized = message.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remove accents
+  
+  // Procedure keywords mapping (variations and common typos)
+  const procedureKeywords: Record<string, string[]> = {
+    'fisioterapia-ortopedica': ['ortopedica', 'ortopédica', 'ortopedic', 'orto'],
+    'fisioterapia-neurologica': ['neurologica', 'neurológica', 'neurologic', 'neuro'],
+    'fisioterapia-respiratoria': ['respiratoria', 'respiratória', 'respirator'],
+    'fisioterapia-pelvica': ['pelvica', 'pélvica', 'pelvic', 'assoalho pelvico'],
+    'rpg': ['rpg', 'reeducacao postural', 'reeducação postural', 'postura global'],
+    'acupuntura': ['acupuntura', 'acupuntur', 'agulha', 'agulhamento'],
+    'pilates': ['pilates', 'pilate'],
+    'drenagem-linfatica': ['drenagem', 'linfatica', 'linfática'],
+    'bandagem': ['bandagem', 'kinesio', 'kinesiotape'],
+    'dry-needling': ['dry needling', 'agulhamento seco', 'agulhamento']
+  };
+  
+  // Check each procedure
+  const allProcedures = clinicDataService.getProcedures();
+  
+  for (const procedure of allProcedures) {
+    const procedureId = procedure.id;
+    const keywords = procedureKeywords[procedureId] || [procedure.name.toLowerCase()];
+    
+    // Check if any keyword matches
+    for (const keyword of keywords) {
+      if (normalized.includes(keyword)) {
+        console.log(`🎯 Detected procedure: "${keyword}" → ${procedure.name}`);
+        return procedure;
+      }
+    }
+  }
+  
+  return undefined;
+}
 
 /**
  * Executes a GPT_RESPONSE node
