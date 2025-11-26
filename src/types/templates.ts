@@ -46,6 +46,11 @@ export interface TemplateContext {
   procedimento_duracao?: string;
   preco_particular?: string | number;
   informacoes_importantes?: string;
+  pacotes_disponiveis?: string;
+  convenios_aceitos?: string;
+  tem_pacotes?: string;
+  tem_convenios?: string;
+  total_convenios?: string;
   
   // Convênios
   convenio_nome?: string;
@@ -126,7 +131,12 @@ export const AVAILABLE_VARIABLES: Record<string, TemplateVariable[]> = {
     { name: 'procedimento_descricao', description: 'Descrição do procedimento', example: 'Técnica de medicina chinesa...' },
     { name: 'procedimento_duracao', description: 'Duração em minutos', example: '60' },
     { name: 'preco_particular', description: 'Preço para particular', example: '150.00' },
-    { name: 'informacoes_importantes', description: 'Informações importantes do procedimento', example: 'Requer avaliação prévia' }
+    { name: 'informacoes_importantes', description: 'Informações importantes do procedimento', example: 'Requer avaliação prévia' },
+    { name: 'pacotes_disponiveis', description: 'Lista de pacotes disponíveis (formatada)', example: '• Pacote de 10 sessões: R$ 1600.00...' },
+    { name: 'convenios_aceitos', description: 'Lista de convênios aceitos (formatada)', example: '• BRADESCO\n• SULAMÉRICA...' },
+    { name: 'tem_pacotes', description: 'Se tem pacotes disponíveis (true/false)', example: 'true' },
+    { name: 'tem_convenios', description: 'Se tem convênios aceitos (true/false)', example: 'true' },
+    { name: 'total_convenios', description: 'Total de convênios aceitos', example: '15' }
   ],
   insurance: [
     { name: 'convenio_nome', description: 'Nome do convênio', example: 'Bradesco' },

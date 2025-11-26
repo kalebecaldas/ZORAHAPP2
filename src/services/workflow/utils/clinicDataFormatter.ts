@@ -1,5 +1,7 @@
 import { clinicData } from '../../../data/clinicData.js';
 import { formatMessageForWhatsApp } from './messageFormatter.js';
+import { TemplateService } from '../../../services/templateService.js';
+import type { TemplateContext } from '../../../types/templates.js';
 
 /**
  * Formats clinic data for GPT context
@@ -155,6 +157,65 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
     normalizedClinicForPrice = 'sao_jose';
   }
   
+  // Try to use template first, fallback to hardcoded if template doesn't exist
+  try {
+    // Build context for template
+    const clinicPrice = procedure.prices?.[normalizedClinicForPrice];
+    let priceText = 'Consultar com nossa equipe';
+    
+    if (clinicPrice !== null && clinicPrice !== undefined) {
+      if (typeof clinicPrice === 'object' && clinicPrice !== null) {
+        // Handle Pilates pricing structure
+        const prices = clinicPrice as any;
+        const priceLines: string[] = [];
+        if (prices.twiceWeek) priceLines.push(`• 2x por semana: R$ ${prices.twiceWeek.toFixed(2)}`);
+        if (prices.threeWeek) priceLines.push(`• 3x por semana: R$ ${prices.threeWeek.toFixed(2)}`);
+        if (prices.singleSession) priceLines.push(`• Sessão avulsa: R$ ${prices.singleSession.toFixed(2)}`);
+        priceText = priceLines.join('\n');
+      } else {
+        priceText = `R$ ${Number(clinicPrice).toFixed(2)}`;
+      }
+    }
+    
+    // Build packages text (only if packages exist)
+    const clinicPackages = procedure.packages?.[normalizedClinicForPrice] || [];
+    const packagesText = clinicPackages.length > 0
+      ? `🎁 *Pacotes Disponíveis:*\n${clinicPackages.map((pkg: any) => {
+          const pricePerSession = pkg.price / pkg.sessions;
+          return `• Pacote de ${pkg.sessions} sessões: R$ ${pkg.price.toFixed(2)} (R$ ${pricePerSession.toFixed(2)} por sessão)`;
+        }).join('\n')}\n`
+      : '';
+    
+    // Build insurances text (only if insurances exist)
+    const acceptedInsurances = procedure.convenios || [];
+    const insurancesText = acceptedInsurances.length > 0
+      ? `💳 *Aceita os seguintes convênios:*\n${acceptedInsurances.slice(0, 10).map((ins: string) => `• ${ins}`).join('\n')}${acceptedInsurances.length > 10 ? `\n... e mais ${acceptedInsurances.length - 10} convênios` : ''}\n`
+      : '';
+    
+    const templateContext: TemplateContext = {
+      procedimento_nome: procedure.name,
+      procedimento_descricao: procedure.description || 'Procedimento disponível',
+      procedimento_duracao: `${procedure.duration}`,
+      preco_particular: priceText,
+      pacotes_disponiveis: packagesText,
+      convenios_aceitos: insurancesText,
+      tem_pacotes: clinicPackages.length > 0 ? 'true' : 'false',
+      tem_convenios: acceptedInsurances.length > 0 ? 'true' : 'false',
+      total_convenios: `${acceptedInsurances.length}`
+    };
+    
+    // Try to get template
+    const template = await TemplateService.getInterpolatedTemplate('procedure_info_complete', templateContext);
+    
+    if (template) {
+      console.log(`🔧 getProcedureInfoForGPT - Using template for ${procedure.name}`);
+      return formatMessageForWhatsApp(template);
+    }
+  } catch (error) {
+    console.warn(`🔧 getProcedureInfoForGPT - Template not found or error, using fallback:`, error);
+  }
+  
+  // Fallback to hardcoded format if template doesn't exist
   let info = `💉 *${procedure.name}*\n`;
   info += `📝 *Descrição:*\n${procedure.description || 'Procedimento disponível'}\n`;
   info += `⏱️ *Duração:* ${procedure.duration} minutos\n`;
