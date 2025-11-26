@@ -62,27 +62,40 @@ O workflow que foi atualizado no banco local (42 nós) **já está salvo no banc
 ```
 
 ### Atualizar Workflow no Railway (se necessário)
+
+**Opção 1: Via Script Automático (Recomendado)**
 ```bash
-# Conecte-se ao Railway via Shell e execute:
-npx tsx -e "
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
-(async () => {
-  // Buscar workflow ativo
-  const workflow = await prisma.workflow.findFirst({
-    where: { isActive: true },
-    orderBy: { createdAt: 'desc' }
-  });
-  
-  if (workflow) {
-    console.log('Workflow encontrado:', workflow.id);
-    console.log('Nós:', JSON.parse(workflow.config || '{}').nodes?.length || 0);
-  }
-  
-  await prisma.\$disconnect();
-})();
-"
+# No Railway Shell, execute:
+npm run update:workflow:railway
 ```
+
+**Opção 2: Via Comando Direto**
+```bash
+# No Railway Shell, execute:
+npx tsx scripts/update_workflow_railway.ts
+```
+
+**O que o script faz:**
+- ✅ Busca o workflow ativo no Railway
+- ✅ Verifica quais nós estão faltando
+- ✅ Adiciona os 6 nós necessários:
+  - `action_get_procedimentos_insurance`
+  - `msg_procedimentos_insurance`
+  - `transfer_to_queue`
+  - `action_get_procedimentos_insurance_encontrado`
+  - `msg_procedimentos_insurance_encontrado`
+  - `transfer_to_queue_encontrado`
+- ✅ Atualiza as conexões corretamente
+- ✅ Remove conexões antigas
+- ✅ Salva tudo no banco de dados
+
+**Opção 3: Manualmente no Editor**
+1. Acesse o workflow editor no Railway
+2. Adicione os nós manualmente seguindo o fluxo:
+   - Após `msg_cadastro_sucesso`: ACTION → MESSAGE → TRANSFER_HUMAN
+   - Após `msg_paciente_encontrado`: ACTION → MESSAGE → TRANSFER_HUMAN
+3. Conecte os nós corretamente
+4. Salve o workflow
 
 ### Verificar Logs do Railway
 ```bash
