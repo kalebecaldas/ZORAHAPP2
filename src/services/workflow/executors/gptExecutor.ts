@@ -67,34 +67,48 @@ export async function executeGPTNode(
     const clinicContext = formatClinicDataForGPT(clinicCode);
     
     const systemPrompt = node.content.systemPrompt || 
-      `Você é um assistente virtual da clínica de fisioterapia. Sua função é:
-1. RESPONDER de forma útil e conversacional
-2. CLASSIFICAR a intenção do usuário
+      `Você é um assistente virtual amigável e prestativo de uma clínica de fisioterapia. 
+
+SEU OBJETIVO:
+1. RESPONDER de forma CONVERSACIONAL, ÚTIL e AMIGÁVEL
+2. CLASSIFICAR a intenção do usuário para roteamento interno
 
 CONTEXTO DA CLÍNICA:
 ${clinicContext}
 
-CATEGORIAS DE INTENÇÃO:
+CATEGORIAS DE INTENÇÃO (para roteamento):
 1) VALORES - perguntas sobre preços, valores particulares, pacotes
 2) CONVÊNIOS - perguntas sobre convênios aceitos, planos de saúde, cobertura
 3) LOCALIZAÇÃO - perguntas sobre endereço, como chegar, horários, contato
 4) PROCEDIMENTO - perguntas sobre o que é um procedimento, benefícios, duração, indicações
-5) AGENDAR - desejo de marcar consulta, agendar, marcar horário
+5) AGENDAR - desejo de marcar consulta, agendar, marcar horário, menções a encaminhamento médico
 6) ATENDENTE - pedido para falar com humano, atendente, pessoa
 
-INSTRUÇÕES ESPECIAIS:
-- Se o usuário mencionar "encaminhamento" ou "sessões", pergunte qual procedimento ele precisa e ajude-o a agendar
-- Se o usuário confirmar algo com "sim", "isso", "correto", reconheça positivamente e pergunte como pode ajudar
-- Se não souber classificar com certeza, seja útil e pergunte mais detalhes
-- SEMPRE inclua uma mensagem útil no campo "brief", não apenas uma classificação seca
+REGRAS IMPORTANTES PARA O CAMPO "brief":
+❌ NUNCA responda apenas: "Encaminhamento para fisioterapia", "Referência a procedimento", "Pergunta sobre valores"
+✅ SEMPRE faça uma pergunta ou dê uma resposta ÚTIL e CONVERSACIONAL
+✅ Use emojis para deixar mais amigável
+✅ Faça perguntas esclarecedoras quando necessário
+✅ Reconheça o que o usuário disse ANTES de perguntar mais
 
-FORMATO DE RESPOSTA:
-Responda com JSON: {"intent_port":"<1|2|3|4|5|6>","brief":"<mensagem conversacional e útil>","confidence":<0..1>}
+CASOS ESPECIAIS:
+- "encaminhamento" ou "sessões" → Reconheça o encaminhamento, pergunte qual procedimento, classifique como porta 5
+- "sim", "isso", "correto" → Reconheça positivamente, pergunte como pode ajudar ou qual procedimento, porta 5
+- "posso parcelar?" → Mencione que vai ajudar com pagamento, porta 1
+- Mensagens vagas → Seja prestativo, ofereça opções, pergente o que ele precisa
 
-EXEMPLOS:
-- "tenho encaminhamento para fisioterapia" → {"intent_port":"5","brief":"Ótimo! Você tem encaminhamento para fisioterapia. Para qual procedimento específico você precisa? (ex: ortopédica, neurológica, RPG, acupuntura)","confidence":0.9}
-- "isso mesmo" → {"intent_port":"5","brief":"Perfeito! Vamos prosseguir com seu agendamento. Qual procedimento você precisa?","confidence":0.7}
-- "posso parcelar?" → {"intent_port":"1","brief":"Sobre formas de pagamento e parcelamento, vou te conectar com nossa equipe para te dar as melhores opções!","confidence":0.8}`;
+FORMATO DE RESPOSTA (JSON):
+{"intent_port":"<1-6>","brief":"<RESPOSTA CONVERSACIONAL COMPLETA (mínimo 50 caracteres)>","confidence":<0-1>}
+
+EXEMPLOS CORRETOS:
+❌ MAU: {"intent_port":"5","brief":"Encaminhamento para fisioterapia","confidence":0.9}
+✅ BOM: {"intent_port":"5","brief":"Ótimo! Você tem encaminhamento para fisioterapia! 🏥 Para qual procedimento específico? Temos ortopédica, neurológica, RPG, acupuntura e outros.","confidence":0.9}
+
+❌ MAU: {"intent_port":"5","brief":"Referência a procedimento anterior","confidence":0.7}
+✅ BOM: {"intent_port":"5","brief":"Perfeito! Entendi que você quer agendar. 📅 Me conte: qual procedimento você precisa?","confidence":0.8}
+
+❌ MAU: {"intent_port":"1","brief":"Pergunta sobre parcelamento","confidence":0.8}
+✅ BOM: {"intent_port":"1","brief":"Sobre formas de pagamento e parcelamento, posso te ajudar! 💳 Qual procedimento você gostaria de fazer?","confidence":0.9}`;
     
     // Build conversation history
     const historyContext = context.conversationHistory
@@ -217,9 +231,32 @@ EXEMPLOS:
     
     console.log(`🤖 [GPT] Intent classified - Port: ${port}, Next node: ${nextNodeId}`);
     
+    // Ensure response is conversational (not just a classification)
+    let conversationalResponse = brief || '';
+    
+    // If brief is too short or looks like a classification, make it more conversational
+    if (conversationalResponse.length < 30 || 
+        conversationalResponse.match(/^(encaminhamento|refer[eê]ncia|pergunta|sobre)/i)) {
+      
+      console.log(`🤖 [GPT] ⚠️ Brief muito curto ou não conversacional: "${conversationalResponse}"`);
+      
+      // Generate better response based on intent
+      const conversationalMap: Record<string, string> = {
+        '1': `Entendi que você quer saber sobre valores! 💰 Me conte: qual procedimento você gostaria de fazer?`,
+        '2': `Legal! Você quer saber sobre convênios. 🏥 Qual convênio você tem?`,
+        '3': `Vou te passar nossa localização! 📍 Você precisa saber como chegar ou quer o endereço?`,
+        '4': `Você quer saber sobre algum procedimento específico! 📝 Qual procedimento te interessa?`,
+        '5': `Ótimo! Vamos agendar sua consulta! 📅 Para começar, preciso de alguns dados. Qual seu nome completo?`,
+        '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
+      };
+      
+      conversationalResponse = conversationalMap[port] || conversationalResponse;
+      context.workflowLogs.push(`🤖 [GPT] ✨ Resposta melhorada: "${conversationalResponse}"`);
+    }
+    
     return {
       nextNodeId,
-      response: brief || '',
+      response: conversationalResponse,
       shouldStop: false,
       autoAdvance: true
     };
