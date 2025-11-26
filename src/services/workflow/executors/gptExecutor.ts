@@ -240,6 +240,15 @@ EXEMPLOS CORRETOS:
     
     console.log(`🤖 [GPT] Intent classified - Port: ${port}, Next node: ${nextNodeId}`);
     
+    // Detect if user mentioned a specific procedure
+    const detectedProcedure = detectProcedureInMessage(userMessage);
+    if (detectedProcedure) {
+      context.userData.lastMentionedProcedure = detectedProcedure.name;
+      context.userData.lastMentionedProcedureId = detectedProcedure.id;
+      console.log(`🤖 [GPT] 🎯 Procedimento detectado: ${detectedProcedure.name}`);
+      context.workflowLogs.push(`🤖 [GPT] 🎯 Procedimento detectado na mensagem: ${detectedProcedure.name}`);
+    }
+    
     // Ensure response is conversational (not just a classification)
     let conversationalResponse = brief || '';
     
@@ -252,30 +261,50 @@ EXEMPLOS CORRETOS:
       // Get procedures list for better responses
       const clinicCode = context.userData.selectedClinic || 'vieiralves';
       const allProcedures = clinicDataService.getProcedures();
-      const mainProcedures = allProcedures.slice(0, 5).map((p: any) => {
-        const price = clinicDataService.getPrice(p.id, clinicCode);
+      
+      // If specific procedure was mentioned, respond about THAT procedure only
+      if (detectedProcedure) {
+        const price = clinicDataService.getPrice(detectedProcedure.id, clinicCode);
         const priceText = typeof price === 'number' ? `R$ ${price},00` : 
                          typeof price === 'string' ? price : 'consultar';
-        return `- ${p.name} (${priceText})`;
-      }).join('\n');
-      
-      const allInsurances = clinicDataService.getInsurances();
-      
-      // Generate better response based on intent WITH REAL DATA
-      const conversationalMap: Record<string, string> = {
-        '1': `Entendi que você quer saber sobre valores! 💰\n\nNossos principais procedimentos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
-        '2': `Legal! Você quer saber sobre convênios. 🏥\n\nAceitamos: ${allInsurances.slice(0, 5).join(', ')} e outros.\n\nQual convênio você tem?`,
-        '3': (() => {
-          const unit = clinicDataService.getUnitById(clinicCode) || clinicDataService.getUnits()[0];
-          return `Vou te passar nossa localização! 📍\n\n${unit.name}\n${unit.mapsUrl ? `📍 ${unit.mapsUrl}\n` : ''}📞 ${unit.phone}\n\nPrecisa saber como chegar?`;
-        })(),
-        '4': `Você quer saber sobre procedimentos! 📝\n\nOferecemos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
-        '5': `Ótimo! Vamos agendar sua consulta! 📅\n\nTemos disponíveis:\n${mainProcedures}\n\nPara qual procedimento você precisa agendar?`,
-        '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
-      };
-      
-      conversationalResponse = conversationalMap[port] || conversationalResponse;
-      context.workflowLogs.push(`🤖 [GPT] ✨ Resposta melhorada com dados reais: "${conversationalResponse.substring(0, 100)}..."`);
+        
+        // Generate specific response based on intent and procedure
+        if (port === '1') { // VALUES
+          conversationalResponse = `📋 **${detectedProcedure.name}**\n\n💰 **Valor (Particular):** ${priceText}\n\nGostaria de saber mais detalhes ou ver outros procedimentos?`;
+        } else if (port === '4') { // PROCEDURE_INFO
+          conversationalResponse = `📋 **${detectedProcedure.name}**\n\n📝 ${detectedProcedure.description || 'Procedimento especializado da nossa clínica.'}\n\n💰 **Valor:** ${priceText}\n\nQuer saber mais alguma coisa?`;
+        } else {
+          conversationalResponse = `Entendi! Você quer saber sobre **${detectedProcedure.name}**. Como posso ajudar?`;
+        }
+        
+        context.workflowLogs.push(`🤖 [GPT] ✨ Resposta específica para ${detectedProcedure.name}: "${conversationalResponse.substring(0, 80)}..."`);
+      } else {
+        // No specific procedure - show general list
+        const mainProcedures = allProcedures.slice(0, 5).map((p: any) => {
+          const price = clinicDataService.getPrice(p.id, clinicCode);
+          const priceText = typeof price === 'number' ? `R$ ${price},00` : 
+                           typeof price === 'string' ? price : 'consultar';
+          return `- ${p.name} (${priceText})`;
+        }).join('\n');
+        
+        const allInsurances = clinicDataService.getInsurances();
+        
+        // Generate better response based on intent WITH REAL DATA
+        const conversationalMap: Record<string, string> = {
+          '1': `Entendi que você quer saber sobre valores! 💰\n\nNossos principais procedimentos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
+          '2': `Legal! Você quer saber sobre convênios. 🏥\n\nAceitamos: ${allInsurances.slice(0, 5).join(', ')} e outros.\n\nQual convênio você tem?`,
+          '3': (() => {
+            const unit = clinicDataService.getUnitById(clinicCode) || clinicDataService.getUnits()[0];
+            return `Vou te passar nossa localização! 📍\n\n${unit.name}\n${unit.mapsUrl ? `📍 ${unit.mapsUrl}\n` : ''}📞 ${unit.phone}\n\nPrecisa saber como chegar?`;
+          })(),
+          '4': `Você quer saber sobre procedimentos! 📝\n\nOferecemos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
+          '5': `Ótimo! Vamos agendar sua consulta! 📅\n\nTemos disponíveis:\n${mainProcedures}\n\nPara qual procedimento você precisa agendar?`,
+          '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
+        };
+        
+        conversationalResponse = conversationalMap[port] || conversationalResponse;
+        context.workflowLogs.push(`🤖 [GPT] ✨ Resposta melhorada com dados reais: "${conversationalResponse.substring(0, 100)}..."`);
+      }
     }
     
     return {
