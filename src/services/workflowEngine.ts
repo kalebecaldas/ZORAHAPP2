@@ -620,7 +620,8 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
         out = out.replace('${procedimentos_disponiveis}', bullets)
       }
     } catch { }
-    return out;
+    // Format message for WhatsApp with proper line breaks
+    return formatMessageForWhatsApp(out);
   }
 
   private async executeConditionNode(node: WorkflowNode): Promise<NodeExecutionResult> {
