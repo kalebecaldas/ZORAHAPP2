@@ -145,14 +145,19 @@ Responda de forma completa e útil, usando TODAS as informações relevantes do 
     context.workflowLogs.push(`🤖 [GPT Response] 🏥 Clínica: ${clinicCode}`);
     context.workflowLogs.push(`🤖 [GPT Response] ⏳ Gerando resposta completa...`);
     
+    // Use more powerful model for complex responses (gpt-4o or gpt-4-turbo)
+    const responseModel = process.env.OPENAI_RESPONSE_MODEL || 'gpt-4o';
+    
+    console.log(`🤖 [GPT Response] Using model: ${responseModel} for contextual response`);
+    
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model: responseModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
       temperature: 0.7, // Slightly higher for more natural responses
-      max_tokens: 500 // More tokens for complete responses
+      max_tokens: 600 // More tokens for complete rich responses
     }, { timeout: 30000 });
     
     const response = completion.choices?.[0]?.message?.content || '';

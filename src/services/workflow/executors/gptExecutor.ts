@@ -134,14 +134,19 @@ EXEMPLOS CORRETOS:
     
     console.log(`🤖 [GPT] Calling GPT with message: "${userMessage}"`);
     
+    // Use faster/cheaper model for classification (gpt-4o-mini by default)
+    const classificationModel = process.env.OPENAI_CLASSIFICATION_MODEL || 'gpt-4o-mini';
+    
+    console.log(`🤖 [GPT] Using model: ${classificationModel} for intent classification`);
+    
     const completion = await client.chat.completions.create({
-      model: 'gpt-4o',
+      model: classificationModel,
       messages: [
         { role: 'system', content: 'Responda apenas com JSON válido sem texto extra.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0,
-      max_tokens: 100
+      temperature: 0.3, // Slightly higher for more natural brief
+      max_tokens: 150 // More tokens for better brief responses
     }, { timeout: 30000 });
     
     let content = completion.choices?.[0]?.message?.content || '';
