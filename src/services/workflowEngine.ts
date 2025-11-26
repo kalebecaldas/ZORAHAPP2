@@ -279,7 +279,8 @@ export class WorkflowEngine {
       case 'ACTION':
         return this.executeActionNode(node);
       case 'GPT_RESPONSE':
-        return this.executeGPTResponseNode(node);
+        // Use the new improved GPT executor with dual-model support
+        return await this.executeGPTResponseNodeImproved(node);
       case 'DATA_COLLECTION':
         return this.executeDataCollectionNode(node);
       case 'COLLECT_INFO':
@@ -298,6 +299,55 @@ export class WorkflowEngine {
         const connections = this.connections.get(node.id);
         const nextNodeId = connections && connections.length > 0 ? connections[0].targetId : undefined;
         return { nextNodeId };
+    }
+  }
+
+  // New improved GPT executor using the modular executor
+  private async executeGPTResponseNodeImproved(node: WorkflowNode): Promise<NodeExecutionResult> {
+    try {
+      // Import and use the new improved GPT executor
+      const { executeGPTNode } = await import('./workflow/executors/gptExecutor.js');
+      
+      // Convert node format to match executor expectations
+      const executorNode = {
+        id: node.id,
+        type: node.type as any,
+        content: {
+          ...node.content,
+          systemPrompt: node.content.systemPrompt
+        },
+        position: node.position || { x: 0, y: 0 }
+      };
+      
+      // Convert context format
+      const executorContext = {
+        ...this.context,
+        conversationHistory: this.context.conversationHistory.map(h => ({
+          role: h.role,
+          content: h.content
+        }))
+      };
+      
+      // Convert connections format
+      const connectionsMap = new Map();
+      const nodeConnections = this.connections.get(node.id) || [];
+      connectionsMap.set(node.id, nodeConnections.map(c => ({
+        targetId: c.targetId,
+        port: c.port || 'main'
+      })));
+      
+      const result = await executeGPTNode(executorNode as any, executorContext as any, connectionsMap);
+      
+      // Convert result back to workflowEngine format
+      return {
+        nextNodeId: result.nextNodeId,
+        response: result.response,
+        shouldStop: result.shouldStop
+      };
+    } catch (error) {
+      console.error('🔧 Error using improved GPT executor, falling back to legacy:', error);
+      // Fallback to legacy implementation if new one fails
+      return await this.executeGPTResponseNodeLegacy(node);
     }
   }
 
@@ -927,7 +977,8 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
     };
   }
 
-  private async executeGPTResponseNode(node: WorkflowNode): Promise<NodeExecutionResult> {
+  // Legacy GPT executor (kept as fallback)
+  private async executeGPTResponseNodeLegacy(node: WorkflowNode): Promise<NodeExecutionResult> {
     // Usar systemPrompt do node, ou fallback padrão que corresponde ao workflow (1-6 portas)
     const systemPrompt = node.content.systemPrompt ||
       'Você é um classificador de intenção para clínica de fisioterapia. Analise a mensagem do usuário e classifique em UMA das opções:\n\n1) VALORES - perguntas sobre preços, valores particulares, pacotes (ex: "quanto custa", "qual o valor", "preço")\n2) CONVÊNIOS - perguntas sobre convênios aceitos, planos de saúde, cobertura (ex: "quais convênios", "aceita bradesco")\n3) LOCALIZAÇÃO - perguntas sobre endereço, como chegar, horários, contato (ex: "onde fica", "endereço", "horário")\n4) PROCEDIMENTO - perguntas sobre o que é um procedimento, benefícios, duração, indicações (ex: "o que é acupuntura", "benefícios")\n5) AGENDAR - desejo de marcar consulta, agendar, marcar horário (ex: "quero agendar", "quero gendar", "marcar consulta", "agendar", "marcar", "quero marcar")\n6) ATENDENTE - pedido para falar com humano, atendente, pessoa (ex: "falar com humano", "atendente")\n\nIMPORTANTE: "quero agendar", "quero gendar" (com erro de digitação), "marcar", "agendar consulta" = SEMPRE porta 5 (AGENDAR).\n\nResponda APENAS com JSON no formato {"intent_port":"<1|2|3|4|5|6>","brief":"<mensagem curta>","confidence":<0..1>}.';
