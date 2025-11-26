@@ -15,6 +15,8 @@
     "up": "npm run kill-ports && npm run dev",
     "start": "npx prisma generate && npx prisma migrate deploy && npx tsx api/server.ts",
     "start:prod": "npx prisma generate && npx prisma migrate deploy && npx tsx api/server.ts",
+    "db:cleanup-clinic": "npx prisma db execute --script \"DROP TABLE IF EXISTS \\\"InsuranceProcedure\\\" CASCADE; DROP TABLE IF EXISTS \\\"InsuranceCompany\\\" CASCADE; DROP TABLE IF EXISTS \\\"Procedure\\\" CASCADE;\"",
+    "fix:migrations:clinic": "npm run db:cleanup-clinic && npx prisma migrate resolve --rolled-back 20251115195251_clinic_models && npx prisma migrate deploy",
     "start:dev": "./scripts/start-server.sh",
     "start:win": "scripts\\start-server.bat",
     "start:node": "node scripts/start-server.js",
