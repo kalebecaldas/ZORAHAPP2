@@ -2,11 +2,26 @@ import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Criar Prisma Client
+// IMPORTANTE: Este script deve ser executado DENTRO do Railway Shell do Dashboard
+// O hostname postgres.railway.internal só funciona dentro do ambiente Railway
 const prisma = new PrismaClient();
 
 async function uploadWorkflowToRailway() {
   try {
     console.log('📤 Fazendo upload do workflow para Railway...\n');
+    
+    // Verificar se estamos no ambiente Railway
+    const dbUrl = process.env.DATABASE_URL || '';
+    const isRailwayInternal = dbUrl.includes('railway.internal');
+    
+    if (!isRailwayInternal) {
+      console.log('⚠️  ATENÇÃO: Este script deve ser executado DENTRO do Railway Shell do Dashboard!');
+      console.log('   O hostname postgres.railway.internal só funciona dentro do ambiente Railway.');
+      console.log('   Acesse: Railway Dashboard > Seu Serviço > Shell\n');
+      console.log('   DATABASE_URL atual:', dbUrl.substring(0, 50) + '...\n');
+      return;
+    }
     
     // 1. Ler arquivo temporário criado localmente
     const tempFile = path.join(process.cwd(), 'workflow_to_sync.json');
