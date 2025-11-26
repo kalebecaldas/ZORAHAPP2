@@ -355,7 +355,7 @@ EXEMPLOS CORRETOS:
           })(),
           '4': `Você quer saber sobre procedimentos! 📝\n\nOferecemos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
           '5': `Ótimo! Vamos agendar sua consulta! 📅\n\nTemos disponíveis:\n${mainProcedures}\n\nPara qual procedimento você precisa agendar?`,
-          '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
+          '6': `Entendi! Vou te conectar com um atendente humano.\n\n⏳ Aguarde um momento...`
         };
         
         conversationalResponse = conversationalMap[port] || conversationalResponse;
@@ -364,12 +364,21 @@ EXEMPLOS CORRETOS:
     }
     
     // Format response with proper line breaks for WhatsApp
-    // Ensure consistent spacing and formatting
+    // WhatsApp needs consistent \n\n between sections for proper spacing
     let formattedResponse = conversationalResponse
-      .replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with 2
+      // First, normalize all line breaks
+      .replace(/\r\n/g, '\n') // Windows line breaks
+      .replace(/\r/g, '\n') // Mac line breaks
+      // Ensure sections have proper spacing (at least one blank line between major sections)
+      .replace(/(\*\*[^*]+\*\*)\n([^\n])/g, '$1\n\n$2') // Add space after bold headers
       .replace(/([.!?])\n([A-Z])/g, '$1\n\n$2') // Add space after sentences
-      .replace(/\n\n\n+/g, '\n\n') // Clean up multiple newlines
-      .trim(); // Remove leading/trailing whitespace
+      // Clean up excessive newlines (more than 2 consecutive)
+      .replace(/\n{3,}/g, '\n\n')
+      // Ensure list items have proper spacing
+      .replace(/(• [^\n]+)\n(• [^\n]+)/g, '$1\n$2') // Keep single line between list items
+      .replace(/(• [^\n]+)\n\n(• [^\n]+)/g, '$1\n$2') // Remove double line between list items
+      // Final cleanup
+      .trim();
     
     return {
       nextNodeId: shouldSkipNextNode ? undefined : nextNodeId, // Skip next node if we generated complete response

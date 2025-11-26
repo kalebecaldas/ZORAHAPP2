@@ -154,9 +154,9 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
     normalizedClinicForPrice = 'sao_jose';
   }
   
-  let info = `💉 **${procedure.name}**\n\n`;
-  info += `📝 **Descrição:**\n${procedure.description || 'Procedimento disponível'}\n\n`;
-  info += `⏱️ **Duração:** ${procedure.duration} minutos\n\n`;
+  let info = `💉 *${procedure.name}*\n\n`;
+  info += `📝 *Descrição:*\n${procedure.description || 'Procedimento disponível'}\n\n`;
+  info += `⏱️ *Duração:* ${procedure.duration} minutos\n\n`;
   
   // Get price for selected clinic
   const clinicPrice = procedure.prices?.[normalizedClinicForPrice];
@@ -164,21 +164,21 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
     if (typeof clinicPrice === 'object' && clinicPrice !== null) {
       // Handle Pilates pricing structure
       const prices = clinicPrice as any;
-      info += `💰 **Valor (Particular):**\n`;
+      info += `💰 *Valor (Particular):*\n`;
       if (prices.twiceWeek) info += `• 2x por semana: R$ ${prices.twiceWeek.toFixed(2)}\n`;
       if (prices.threeWeek) info += `• 3x por semana: R$ ${prices.threeWeek.toFixed(2)}\n`;
       if (prices.singleSession) info += `• Sessão avulsa: R$ ${prices.singleSession.toFixed(2)}\n`;
     } else {
-      info += `💰 **Valor (Particular):** R$ ${Number(clinicPrice).toFixed(2)}\n`;
+      info += `💰 *Valor (Particular):* R$ ${Number(clinicPrice).toFixed(2)}\n`;
     }
   } else {
-    info += `💰 **Valor:** Consultar com nossa equipe\n`;
+    info += `💰 *Valor:* Consultar com nossa equipe\n`;
   }
   
   // Get packages for selected clinic
   const clinicPackages = procedure.packages?.[normalizedClinicForPrice] || [];
   if (clinicPackages.length > 0) {
-    info += `\n🎁 **Pacotes Disponíveis:**\n`;
+    info += `\n🎁 *Pacotes Disponíveis:*\n`;
     clinicPackages.forEach((pkg: any) => {
       const pricePerSession = pkg.price / pkg.sessions;
       info += `• Pacote de ${pkg.sessions} sessões: R$ ${pkg.price.toFixed(2)} (R$ ${pricePerSession.toFixed(2)} por sessão)\n`;
@@ -188,17 +188,17 @@ export function getProcedureInfoForGPT(procedureName: string, clinicCode?: strin
   // Get insurance info from procedure.convenios
   const acceptedInsurances = procedure.convenios || [];
   if (acceptedInsurances.length > 0) {
-    info += `\n💳 **Aceita os seguintes convênios:**\n`;
+    info += `\n💳 *Aceita os seguintes convênios:*\n`;
     info += acceptedInsurances.slice(0, 10).map((ins: string) => `• ${ins}`).join('\n');
     if (acceptedInsurances.length > 10) {
       info += `\n... e mais ${acceptedInsurances.length - 10} convênios`;
     }
-    info += `\n💡 Valores com convênio podem variar. Consulte nossa equipe para valores específicos do seu plano.`;
+    info += `\n\n💡 Valores com convênio podem variar. Consulte nossa equipe para valores específicos do seu plano.`;
   } else {
-    info += `\n💡 Consulte nossa equipe para informações sobre convênios aceitos.`;
+    info += `\n\n💡 Consulte nossa equipe para informações sobre convênios aceitos.`;
   }
   
-  info += `\n\n📞 **Próximos passos:**\n`;
+  info += `\n\n📞 *Próximos passos:*\n`;
   info += `Para agendar uma sessão, entre em contato conosco ou use o comando de agendamento!`;
   
   return info;
