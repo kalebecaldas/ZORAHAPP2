@@ -22,7 +22,7 @@ const httpServer = createServer(app as any)
 
 // Inicializar realtime com tratamento de erro
 try {
-  initRealtime(httpServer)
+initRealtime(httpServer)
   console.log('✅ Socket.IO inicializado')
 } catch (error) {
   console.error('⚠️ Erro ao inicializar Socket.IO:', error)

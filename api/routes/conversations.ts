@@ -721,6 +721,25 @@ export async function processIncomingMessage(
     const sessionExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // 24 hours
 
     if (!conversation) {
+      // Get workflow BEFORE creating conversation to ensure workflowId is set
+      let defaultWorkflowId: string | null = null
+      let defaultStartNode: string = 'start'
+      try {
+        const wf = await getDefaultWorkflow()
+        if (wf) {
+          defaultWorkflowId = wf.id
+          const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
+          const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
+          const startNode = nodes.find((n: any) => n.type === 'START')
+          defaultStartNode = startNode?.id || 'start'
+          console.log(`✅ Workflow encontrado: ${wf.id}, startNode: ${defaultStartNode}`)
+        } else {
+          console.warn(`⚠️ Nenhum workflow ativo encontrado no banco`)
+        }
+      } catch (err) {
+        console.error(`❌ Erro ao buscar workflow padrão:`, err)
+      }
+
       conversation = await prisma.conversation.create({
         data: {
           phone,
@@ -732,10 +751,14 @@ export async function processIncomingMessage(
           sessionExpiryTime: sessionExpiryTime,
           sessionStatus: 'active',
           lastUserActivity: now,
-          channel: 'whatsapp'
+          channel: 'whatsapp',
+          workflowId: defaultWorkflowId, // ✅ Set workflowId na criação
+          currentWorkflowNode: defaultStartNode,
+          workflowContext: {},
+          awaitingInput: false
         }
       })
-      console.log(`💬 Nova conversa criada: ${conversation.id} com sessão de 24h`)
+      console.log(`💬 Nova conversa criada: ${conversation.id} com sessão de 24h, workflowId: ${defaultWorkflowId || 'nenhum'}`)
 
       // Start session in memory manager (only if patient exists)
       if (patient?.id) {
@@ -746,21 +769,6 @@ export async function processIncomingMessage(
           console.warn(`⚠️ Erro ao iniciar sessão no manager:`, err)
         }
       }
-
-      try {
-        const wf = await getDefaultWorkflow()
-        if (wf) {
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: {
-              workflowId: wf.id,
-              currentWorkflowNode: (Array.isArray((wf as any).config?.nodes) ? (wf as any).config.nodes.find((n: any) => n.type === 'START')?.id : 'start') || 'start',
-              workflowContext: {},
-              awaitingInput: false
-            }
-          })
-        }
-      } catch { }
     } else {
       // Check session status and update
       const sessionExpired = conversation.sessionExpiryTime && new Date(conversation.sessionExpiryTime) < now
@@ -898,18 +906,55 @@ export async function processIncomingMessage(
               awaitingInput: false
             }
           })
+          conversation.workflowId = def.id // Update local reference
         }
       } catch { }
       const logs = await advanceWorkflow(conversation, text)
       workflowLogs.push(...logs)
     } else if (shouldProcessWithBot) {
-      // Fallback para conversas sem workflow mas ainda na fila do bot
-      const handled = await handleAppointmentFlow(conversation, patient, text)
-      if (!handled) {
-        if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
-          await processWithAI(conversation, message, patient)
+      // ✅ TENTAR BUSCAR WORKFLOW ANTES DE CAIR NO FALLBACK
+      try {
+        const def = await getDefaultWorkflow()
+        if (def) {
+          console.log(`🔄 Conversa sem workflowId, atribuindo workflow ativo: ${def.id}`)
+          const cfg = (typeof (def as any).config === 'string') ? (() => { try { return JSON.parse((def as any).config) } catch { return {} } })() : ((def as any).config || {})
+          const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
+          const start = nodes.find((n: any) => n.type === 'START')
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              workflowId: def.id,
+              currentWorkflowNode: start?.id || 'start',
+              workflowContext: {},
+              awaitingInput: false
+            }
+          })
+          conversation.workflowId = def.id // Update local reference
+          // Agora processar com workflow
+          const logs = await advanceWorkflow(conversation, text)
+          workflowLogs.push(...logs)
         } else {
-          await sendAutoResponse(conversation, patient)
+          console.warn(`⚠️ Nenhum workflow ativo encontrado, usando fallback hardcoded`)
+          // Fallback para conversas sem workflow mas ainda na fila do bot
+          const handled = await handleAppointmentFlow(conversation, patient, text)
+          if (!handled) {
+            if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
+              await processWithAI(conversation, message, patient)
+            } else {
+              await sendAutoResponse(conversation, patient)
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`❌ Erro ao buscar workflow para conversa sem workflowId:`, err)
+        // Fallback em caso de erro
+        const handled = await handleAppointmentFlow(conversation, patient, text)
+        if (!handled) {
+          if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
+            await processWithAI(conversation, message, patient)
+          } else {
+            await sendAutoResponse(conversation, patient)
+          }
         }
       }
     }
