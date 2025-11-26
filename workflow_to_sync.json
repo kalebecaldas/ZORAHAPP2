@@ -262,28 +262,12 @@
         "target": "transfer_to_queue"
       },
       {
-        "id": "msg_paciente_encontrado_action_get_procedimentos_insurance_encontrado",
+        "id": "edge-msg_paciente_encontrado-action_get_procedimentos_insurance",
         "data": {
           "port": "main"
         },
         "source": "msg_paciente_encontrado",
-        "target": "action_get_procedimentos_insurance_encontrado"
-      },
-      {
-        "id": "action_get_procedimentos_insurance_encontrado_msg_procedimentos_insurance_encontrado",
-        "data": {
-          "port": "main"
-        },
-        "source": "action_get_procedimentos_insurance_encontrado",
-        "target": "msg_procedimentos_insurance_encontrado"
-      },
-      {
-        "id": "msg_procedimentos_insurance_encontrado_transfer_to_queue_encontrado",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_procedimentos_insurance_encontrado",
-        "target": "transfer_to_queue_encontrado"
+        "target": "action_get_procedimentos_insurance"
       }
     ],
     "nodes": [
@@ -1291,100 +1275,6 @@
         "position": {
           "x": 1000,
           "y": 2460
-        },
-        "connections": []
-      },
-      {
-        "id": "action_get_procedimentos_insurance_encontrado",
-        "type": "ACTION",
-        "content": {
-          "type": "ACTION",
-          "label": "ACTION",
-          "ports": [
-            {
-              "id": "input",
-              "type": "input",
-              "label": "Entrada",
-              "position": "top"
-            },
-            {
-              "id": "main",
-              "type": "output",
-              "label": "Saída",
-              "position": "bottom"
-            }
-          ],
-          "action": "get_procedures_by_insurance"
-        },
-        "position": {
-          "x": 315,
-          "y": 1020
-        },
-        "connections": [
-          {
-            "port": "main",
-            "targetId": "msg_procedimentos_insurance_encontrado"
-          }
-        ]
-      },
-      {
-        "id": "msg_procedimentos_insurance_encontrado",
-        "type": "MESSAGE",
-        "content": {
-          "type": "MESSAGE",
-          "label": "MESSAGE",
-          "ports": [
-            {
-              "id": "input",
-              "type": "input",
-              "label": "Entrada",
-              "position": "top"
-            },
-            {
-              "id": "main",
-              "type": "output",
-              "label": "Saída",
-              "position": "bottom"
-            }
-          ],
-          "message": "🩺 **Procedimentos disponíveis para ${paciente.convenio}:**\n\n${procedimentos_lista}\n\n💡 Você pode informar quais procedimentos deseja agendar enquanto aguarda o atendimento."
-        },
-        "position": {
-          "x": 285,
-          "y": 1170
-        },
-        "connections": [
-          {
-            "port": "main",
-            "targetId": "transfer_to_queue_encontrado"
-          }
-        ]
-      },
-      {
-        "id": "transfer_to_queue_encontrado",
-        "type": "TRANSFER_HUMAN",
-        "content": {
-          "type": "TRANSFER_HUMAN",
-          "label": "TRANSFER_HUMAN",
-          "ports": [
-            {
-              "id": "input",
-              "type": "input",
-              "label": "Entrada",
-              "position": "top"
-            },
-            {
-              "id": "main",
-              "type": "output",
-              "label": "Saída",
-              "position": "bottom"
-            }
-          ],
-          "finalMessage": "⏳ **Você foi encaminhado para um de nossos atendentes!**\n\nEnquanto aguarda, você pode informar quais procedimentos deseja agendar.\nNossa equipe entrará em contato em breve para finalizar seu agendamento."
-        },
-        "position": {
-          "x": 300,
-          "y": 1350
         },
         "connections": []
       }
