@@ -293,6 +293,7 @@ EXEMPLOS CORRETOS:
     
     // Ensure response is conversational (not just a classification)
     let conversationalResponse = brief || '';
+    let shouldSkipNextNode = false; // Flag to prevent duplicate responses
     
     // If brief is too short or looks like a classification, make it more conversational WITH REAL DATA
     if (conversationalResponse.length < 50 || 
@@ -304,17 +305,30 @@ EXEMPLOS CORRETOS:
       const clinicCode = context.userData.selectedClinic || 'vieiralves';
       const allProcedures = clinicDataService.getProcedures();
       
-      // If specific procedure was mentioned, respond about THAT procedure only
+      // If specific procedure was mentioned, generate COMPLETE response with all details
       if (detectedProcedure) {
-        const price = clinicDataService.getPrice(detectedProcedure.id, clinicCode);
-        const priceText = typeof price === 'number' ? `R$ ${price},00` : 
-                         typeof price === 'string' ? price : 'consultar';
-        
-        // Generate specific response based on intent and procedure
-        if (port === '1') { // VALUES
-          conversationalResponse = `📋 **${detectedProcedure.name}**\n\n💰 **Valor (Particular):** ${priceText}\n\nGostaria de saber mais detalhes ou ver outros procedimentos?`;
-        } else if (port === '4') { // PROCEDURE_INFO
-          conversationalResponse = `📋 **${detectedProcedure.name}**\n\n📝 ${detectedProcedure.description || 'Procedimento especializado da nossa clínica.'}\n\n💰 **Valor:** ${priceText}\n\nQuer saber mais alguma coisa?`;
+        // Generate complete response based on intent and procedure
+        if (port === '1' || port === '4') { // VALUES or PROCEDURE_INFO
+          // Use complete info from formatter (includes packages, insurances, etc.)
+          const { getProcedureInfoForGPT } = await import('../utils/clinicDataFormatter');
+          const completeInfo = getProcedureInfoForGPT(detectedProcedure.name, clinicCode);
+          
+          if (completeInfo) {
+            conversationalResponse = completeInfo;
+            shouldSkipNextNode = true; // Don't go to next node, we already have complete info
+            context.workflowLogs.push(`🤖 [GPT] ✨ Resposta completa gerada para ${detectedProcedure.name} (evitando duplicação)`);
+          } else {
+            // Fallback if formatter doesn't find procedure
+            const price = clinicDataService.getPrice(detectedProcedure.id, clinicCode);
+            const priceText = typeof price === 'number' ? `R$ ${price},00` : 
+                             typeof price === 'string' ? price : 'consultar';
+            
+            if (port === '1') {
+              conversationalResponse = `📋 **${detectedProcedure.name}**\n\n💰 **Valor (Particular):** ${priceText}\n\nGostaria de saber mais detalhes ou ver outros procedimentos?`;
+            } else {
+              conversationalResponse = `📋 **${detectedProcedure.name}**\n\n📝 ${detectedProcedure.description || 'Procedimento especializado da nossa clínica.'}\n\n💰 **Valor:** ${priceText}\n\nQuer saber mais alguma coisa?`;
+            }
+          }
         } else {
           conversationalResponse = `Entendi! Você quer saber sobre **${detectedProcedure.name}**. Como posso ajudar?`;
         }
@@ -349,11 +363,19 @@ EXEMPLOS CORRETOS:
       }
     }
     
+    // Format response with proper line breaks for WhatsApp
+    // Ensure consistent spacing and formatting
+    let formattedResponse = conversationalResponse
+      .replace(/\n{3,}/g, '\n\n') // Replace 3+ newlines with 2
+      .replace(/([.!?])\n([A-Z])/g, '$1\n\n$2') // Add space after sentences
+      .replace(/\n\n\n+/g, '\n\n') // Clean up multiple newlines
+      .trim(); // Remove leading/trailing whitespace
+    
     return {
-      nextNodeId,
-      response: conversationalResponse,
-      shouldStop: false,
-      autoAdvance: true
+      nextNodeId: shouldSkipNextNode ? undefined : nextNodeId, // Skip next node if we generated complete response
+      response: formattedResponse,
+      shouldStop: shouldSkipNextNode, // Stop if we generated complete response
+      autoAdvance: !shouldSkipNextNode
     };
     
   } catch (error: any) {
