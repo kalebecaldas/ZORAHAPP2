@@ -92,23 +92,25 @@ REGRAS IMPORTANTES PARA O CAMPO "brief":
 ✅ Reconheça o que o usuário disse ANTES de perguntar mais
 
 CASOS ESPECIAIS:
-- "encaminhamento" ou "sessões" → Reconheça o encaminhamento, pergunte qual procedimento, classifique como porta 5
-- "sim", "isso", "correto" → Reconheça positivamente, pergunte como pode ajudar ou qual procedimento, porta 5
+- "encaminhamento" ou "sessões" → USE OS PROCEDIMENTOS DA CLÍNICA para dar opções reais, pergunte qual, porta 5
+- "sim", "isso", "correto" → Reconheça positivamente, pergunte como pode ajudar, porta 5
 - "posso parcelar?" → Mencione que vai ajudar com pagamento, porta 1
-- Mensagens vagas → Seja prestativo, ofereça opções, pergente o que ele precisa
+- Mensagens vagas → Seja prestativo, USE OS DADOS DA CLÍNICA para oferecer opções reais
+
+IMPORTANTE: Quando o usuário mencionar "encaminhamento" ou "sessões", SEMPRE inclua a lista real de procedimentos disponíveis no brief.
 
 FORMATO DE RESPOSTA (JSON):
-{"intent_port":"<1-6>","brief":"<RESPOSTA CONVERSACIONAL COMPLETA (mínimo 50 caracteres)>","confidence":<0-1>}
+{"intent_port":"<1-6>","brief":"<RESPOSTA CONVERSACIONAL COMPLETA usando dados reais da clínica (mínimo 80 caracteres)>","confidence":<0-1>}
 
 EXEMPLOS CORRETOS:
 ❌ MAU: {"intent_port":"5","brief":"Encaminhamento para fisioterapia","confidence":0.9}
-✅ BOM: {"intent_port":"5","brief":"Ótimo! Você tem encaminhamento para fisioterapia! 🏥 Para qual procedimento específico? Temos ortopédica, neurológica, RPG, acupuntura e outros.","confidence":0.9}
+✅ BOM: {"intent_port":"5","brief":"Ótimo! Você tem encaminhamento para fisioterapia! 🏥\\n\\nTemos estes procedimentos disponíveis:\\n- Fisioterapia Ortopédica (R$ 90,00)\\n- Fisioterapia Neurológica (R$ 100,00)\\n- RPG (R$ 120,00)\\n- Acupuntura (R$ 180,00)\\n\\nPara qual procedimento específico você foi encaminhado?","confidence":0.9}
 
 ❌ MAU: {"intent_port":"5","brief":"Referência a procedimento anterior","confidence":0.7}
-✅ BOM: {"intent_port":"5","brief":"Perfeito! Entendi que você quer agendar. 📅 Me conte: qual procedimento você precisa?","confidence":0.8}
+✅ BOM: {"intent_port":"5","brief":"Perfeito! Entendi que você quer agendar. 📅\\n\\nTemos diversos procedimentos: Fisioterapia Ortopédica, Neurológica, RPG, Acupuntura, Fisioterapia Pélvica.\\n\\nQual desses você precisa?","confidence":0.8}
 
 ❌ MAU: {"intent_port":"1","brief":"Pergunta sobre parcelamento","confidence":0.8}
-✅ BOM: {"intent_port":"1","brief":"Sobre formas de pagamento e parcelamento, posso te ajudar! 💳 Qual procedimento você gostaria de fazer?","confidence":0.9}`;
+✅ BOM: {"intent_port":"1","brief":"Sobre formas de pagamento e parcelamento, posso te ajudar! 💳\\n\\nTemos procedimentos desde R$ 90,00 até R$ 220,00, com pacotes disponíveis.\\n\\nQual procedimento você gostaria de fazer?","confidence":0.9}`;
     
     // Build conversation history
     const historyContext = context.conversationHistory
@@ -234,24 +236,33 @@ EXEMPLOS CORRETOS:
     // Ensure response is conversational (not just a classification)
     let conversationalResponse = brief || '';
     
-    // If brief is too short or looks like a classification, make it more conversational
-    if (conversationalResponse.length < 30 || 
+    // If brief is too short or looks like a classification, make it more conversational WITH REAL DATA
+    if (conversationalResponse.length < 50 || 
         conversationalResponse.match(/^(encaminhamento|refer[eê]ncia|pergunta|sobre)/i)) {
       
       console.log(`🤖 [GPT] ⚠️ Brief muito curto ou não conversacional: "${conversationalResponse}"`);
       
-      // Generate better response based on intent
+      // Get procedures list for better responses
+      const clinicCode = context.userData.selectedClinic || 'vieiralves';
+      const clinicInfo = clinicDataService.getClinicInfo(clinicCode);
+      const mainProcedures = (clinicInfo.procedures || []).slice(0, 5).map((p: any) => {
+        const price = p.prices?.[clinicCode];
+        const priceText = typeof price === 'number' ? `R$ ${price},00` : 'consultar';
+        return `- ${p.name} (${priceText})`;
+      }).join('\n');
+      
+      // Generate better response based on intent WITH REAL DATA
       const conversationalMap: Record<string, string> = {
-        '1': `Entendi que você quer saber sobre valores! 💰 Me conte: qual procedimento você gostaria de fazer?`,
-        '2': `Legal! Você quer saber sobre convênios. 🏥 Qual convênio você tem?`,
-        '3': `Vou te passar nossa localização! 📍 Você precisa saber como chegar ou quer o endereço?`,
-        '4': `Você quer saber sobre algum procedimento específico! 📝 Qual procedimento te interessa?`,
-        '5': `Ótimo! Vamos agendar sua consulta! 📅 Para começar, preciso de alguns dados. Qual seu nome completo?`,
+        '1': `Entendi que você quer saber sobre valores! 💰\n\nNossos principais procedimentos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
+        '2': `Legal! Você quer saber sobre convênios. 🏥\n\nAceitamos: ${(clinicInfo.acceptedInsurance || []).slice(0, 5).join(', ')} e outros.\n\nQual convênio você tem?`,
+        '3': `Vou te passar nossa localização! 📍\n\n${clinicLocations[clinicCode].name}\n${clinicLocations[clinicCode].address}\n${clinicLocations[clinicCode].phone}\n\nPrecisa saber como chegar?`,
+        '4': `Você quer saber sobre procedimentos! 📝\n\nOferecemos:\n${mainProcedures}\n\nQual procedimento te interessa?`,
+        '5': `Ótimo! Vamos agendar sua consulta! 📅\n\nTemos disponíveis:\n${mainProcedures}\n\nPara qual procedimento você precisa agendar?`,
         '6': `Entendi! Vou te conectar com um atendente humano. ⏳ Aguarde um momento...`
       };
       
       conversationalResponse = conversationalMap[port] || conversationalResponse;
-      context.workflowLogs.push(`🤖 [GPT] ✨ Resposta melhorada: "${conversationalResponse}"`);
+      context.workflowLogs.push(`🤖 [GPT] ✨ Resposta melhorada com dados reais: "${conversationalResponse.substring(0, 100)}..."`);
     }
     
     return {
