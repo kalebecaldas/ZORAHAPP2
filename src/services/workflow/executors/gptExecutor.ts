@@ -138,6 +138,7 @@ EXEMPLOS CORRETOS:
     const classificationModel = process.env.OPENAI_CLASSIFICATION_MODEL || 'gpt-4o-mini';
     
     console.log(`🤖 [GPT] Using model: ${classificationModel} for intent classification`);
+    context.workflowLogs.push(`🤖 [GPT] 📊 Modelo usado: ${classificationModel}`);
     
     const completion = await client.chat.completions.create({
       model: classificationModel,

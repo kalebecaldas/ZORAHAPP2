@@ -149,6 +149,7 @@ Responda de forma completa e útil, usando TODAS as informações relevantes do 
     const responseModel = process.env.OPENAI_RESPONSE_MODEL || 'gpt-4o';
     
     console.log(`🤖 [GPT Response] Using model: ${responseModel} for contextual response`);
+    context.workflowLogs.push(`🤖 [GPT Response] 📊 Modelo usado: ${responseModel}`);
     
     const completion = await client.chat.completions.create({
       model: responseModel,

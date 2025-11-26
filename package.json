@@ -30,7 +30,8 @@
     "fix:duplicate-edges": "tsx scripts/fix_duplicate_edges.ts",
     "check:workflow:railway": "tsx scripts/check_workflow_railway.ts",
     "fix:patient-found-flow": "tsx scripts/fix_patient_found_flow.ts",
-    "cleanup:workflows": "tsx scripts/cleanup_old_workflows.ts"
+    "cleanup:workflows": "tsx scripts/cleanup_old_workflows.ts",
+    "test:gpt-models": "tsx scripts/test_gpt_models.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
