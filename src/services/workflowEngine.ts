@@ -240,12 +240,18 @@ export class WorkflowEngine {
         }
         break;
       case 'GPT_RESPONSE':
-        // GPT_RESPONSE nodes should continue if they have a next node
-        // This allows the flow to continue after intent classification
-        if (result.nextNodeId) {
+        // GPT_RESPONSE nodes should respect shouldStop from executor
+        // If executor says to stop (e.g., complete response generated), don't continue
+        if (result.shouldStop) {
+          // Executor generated complete response, stop here
+          console.log(`🔧 GPT_RESPONSE - Executor requested stop, not continuing to next node`);
+          result.shouldStop = true;
+        } else if (result.nextNodeId) {
+          // No stop requested, continue to next node if available
           this.context.currentNodeId = result.nextNodeId;
           result.shouldStop = false; // Continue to next node
         } else {
+          // No next node and no stop requested, stop here
           result.shouldStop = true; // Stop if no next node
         }
         break;
