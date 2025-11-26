@@ -482,18 +482,73 @@ Prompt: "Crie um workflow que:
 
 ## 💰 Custos Estimados
 
+> **Nota**: Valores em USD (Dólar). Conversão aproximada: 1 USD = 5 BRL (R$)
+
 ### N8N Self-Hosted (Railway):
-- **Starter Plan**: $5-10/mês
-- **Pro Plan**: $20/mês
 
-### N8N Cloud:
-- **Starter**: $20/mês (5.000 execuções)
-- **Pro**: $50/mês (20.000 execuções)
-- **Enterprise**: Custom
+**Opção 1: Railway Hobby Plan**
+- **Custo**: $5 USD/mês (~R$ 25/mês)
+- **Recursos**: 8 GB RAM, 8 vCPUs
+- **Adequado para**: Cargas leves a moderadas
+- **Vantagem**: Mais barato, controle total
 
-### Total Estimado:
-- **Self-hosted**: +$10/mês (hosting N8N)
-- **Cloud**: +$20-50/mês
+**Opção 2: Railway Pro Plan**
+- **Custo**: $20 USD/mês (~R$ 100/mês)
+- **Recursos**: Mais recursos, melhor performance
+- **Adequado para**: Produção com alto volume
+
+**Custo adicional**: N8N em si é **GRATUITO** (open source), você paga apenas o hosting.
+
+### N8N Cloud (Hospedagem Gerenciada):
+
+**Starter Plan**
+- **Custo**: €20/mês (~$24 USD ou ~R$ 120/mês)
+- **Execuções**: 2.500 workflows/mês
+- **Inclui**: Usuários e workflows ilimitados
+
+**Pro Plan**
+- **Custo**: €50/mês (~$60 USD ou ~R$ 300/mês)
+- **Execuções**: 10.000 workflows/mês
+- **Inclui**: Suporte prioritário, recursos avançados
+
+**Business Plan**
+- **Custo**: €667/mês (~$800 USD ou ~R$ 4.000/mês)
+- **Execuções**: 40.000 workflows/mês
+- **Inclui**: Suporte dedicado, SLA garantido
+
+### Comparação de Custos:
+
+| Opção | USD/mês | BRL/mês (R$) | Execuções | Manutenção |
+|-------|---------|--------------|-----------|------------|
+| **Self-hosted (Railway Hobby)** | $5 | ~R$ 25 | Ilimitadas* | Você faz |
+| **Self-hosted (Railway Pro)** | $20 | ~R$ 100 | Ilimitadas* | Você faz |
+| **N8N Cloud Starter** | $24 | ~R$ 120 | 2.500 | N8N faz |
+| **N8N Cloud Pro** | $60 | ~R$ 300 | 10.000 | N8N faz |
+
+*Limitadas apenas pelos recursos do servidor
+
+### Total Estimado para seu caso:
+
+**Cenário 1: Self-hosted (Recomendado para começar)**
+- Railway Hobby: **R$ 25/mês**
+- N8N: **GRATUITO** (open source)
+- **Total**: **+R$ 25/mês**
+
+**Cenário 2: N8N Cloud (Mais fácil, mas mais caro)**
+- N8N Cloud Starter: **R$ 120/mês**
+- **Total**: **+R$ 120/mês**
+
+### 💡 Recomendação de Custo:
+
+Para começar: **Self-hosted no Railway (R$ 25/mês)**
+- Mais barato
+- Controle total
+- Você já usa Railway
+
+Se crescer muito: **N8N Cloud Pro (R$ 300/mês)**
+- Mais fácil de gerenciar
+- Suporte incluído
+- Escalabilidade automática
 
 ---
 

@@ -96,8 +96,14 @@ export async function executeMessageNode(
   }
   */
 
-  // Special case: msg_solicita_cadastro should continue automatically
-  const shouldAutoAdvance = node.id === 'msg_solicita_cadastro';
+  // Special case: these messages should continue automatically to next node
+  // msg_solicita_cadastro: continues to data collection
+  // msg_cadastro_sucesso: continues to action_get_procedimentos_insurance
+  // msg_paciente_encontrado: continues to action_get_procedimentos_insurance
+  const shouldAutoAdvance = 
+    node.id === 'msg_solicita_cadastro' ||
+    node.id === 'msg_cadastro_sucesso' ||
+    node.id === 'msg_paciente_encontrado';
 
   if (shouldAutoAdvance && nextNodeId) {
     console.log(`🔧 MESSAGE node ${node.id} - Auto-advancing to ${nextNodeId}`);
