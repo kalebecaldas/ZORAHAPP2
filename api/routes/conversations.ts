@@ -810,19 +810,35 @@ export async function processIncomingMessage(
 
     // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem
     let message = null
-    if (messageId && metadata?.whatsappMessageId) {
-      // Verificar se mensagem já existe
-      const existingMessage = await prisma.message.findFirst({
+    if (messageId) {
+      // Buscar mensagens recentes do mesmo telefone
+      const recentMessages = await prisma.message.findMany({
         where: {
           phoneNumber: phone,
-          metadata: {
-            path: ['whatsappMessageId'],
-            equals: messageId
+          direction: 'RECEIVED',
+          createdAt: {
+            gte: new Date(Date.now() - 5 * 60 * 1000) // Últimos 5 minutos
           }
-        }
+        },
+        select: {
+          id: true,
+          metadata: true,
+          messageText: true
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: 10
       })
 
-      if (existingMessage) {
+      // Verificar se alguma mensagem tem o mesmo whatsappMessageId ou mesmo texto recente
+      const isDuplicate = recentMessages.some(msg => {
+        const msgMetadata = msg.metadata as any
+        return msgMetadata?.whatsappMessageId === messageId || 
+               (msg.messageText === text && msgMetadata?.whatsappMessageId) // Mesmo texto com ID já processado
+      })
+
+      if (isDuplicate) {
         console.log(`⚠️ Mensagem duplicada detectada em processIncomingMessage: ${messageId} de ${phone}`)
         // Retornar logs vazios mas não processar novamente
         return workflowLogs

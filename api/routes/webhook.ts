@@ -202,18 +202,34 @@ router.post('/', async (req: Request, res: Response) => {
 
         // ✅ VERIFICAR DUPLICAÇÃO: Checar se mensagem já foi processada
         try {
-          const existingMessage = await prisma.message.findFirst({
+          // Buscar mensagens do mesmo telefone e verificar metadata
+          const recentMessages = await prisma.message.findMany({
             where: {
               phoneNumber: phone,
-              metadata: {
-                path: ['whatsappMessageId'],
-                equals: messageId
+              direction: 'RECEIVED',
+              createdAt: {
+                gte: new Date(Date.now() - 5 * 60 * 1000) // Últimos 5 minutos
               }
-            }
+            },
+            select: {
+              id: true,
+              metadata: true,
+              createdAt: true
+            },
+            orderBy: {
+              createdAt: 'desc'
+            },
+            take: 10
           })
 
-          if (existingMessage) {
-            console.log(`⚠️ Mensagem duplicada ignorada: ${messageId} de ${phone} (já processada em ${existingMessage.createdAt})`)
+          // Verificar se alguma mensagem tem o mesmo whatsappMessageId
+          const isDuplicate = recentMessages.some(msg => {
+            const metadata = msg.metadata as any
+            return metadata?.whatsappMessageId === messageId
+          })
+
+          if (isDuplicate) {
+            console.log(`⚠️ Mensagem duplicada ignorada: ${messageId} de ${phone}`)
             continue // Pular esta mensagem
           }
         } catch (error) {
