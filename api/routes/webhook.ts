@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import { processIncomingMessage } from '../routes/conversations.js'
 import { WhatsAppService } from '../services/whatsapp.js'
+import prisma from '../prisma/client.js'
 import fs from 'fs/promises'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -75,15 +76,19 @@ router.post('/', async (req: Request, res: Response) => {
         if (message.text?.body) {
           text = message.text.body
           messageType = 'TEXT'
+          metadata = { whatsappMessageId: messageId }
         } else if (message.button?.text) {
           text = message.button.text
           messageType = 'TEXT'
+          metadata = { whatsappMessageId: messageId }
         } else if (message.interactive?.button_reply?.title) {
           text = message.interactive.button_reply.title
           messageType = 'TEXT'
+          metadata = { whatsappMessageId: messageId }
         } else if (message.interactive?.list_reply?.title) {
           text = message.interactive.list_reply.title
           messageType = 'TEXT'
+          metadata = { whatsappMessageId: messageId }
         } else if (message.type === 'image') {
           messageType = 'IMAGE'
           text = message.image?.caption || 'Imagem recebida'
@@ -106,6 +111,7 @@ router.post('/', async (req: Request, res: Response) => {
               
               mediaUrl = `/api/conversations/files/${filename}`
               metadata = {
+                whatsappMessageId: messageId,
                 mime_type: message.image?.mime_type,
                 sha256: message.image?.sha256,
                 originalId: mediaId
@@ -139,6 +145,7 @@ router.post('/', async (req: Request, res: Response) => {
               
               mediaUrl = `/api/conversations/files/${filename}`
               metadata = {
+                whatsappMessageId: messageId,
                 filename: message.document?.filename,
                 mime_type: message.document?.mime_type,
                 sha256: message.document?.sha256,
@@ -172,6 +179,7 @@ router.post('/', async (req: Request, res: Response) => {
               
               mediaUrl = `/api/conversations/files/${filename}`
               metadata = {
+                whatsappMessageId: messageId,
                 mime_type: message.audio?.mime_type,
                 sha256: message.audio?.sha256,
                 originalId: mediaId
@@ -190,6 +198,27 @@ router.post('/', async (req: Request, res: Response) => {
         if (!phone || !text) {
           console.log('⚠️ Mensagem sem telefone ou texto:', { phone, text })
           continue
+        }
+
+        // ✅ VERIFICAR DUPLICAÇÃO: Checar se mensagem já foi processada
+        try {
+          const existingMessage = await prisma.message.findFirst({
+            where: {
+              phoneNumber: phone,
+              metadata: {
+                path: ['whatsappMessageId'],
+                equals: messageId
+              }
+            }
+          })
+
+          if (existingMessage) {
+            console.log(`⚠️ Mensagem duplicada ignorada: ${messageId} de ${phone} (já processada em ${existingMessage.createdAt})`)
+            continue // Pular esta mensagem
+          }
+        } catch (error) {
+          console.warn('⚠️ Erro ao verificar duplicação (continuando):', error)
+          // Continuar mesmo se houver erro na verificação
         }
 
         console.log(`📨 Processando mensagem de ${phone}: ${text} (${messageType})`)

@@ -808,15 +808,42 @@ export async function processIncomingMessage(
       }
     }
 
+    // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem
+    let message = null
+    if (messageId && metadata?.whatsappMessageId) {
+      // Verificar se mensagem já existe
+      const existingMessage = await prisma.message.findFirst({
+        where: {
+          phoneNumber: phone,
+          metadata: {
+            path: ['whatsappMessageId'],
+            equals: messageId
+          }
+        }
+      })
+
+      if (existingMessage) {
+        console.log(`⚠️ Mensagem duplicada detectada em processIncomingMessage: ${messageId} de ${phone}`)
+        // Retornar logs vazios mas não processar novamente
+        return workflowLogs
+      }
+    }
+
+    // Garantir que metadata contém whatsappMessageId
+    const messageMetadata = {
+      ...metadata,
+      whatsappMessageId: messageId || metadata?.whatsappMessageId
+    }
+
     // Create message
-    const message = await prisma.message.create({
+    message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         phoneNumber: phone,
         messageText: text,
         messageType,
         mediaUrl,
-        metadata,
+        metadata: messageMetadata,
         direction: 'RECEIVED',
         from: 'USER',
         timestamp: new Date()
