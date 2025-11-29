@@ -11,6 +11,7 @@ export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
   const { onlineUsers } = useSocket();
+  const branding = useSystemBranding();
 
   const navigation = [
     { name: 'Conversas', href: '/conversations', icon: MessageSquare },
@@ -27,8 +28,8 @@ export function Layout({ children }: LayoutProps) {
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
-              <img src="/favicon.svg" alt="ZoraH Logo" className="h-8 w-8" />
-              <span className="ml-2 text-xl font-bold text-gray-900">ZoraH</span>
+              <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-8 w-8" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+              <span className="ml-2 text-xl font-bold text-gray-900">{branding.systemName}</span>
             </div>
             <button onClick={() => setSidebarOpen(false)}>
               <X className="h-6 w-6 text-gray-400" />
@@ -53,8 +54,8 @@ export function Layout({ children }: LayoutProps) {
       <div className="hidden lg:flex lg:w-64 lg:flex-col">
         <div className="flex min-h-0 flex-1 flex-col bg-white shadow-lg">
           <div className="flex h-16 items-center px-4 bg-blue-600">
-            <img src="/favicon.svg" alt="ZoraH Logo" className="h-8 w-8" />
-            <span className="ml-2 text-xl font-bold text-white">ZoraH</span>
+            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-8 w-8" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+            <span className="ml-2 text-xl font-bold text-white">{branding.systemName}</span>
           </div>
           <div className="flex flex-1 flex-col overflow-y-auto">
             <nav className="flex-1 space-y-1 px-2 py-4">

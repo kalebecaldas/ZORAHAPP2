@@ -8,6 +8,7 @@ import path from 'path'
 const router = Router()
 
 const CLINIC_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'clinicData.json')
+const SYSTEM_BRANDING_PATH = path.join(process.cwd(), 'src', 'data', 'systemBranding.json')
 
 // In development, allow public access for reading settings
 const settingsAuth = process.env.NODE_ENV === 'development'
@@ -339,6 +340,169 @@ router.post('/clinic-data', authMiddleware, async (req: Request, res: Response):
   } catch (error) {
     console.error('Erro ao salvar clinicData.json:', error)
     res.status(500).json({ error: 'Erro ao salvar dados da clínica' })
+  }
+})
+
+// Get system branding (name and logo)
+router.get('/system-branding', settingsAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Try to read from file, fallback to defaults
+    try {
+      const data = await fs.readFile(SYSTEM_BRANDING_PATH, 'utf-8')
+      const branding = JSON.parse(data)
+      res.json(branding)
+    } catch (fileError) {
+      // File doesn't exist, return defaults
+      res.json({
+        systemName: 'ZoraH',
+        logoUrl: '/favicon.svg'
+      })
+    }
+  } catch (error) {
+    console.error('Erro ao ler systemBranding.json:', error)
+    res.status(500).json({ error: 'Erro ao ler configurações de marca' })
+  }
+})
+
+// Update system branding
+router.put('/system-branding', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Only admin can update settings
+    if (req.user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Permissão insuficiente' })
+      return
+    }
+
+    const brandingSchema = z.object({
+      systemName: z.string().min(1).max(100),
+      logoUrl: z.string().min(1)
+    })
+
+    const data = brandingSchema.parse(req.body)
+
+    // Ensure directory exists
+    const brandingDir = path.dirname(SYSTEM_BRANDING_PATH)
+    await fs.mkdir(brandingDir, { recursive: true })
+
+    // Write to file
+    await fs.writeFile(SYSTEM_BRANDING_PATH, JSON.stringify(data, null, 2), 'utf-8')
+
+    // Log the change
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.id,
+        action: 'SETTINGS_SYSTEM_BRANDING_UPDATED',
+        details: { 
+          systemName: data.systemName,
+          logoUrl: data.logoUrl,
+          updatedAt: new Date().toISOString() 
+        }
+      }
+    })
+
+    res.json({ success: true, message: 'Configurações de marca atualizadas com sucesso', branding: data })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Dados inválidos', details: error.errors })
+      return
+    }
+    console.error('Erro ao salvar systemBranding.json:', error)
+    res.status(500).json({ error: 'Erro ao salvar configurações de marca' })
+  }
+})
+
+// Upload logo file
+router.post('/upload-logo', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Only admin can upload
+    if (req.user.role !== 'ADMIN') {
+      res.status(403).json({ error: 'Permissão insuficiente' })
+      return
+    }
+
+    const multer = (await import('multer')).default
+    const uploadsDir = path.join(process.cwd(), 'public', 'logos')
+    await fs.mkdir(uploadsDir, { recursive: true })
+
+    const storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, uploadsDir)
+      },
+      filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname)
+        const name = `logo-${Date.now()}${ext}`
+        cb(null, name)
+      }
+    })
+
+    const upload = multer({
+      storage,
+      limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+      fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|svg/
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
+        const mimetype = allowedTypes.test(file.mimetype) || file.mimetype === 'image/svg+xml'
+        
+        if (extname && mimetype) {
+          cb(null, true)
+        } else {
+          cb(new Error('Formato de arquivo inválido. Use SVG, PNG ou JPG.'))
+        }
+      }
+    })
+
+    upload.single('logo')(req as any, res as any, async (err: any) => {
+      if (err) {
+        console.error('Erro no upload:', err)
+        res.status(400).json({ error: err.message || 'Erro ao fazer upload do arquivo' })
+        return
+      }
+
+      const file = (req as any).file
+      if (!file) {
+        res.status(400).json({ error: 'Nenhum arquivo enviado' })
+        return
+      }
+
+      const logoUrl = `/logos/${file.filename}`
+
+      // Update system branding with new logo URL
+      try {
+        let branding = { systemName: 'ZoraH', logoUrl: '/favicon.svg' }
+        try {
+          const brandingData = await fs.readFile(SYSTEM_BRANDING_PATH, 'utf-8')
+          branding = JSON.parse(brandingData)
+        } catch {
+          // File doesn't exist, use defaults
+        }
+
+        branding.logoUrl = logoUrl
+
+        const brandingDir = path.dirname(SYSTEM_BRANDING_PATH)
+        await fs.mkdir(brandingDir, { recursive: true })
+        await fs.writeFile(SYSTEM_BRANDING_PATH, JSON.stringify(branding, null, 2), 'utf-8')
+
+        await prisma.auditLog.create({
+          data: {
+            actorId: req.user!.id,
+            action: 'SETTINGS_LOGO_UPLOADED',
+            details: { 
+              logoUrl,
+              filename: file.filename,
+              updatedAt: new Date().toISOString() 
+            }
+          }
+        })
+
+        res.json({ success: true, logoUrl, message: 'Logo enviada com sucesso' })
+      } catch (error) {
+        console.error('Erro ao atualizar branding:', error)
+        res.status(500).json({ error: 'Erro ao atualizar configurações de marca' })
+      }
+    })
+  } catch (error) {
+    console.error('Erro ao fazer upload da logo:', error)
+    res.status(500).json({ error: 'Erro interno' })
   }
 })
 

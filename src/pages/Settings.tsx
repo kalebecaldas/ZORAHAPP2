@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 import {
   Save, Plus, Trash2, Edit2, X, Check,
   Settings as SettingsIcon, Building2, FileText,
-  MessageSquare, Bot, LayoutTemplate, ChevronDown, ChevronUp, AlertCircle
+  MessageSquare, Bot, LayoutTemplate, ChevronDown, ChevronUp, AlertCircle,
+  Monitor, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { TemplateManager } from '../components/TemplateManager';
 
@@ -56,6 +57,12 @@ export const Settings = () => {
     webhookUrl: ''
   });
 
+  // System branding settings
+  const [systemBranding, setSystemBranding] = useState({
+    systemName: 'ZoraH',
+    logoUrl: '/favicon.svg'
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -63,9 +70,10 @@ export const Settings = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [clinicRes, settingsRes] = await Promise.all([
+      const [clinicRes, settingsRes, brandingRes] = await Promise.all([
         api.get('/api/settings/clinic-data'),
-        api.get('/api/settings')
+        api.get('/api/settings'),
+        api.get('/api/settings/system-branding').catch(() => ({ data: null })) // Optional, may not exist
       ]);
 
       setClinicData(clinicRes.data);
@@ -81,6 +89,14 @@ export const Settings = () => {
         metaBusinessAccountId: '',
         webhookUrl: ''
       });
+
+      // Map system branding
+      if (brandingRes.data) {
+        setSystemBranding({
+          systemName: brandingRes.data.systemName || 'ZoraH',
+          logoUrl: brandingRes.data.logoUrl || '/favicon.svg'
+        });
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Erro ao carregar dados');
@@ -127,6 +143,65 @@ export const Settings = () => {
     }
   };
 
+  const handleSaveSystemBranding = async () => {
+    try {
+      setSaving(true);
+      await api.put('/api/settings/system-branding', systemBranding);
+      toast.success('Configurações de marca salvas com sucesso');
+      
+      // Reload page to apply changes
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (error) {
+      console.error('Error saving system branding:', error);
+      toast.error('Erro ao salvar configurações de marca');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.match(/^image\/(svg\+xml|png|jpeg|jpg)$/)) {
+      toast.error('Formato de arquivo inválido. Use SVG, PNG ou JPG.');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Arquivo muito grande. Tamanho máximo: 2MB');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const formData = new FormData();
+      formData.append('logo', file);
+
+      const response = await api.post('/api/settings/upload-logo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      if (response.data.logoUrl) {
+        setSystemBranding({ ...systemBranding, logoUrl: response.data.logoUrl });
+        toast.success('Logo enviada com sucesso!');
+      }
+    } catch (error: any) {
+      console.error('Error uploading logo:', error);
+      toast.error(error.response?.data?.error || 'Erro ao enviar logo');
+    } finally {
+      setSaving(false);
+      // Reset input
+      e.target.value = '';
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Carregando...</div>;
   }
@@ -152,6 +227,7 @@ export const Settings = () => {
             { id: 'procedimentos', label: 'Procedimentos', icon: FileText },
             { id: 'chatbot', label: 'Chat + Bot', icon: Bot },
             { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+            { id: 'sistema', label: 'Sistema', icon: Monitor },
           ].map((item) => (
             <button
               key={item.id}
@@ -519,6 +595,131 @@ export const Settings = () => {
               <TemplateManager />
             </div>
           )}
+
+          {activeTab === 'sistema' && (
+            <div className="p-6 space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold">Configurações do Sistema</h2>
+                <button 
+                  onClick={handleSaveSystemBranding} 
+                  disabled={saving} 
+                  className="btn-primary flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" /> Salvar
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Nome do Sistema */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nome do Sistema
+                  </label>
+                  <input
+                    type="text"
+                    value={systemBranding.systemName}
+                    onChange={(e) => setSystemBranding({ ...systemBranding, systemName: e.target.value })}
+                    placeholder="Ex: ZoraH"
+                    className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Este nome aparecerá na página de login, sidebar e em outros lugares do sistema.
+                  </p>
+                </div>
+
+                {/* Logo do Sistema */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Logo do Sistema
+                  </label>
+                  
+                  {/* Preview da Logo */}
+                  <div className="mb-4 flex items-center space-x-4">
+                    <div className="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <img 
+                        src={systemBranding.logoUrl} 
+                        alt="Logo Preview" 
+                        className="h-12 w-12 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/favicon.svg';
+                        }}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-600">
+                        <strong>URL atual:</strong> {systemBranding.logoUrl}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        A logo deve ser um arquivo SVG, PNG ou JPG. Use uma URL ou caminho relativo (ex: /favicon.svg)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Input para URL da Logo */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-gray-600">
+                      URL ou Caminho da Logo
+                    </label>
+                    <input
+                      type="text"
+                      value={systemBranding.logoUrl}
+                      onChange={(e) => setSystemBranding({ ...systemBranding, logoUrl: e.target.value })}
+                      placeholder="/favicon.svg ou https://exemplo.com/logo.svg"
+                      className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Upload de Logo (opcional - para upload direto) */}
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium text-gray-600 mb-2">
+                      Ou faça upload de uma nova logo
+                    </label>
+                    <input
+                      type="file"
+                      accept="image/svg+xml,image/png,image/jpeg,image/jpg"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                      id="logo-upload"
+                    />
+                    <label
+                      htmlFor="logo-upload"
+                      className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span className="text-sm">Selecionar arquivo</span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Formatos aceitos: SVG, PNG, JPG (recomendado: SVG para melhor qualidade)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Preview de como aparece */}
+                <div className="border-t pt-6">
+                  <h3 className="text-sm font-medium text-gray-700 mb-4">Preview</h3>
+                  <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                    {/* Preview Sidebar */}
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-center space-x-3">
+                        <img 
+                          src={systemBranding.logoUrl} 
+                          alt="Logo" 
+                          className="h-8 w-8"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/favicon.svg';
+                          }}
+                        />
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900">{systemBranding.systemName}</h4>
+                          <p className="text-xs text-gray-500">WhatsApp + IA</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -731,7 +932,7 @@ const ProceduresEditor = ({ clinicData, setClinicData, onSave, saving }: {
                                         // For now, simple text edit that must be valid JSON to save effectively
                                       }
                                     }}
-                                    className="w-full border rounded px-2 py-1 text-sm h-16 font-mono text-xs"
+                                    className="w-full border rounded px-2 py-1 h-16 font-mono text-xs"
                                   />
                                   <p className="text-[10px] text-gray-400">Ex: [{`{"sessions": 10, "price": 800}`}]</p>
                                 </div>

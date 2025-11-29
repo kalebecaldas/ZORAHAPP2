@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useSystemBranding } from '../services/systemBrandingService';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
+  const branding = useSystemBranding();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,10 +27,10 @@ export function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-600">
-            <MessageSquare className="h-8 w-8 text-white" />
+            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-8 w-8" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
-            ZoraH
+            {branding.systemName}
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Sistema de Agendamento Inteligente
