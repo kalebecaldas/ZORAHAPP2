@@ -172,6 +172,8 @@ app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, 
 app.use('/webhook', webhookLimiter, webhookRoutes)
 
 // Serve static files from public folder (logos, favicon, etc.)
+// Must be before dist to prioritize public files
+app.use('/logos', express.static(path.join(publicPath, 'logos')))
 app.use(express.static(publicPath))
 
 // Serve static files from dist folder (frontend build)
