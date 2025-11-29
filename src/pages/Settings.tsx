@@ -146,27 +146,37 @@ export const Settings = () => {
   const handleSaveSystemBranding = async () => {
     try {
       setSaving(true);
-      await api.put('/api/settings/system-branding', systemBranding);
+      const response = await api.put('/api/settings/system-branding', systemBranding);
+      
+      // Wait a bit for the file to be written
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Clear cache and force reload
-      const { clearBrandingCache } = await import('../services/systemBrandingService');
-      clearBrandingCache();
+      const { clearBrandingCache, getSystemBranding } = await import('../services/systemBrandingService');
       
-      // Trigger storage event for other tabs
-      window.localStorage.setItem('branding-updated', Date.now().toString());
+      // Get fresh data from server
+      const freshBranding = await getSystemBranding(true);
+      
+      // Update local state
+      setSystemBranding(freshBranding);
+      
+      // Clear cache and notify all components
+      clearBrandingCache();
       
       // Update favicon dynamically
       const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
-      if (faviconLink && systemBranding.logoUrl) {
-        faviconLink.href = `${systemBranding.logoUrl}?t=${Date.now()}`;
+      if (faviconLink && freshBranding.logoUrl) {
+        const timestamp = Date.now();
+        faviconLink.href = `${freshBranding.logoUrl}?t=${timestamp}`;
       }
       
       // Force reload all images with logo
-      const logoUrl = systemBranding.logoUrl;
+      const logoUrl = freshBranding.logoUrl;
       const timestamp = Date.now();
       document.querySelectorAll('img').forEach((img) => {
         const src = img.getAttribute('src');
-        if (src && (src.includes('logo') || src.includes('favicon') || src === logoUrl)) {
+        const alt = img.getAttribute('alt');
+        if (src && (src.includes('logo') || src.includes('favicon') || src === logoUrl || (alt && alt.includes('Logo')))) {
           (img as HTMLImageElement).src = `${logoUrl}?t=${timestamp}`;
         }
       });
@@ -176,7 +186,7 @@ export const Settings = () => {
       // Reload page to apply changes everywhere
       setTimeout(() => {
         window.location.reload();
-      }, 1500);
+      }, 1000);
     } catch (error) {
       console.error('Error saving system branding:', error);
       toast.error('Erro ao salvar configurações de marca');

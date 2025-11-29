@@ -48,6 +48,8 @@ export function clearBrandingCache() {
     cachedBranding = branding;
     // Notify all listeners with fresh data
     listeners.forEach(listener => listener(branding));
+    // Dispatch custom event to trigger updates in all components
+    window.dispatchEvent(new CustomEvent('branding-updated'));
   });
 }
 
@@ -72,33 +74,40 @@ export function useSystemBranding() {
     systemName: 'ZoraH',
     logoUrl: '/favicon.svg'
   });
+  const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
-    // Load branding on mount
-    getSystemBranding(false).then(setBranding);
+    let mounted = true;
+    
+    // Load branding on mount with fresh data
+    getSystemBranding(true).then((data) => {
+      if (mounted) {
+        setBranding(data);
+        setIsLoading(false);
+      }
+    });
     
     // Subscribe to changes
-    const unsubscribe = subscribeToBranding(setBranding);
+    const unsubscribe = subscribeToBranding((data) => {
+      if (mounted) {
+        setBranding(data);
+      }
+    });
     
-    // Also listen for storage events (in case of multiple tabs)
-    const handleStorageChange = () => {
-      getSystemBranding(true).then(setBranding);
-    };
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Poll for changes every 5 seconds (fallback)
-    const pollInterval = setInterval(() => {
-      getSystemBranding(true).then((newBranding) => {
-        if (JSON.stringify(newBranding) !== JSON.stringify(branding)) {
-          setBranding(newBranding);
+    // Listen for custom event when branding is updated
+    const handleBrandingUpdate = () => {
+      getSystemBranding(true).then((data) => {
+        if (mounted) {
+          setBranding(data);
         }
       });
-    }, 5000);
+    };
+    window.addEventListener('branding-updated', handleBrandingUpdate);
     
     return () => {
+      mounted = false;
       unsubscribe();
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(pollInterval);
+      window.removeEventListener('branding-updated', handleBrandingUpdate);
     };
   }, []);
 
