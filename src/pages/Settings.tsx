@@ -147,7 +147,10 @@ export const Settings = () => {
     try {
       setSaving(true);
       await api.put('/api/settings/system-branding', systemBranding);
-      toast.success('Configurações de marca salvas com sucesso');
+      
+      // Clear cache and force reload
+      const { clearBrandingCache } = await import('../services/systemBrandingService');
+      clearBrandingCache();
       
       // Update favicon dynamically
       const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
@@ -155,10 +158,21 @@ export const Settings = () => {
         faviconLink.href = `${systemBranding.logoUrl}?t=${Date.now()}`;
       }
       
-      // Clear cache and reload page to apply changes
+      // Force reload all images with logo
+      const logoUrl = systemBranding.logoUrl;
+      document.querySelectorAll('img').forEach((img) => {
+        const src = img.getAttribute('src');
+        if (src && (src.includes('logo') || src.includes('favicon'))) {
+          img.src = `${logoUrl}?t=${Date.now()}`;
+        }
+      });
+      
+      toast.success('Configurações de marca salvas com sucesso');
+      
+      // Reload page to apply changes everywhere
       setTimeout(() => {
         window.location.reload();
-      }, 1000);
+      }, 1500);
     } catch (error) {
       console.error('Error saving system branding:', error);
       toast.error('Erro ao salvar configurações de marca');
@@ -195,8 +209,11 @@ export const Settings = () => {
       });
 
       if (response.data.logoUrl) {
-        const newLogoUrl = `${response.data.logoUrl}?t=${Date.now()}`;
         setSystemBranding({ ...systemBranding, logoUrl: response.data.logoUrl });
+        
+        // Clear cache and force reload
+        const { clearBrandingCache } = await import('../services/systemBrandingService');
+        clearBrandingCache();
         
         // Force browser to reload favicon and images
         const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
@@ -205,11 +222,19 @@ export const Settings = () => {
         }
         
         // Force reload all images with the logo
-        document.querySelectorAll(`img[src*="${response.data.logoUrl}"]`).forEach((img) => {
-          (img as HTMLImageElement).src = `${response.data.logoUrl}?t=${Date.now()}`;
+        document.querySelectorAll('img').forEach((img) => {
+          const src = img.getAttribute('src');
+          if (src && (src.includes('logo') || src.includes('favicon'))) {
+            (img as HTMLImageElement).src = `${response.data.logoUrl}?t=${Date.now()}`;
+          }
         });
         
         toast.success('Logo enviada com sucesso!');
+        
+        // Reload page after a short delay to ensure all components update
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       }
     } catch (error: any) {
       console.error('Error uploading logo:', error);

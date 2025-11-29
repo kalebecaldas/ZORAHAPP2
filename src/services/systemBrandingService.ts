@@ -42,10 +42,11 @@ export async function getSystemBranding(): Promise<SystemBranding> {
  */
 export function clearBrandingCache() {
   cachedBranding = null;
-  // Notify all listeners
-  if (cachedBranding) {
-    listeners.forEach(listener => listener(cachedBranding!));
-  }
+  // Force reload by fetching fresh data
+  getSystemBranding().then((branding) => {
+    // Notify all listeners with fresh data
+    listeners.forEach(listener => listener(branding));
+  });
 }
 
 /**
