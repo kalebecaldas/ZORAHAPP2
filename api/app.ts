@@ -173,15 +173,36 @@ app.use('/webhook', webhookLimiter, webhookRoutes)
 
 // Serve static files from public folder (logos, favicon, etc.)
 // Must be before dist to prioritize public files
-app.use('/logos', express.static(path.join(publicPath, 'logos')))
-app.use(express.static(publicPath))
+// IMPORTANT: These routes must be registered BEFORE the SPA fallback
+app.use('/logos', express.static(path.join(publicPath, 'logos'), {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}))
+app.use(express.static(publicPath, {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}))
 
 // Serve static files from dist folder (frontend build)
-app.use(express.static(clientDistPath))
+app.use(express.static(clientDistPath, {
+  maxAge: '1d',
+  etag: true,
+  lastModified: true
+}))
 
 // Fallback to index.html for SPA routing
+// IMPORTANT: This must be LAST and must NOT match static file routes
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) return next()
+  // Skip API routes, webhook routes, and static file routes
+  if (req.path.startsWith('/api') || 
+      req.path.startsWith('/webhook') || 
+      req.path.startsWith('/logos/') ||
+      req.path.startsWith('/favicon') ||
+      req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/i)) {
+    return next()
+  }
   res.sendFile(path.join(clientDistPath, 'index.html'))
 })
 
