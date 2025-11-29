@@ -16,11 +16,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { api } from '../lib/utils';
+import { useSystemBranding } from '../services/systemBrandingService';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  const branding = useSystemBranding();
 
   // Verificar se é a primeira vez acessando conversas nesta sessão
   const getInitialCollapsedState = () => {

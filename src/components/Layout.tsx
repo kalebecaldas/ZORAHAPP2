@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Menu, X, MessageSquare, Users, BarChart3, Settings, LogOut, Bell, Clock } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
+import { useSystemBranding } from '../services/systemBrandingService';
 
 interface LayoutProps {
   children: React.ReactNode;
