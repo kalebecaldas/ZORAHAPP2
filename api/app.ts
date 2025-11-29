@@ -38,6 +38,10 @@ import { authMiddleware } from './utils/auth.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+// Paths for static files
+const publicPath = path.join(__dirname, '..', 'public')
+const clientDistPath = path.join(__dirname, '..', 'dist')
+
 // load env
 dotenv.config()
 
@@ -167,8 +171,13 @@ app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, 
 })
 app.use('/webhook', webhookLimiter, webhookRoutes)
 
-const clientDistPath = path.resolve(__dirname, '../dist')
+// Serve static files from public folder (logos, favicon, etc.)
+app.use(express.static(publicPath))
+
+// Serve static files from dist folder (frontend build)
 app.use(express.static(clientDistPath))
+
+// Fallback to index.html for SPA routing
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) return next()
   res.sendFile(path.join(clientDistPath, 'index.html'))
