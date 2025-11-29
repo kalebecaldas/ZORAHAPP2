@@ -170,7 +170,13 @@ const Sidebar: React.FC = () => {
         <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="flex-shrink-0">
-              <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-8 w-8" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+              <img 
+                src={`${branding.logoUrl}?t=${Date.now()}`} 
+                alt={`${branding.systemName} Logo`} 
+                className="h-8 w-8" 
+                key={branding.logoUrl}
+                onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+              />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
               <h1 className="text-xl font-bold text-gray-700 whitespace-nowrap">{branding.systemName}</h1>

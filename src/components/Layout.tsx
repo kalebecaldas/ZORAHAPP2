@@ -29,7 +29,13 @@ export function Layout({ children }: LayoutProps) {
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
-              <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-10 w-10" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+              <img 
+                src={`${branding.logoUrl}?t=${Date.now()}`} 
+                alt={`${branding.systemName} Logo`} 
+                className="h-10 w-10" 
+                key={branding.logoUrl}
+                onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+              />
               <span className="ml-2 text-xl font-bold text-gray-800">{branding.systemName}</span>
             </div>
             <button onClick={() => setSidebarOpen(false)}>
@@ -55,7 +61,13 @@ export function Layout({ children }: LayoutProps) {
       <div className="hidden lg:flex lg:w-64 lg:flex-col">
         <div className="flex min-h-0 flex-1 flex-col bg-white shadow-lg">
           <div className="flex h-16 items-center px-4 bg-blue-600">
-            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-10 w-10" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+            <img 
+              src={`${branding.logoUrl}?t=${Date.now()}`} 
+              alt={`${branding.systemName} Logo`} 
+              className="h-10 w-10" 
+              key={branding.logoUrl}
+              onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+            />
             <span className="ml-2 text-xl font-bold text-white">{branding.systemName}</span>
           </div>
           <div className="flex flex-1 flex-col overflow-y-auto">

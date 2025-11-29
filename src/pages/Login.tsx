@@ -27,7 +27,13 @@ export function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto flex items-center justify-center">
-            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-16 w-16" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+            <img 
+              src={`${branding.logoUrl}?t=${Date.now()}`} 
+              alt={`${branding.systemName} Logo`} 
+              className="h-16 w-16" 
+              key={branding.logoUrl}
+              onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+            />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-800">
             {branding.systemName}
