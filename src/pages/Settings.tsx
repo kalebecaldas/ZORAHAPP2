@@ -195,7 +195,20 @@ export const Settings = () => {
       });
 
       if (response.data.logoUrl) {
+        const newLogoUrl = `${response.data.logoUrl}?t=${Date.now()}`;
         setSystemBranding({ ...systemBranding, logoUrl: response.data.logoUrl });
+        
+        // Force browser to reload favicon and images
+        const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
+        if (faviconLink) {
+          faviconLink.href = `${response.data.logoUrl}?t=${Date.now()}`;
+        }
+        
+        // Force reload all images with the logo
+        document.querySelectorAll(`img[src*="${response.data.logoUrl}"]`).forEach((img) => {
+          (img as HTMLImageElement).src = `${response.data.logoUrl}?t=${Date.now()}`;
+        });
+        
         toast.success('Logo enviada com sucesso!');
       }
     } catch (error: any) {
