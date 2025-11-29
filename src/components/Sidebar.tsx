@@ -169,7 +169,7 @@ const Sidebar: React.FC = () => {
         {/* Header/Logo */}
         <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl logo-glow shadow-lg border border-white/20 flex-shrink-0">
+            <div className="flex-shrink-0">
               <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-6 w-6" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>

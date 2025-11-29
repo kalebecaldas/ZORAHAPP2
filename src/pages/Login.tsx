@@ -26,8 +26,8 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-600">
-            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-8 w-8" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
+          <div className="mx-auto flex items-center justify-center">
+            <img src={branding.logoUrl} alt={`${branding.systemName} Logo`} className="h-12 w-12" onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} />
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             {branding.systemName}
