@@ -31,6 +31,8 @@
     "check:workflow:railway": "tsx scripts/check_workflow_railway.ts",
     "fix:patient-found-flow": "tsx scripts/fix_patient_found_flow.ts",
     "cleanup:workflows": "tsx scripts/cleanup_old_workflows.ts",
+    "delete:workflows:except": "tsx scripts/delete_all_workflows_except.ts",
+    "delete:workflows:railway": "tsx scripts/delete_workflows_railway.ts",
     "test:gpt-models": "tsx scripts/test_gpt_models.ts",
     "seed:procedure-template": "tsx scripts/seed_procedure_template.ts"
   },
