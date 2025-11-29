@@ -359,10 +359,18 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
           const logoPath = path.join(process.cwd(), 'public', 'logos', logoFilename)
           await fs.access(logoPath)
           console.log(`✅ Logo file verified: ${logoPath}`)
+          
+          // Also verify the file is readable
+          const stats = await fs.stat(logoPath)
+          if (stats.size === 0) {
+            console.warn(`⚠️ Logo file is empty: ${logoPath}`)
+            branding.logoUrl = '/favicon.svg'
+          }
         } catch (error) {
           // Logo file doesn't exist, fallback to favicon
           console.warn(`⚠️ Logo file not found: ${branding.logoUrl}, using default`, error)
-          branding.logoUrl = '/favicon.svg'
+          // Don't change branding.logoUrl here - let it try to load and fail gracefully
+          // The frontend will handle the error with onError handler
         }
       }
       

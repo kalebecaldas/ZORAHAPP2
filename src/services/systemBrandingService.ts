@@ -21,14 +21,24 @@ export async function getSystemBranding(forceRefresh = false): Promise<SystemBra
 
   try {
     // Add timestamp to prevent browser cache
-    const response = await fetch(`/api/settings/system-branding?t=${Date.now()}`);
+    const response = await fetch(`/api/settings/system-branding?t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
     if (response.ok) {
       const branding = await response.json();
+      console.log('📦 Loaded branding from API:', branding);
       cachedBranding = branding;
       return branding;
+    } else {
+      console.warn('⚠️ Failed to load branding, status:', response.status);
     }
   } catch (error) {
-    console.warn('Failed to load system branding, using defaults:', error);
+    console.warn('❌ Failed to load system branding, using defaults:', error);
   }
 
   // Defaults
