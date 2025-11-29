@@ -350,6 +350,19 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
     try {
       const data = await fs.readFile(SYSTEM_BRANDING_PATH, 'utf-8')
       const branding = JSON.parse(data)
+      
+      // Verify if logo file exists, if not, fallback to favicon
+      if (branding.logoUrl && branding.logoUrl !== '/favicon.svg') {
+        try {
+          const logoPath = path.join(process.cwd(), 'public', branding.logoUrl.replace('/logos/', ''))
+          await fs.access(logoPath)
+        } catch {
+          // Logo file doesn't exist, fallback to favicon
+          console.warn(`Logo file not found: ${branding.logoUrl}, using default`)
+          branding.logoUrl = '/favicon.svg'
+        }
+      }
+      
       res.json(branding)
     } catch (fileError) {
       // File doesn't exist, return defaults
