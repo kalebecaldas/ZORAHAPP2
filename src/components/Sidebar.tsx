@@ -168,7 +168,7 @@ const Sidebar: React.FC = () => {
         <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2 rounded-xl logo-glow shadow-lg border border-white/20 flex-shrink-0">
-              <Bot className="h-6 w-6 text-white" />
+              <img src="/favicon.svg" alt="ZoraH Logo" className="h-6 w-6" />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
               <h1 className="text-xl font-bold text-gray-400 whitespace-nowrap">ZoraH</h1>

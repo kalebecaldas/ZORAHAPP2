@@ -27,7 +27,7 @@ export function Layout({ children }: LayoutProps) {
         <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white">
           <div className="flex h-16 items-center justify-between px-4">
             <div className="flex items-center">
-              <MessageSquare className="h-8 w-8 text-blue-600" />
+              <img src="/favicon.svg" alt="ZoraH Logo" className="h-8 w-8" />
               <span className="ml-2 text-xl font-bold text-gray-900">ZoraH</span>
             </div>
             <button onClick={() => setSidebarOpen(false)}>
@@ -53,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
       <div className="hidden lg:flex lg:w-64 lg:flex-col">
         <div className="flex min-h-0 flex-1 flex-col bg-white shadow-lg">
           <div className="flex h-16 items-center px-4 bg-blue-600">
-            <MessageSquare className="h-8 w-8 text-white" />
+            <img src="/favicon.svg" alt="ZoraH Logo" className="h-8 w-8" />
             <span className="ml-2 text-xl font-bold text-white">ZoraH</span>
           </div>
           <div className="flex flex-1 flex-col overflow-y-auto">
