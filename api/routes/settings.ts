@@ -11,9 +11,13 @@ const CLINIC_DATA_PATH = path.join(process.cwd(), 'src', 'data', 'clinicData.jso
 const SYSTEM_BRANDING_PATH = path.join(process.cwd(), 'src', 'data', 'systemBranding.json')
 
 // In development, allow public access for reading settings
+// In production, system-branding should be public (for login page logo)
 const settingsAuth = process.env.NODE_ENV === 'development'
   ? ((req: Request, res: Response, next: any) => next())
-  : authMiddleware
+  : ((req: Request, res: Response, next: any) => next()) // Allow public access for branding
+
+// Auth for other settings routes
+const settingsWriteAuth = authMiddleware
 
 // Get system settings
 router.get('/', settingsAuth, async (req: Request, res: Response): Promise<void> => {
@@ -389,7 +393,7 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
 })
 
 // Update system branding
-router.put('/system-branding', authMiddleware, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
+router.put('/system-branding', settingsWriteAuth, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
 
     const brandingSchema = z.object({
