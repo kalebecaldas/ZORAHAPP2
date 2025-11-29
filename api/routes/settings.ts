@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
-import { authMiddleware } from '../utils/auth.js'
+import { authMiddleware, authorize } from '../utils/auth.js'
 import fs from 'fs/promises'
 import path from 'path'
 
@@ -365,13 +365,8 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
 })
 
 // Update system branding
-router.put('/system-branding', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.put('/system-branding', authMiddleware, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
-    // Only admin can update settings
-    if (req.user.role !== 'ADMIN') {
-      res.status(403).json({ error: 'Permissão insuficiente' })
-      return
-    }
 
     const brandingSchema = z.object({
       systemName: z.string().min(1).max(100),
@@ -412,13 +407,8 @@ router.put('/system-branding', authMiddleware, async (req: Request, res: Respons
 })
 
 // Upload logo file
-router.post('/upload-logo', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+router.post('/upload-logo', authMiddleware, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
-    // Only admin can upload
-    if (req.user.role !== 'ADMIN') {
-      res.status(403).json({ error: 'Permissão insuficiente' })
-      return
-    }
 
     const multer = (await import('multer')).default
     const uploadsDir = path.join(process.cwd(), 'public', 'logos')
