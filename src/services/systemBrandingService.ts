@@ -14,13 +14,14 @@ let listeners: Array<(branding: SystemBranding) => void> = [];
 /**
  * Get system branding (with caching)
  */
-export async function getSystemBranding(): Promise<SystemBranding> {
-  if (cachedBranding) {
+export async function getSystemBranding(forceRefresh = false): Promise<SystemBranding> {
+  if (cachedBranding && !forceRefresh) {
     return cachedBranding;
   }
 
   try {
-    const response = await fetch('/api/settings/system-branding');
+    // Add timestamp to prevent browser cache
+    const response = await fetch(`/api/settings/system-branding?t=${Date.now()}`);
     if (response.ok) {
       const branding = await response.json();
       cachedBranding = branding;
@@ -42,8 +43,9 @@ export async function getSystemBranding(): Promise<SystemBranding> {
  */
 export function clearBrandingCache() {
   cachedBranding = null;
-  // Force reload by fetching fresh data
-  getSystemBranding().then((branding) => {
+  // Force reload by fetching fresh data (bypass cache)
+  getSystemBranding(true).then((branding) => {
+    cachedBranding = branding;
     // Notify all listeners with fresh data
     listeners.forEach(listener => listener(branding));
   });
@@ -72,10 +74,32 @@ export function useSystemBranding() {
   });
 
   React.useEffect(() => {
-    getSystemBranding().then(setBranding);
+    // Load branding on mount
+    getSystemBranding(false).then(setBranding);
     
+    // Subscribe to changes
     const unsubscribe = subscribeToBranding(setBranding);
-    return unsubscribe;
+    
+    // Also listen for storage events (in case of multiple tabs)
+    const handleStorageChange = () => {
+      getSystemBranding(true).then(setBranding);
+    };
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Poll for changes every 5 seconds (fallback)
+    const pollInterval = setInterval(() => {
+      getSystemBranding(true).then((newBranding) => {
+        if (JSON.stringify(newBranding) !== JSON.stringify(branding)) {
+          setBranding(newBranding);
+        }
+      });
+    }, 5000);
+    
+    return () => {
+      unsubscribe();
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollInterval);
+    };
   }, []);
 
   return branding;

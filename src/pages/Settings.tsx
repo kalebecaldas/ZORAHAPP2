@@ -152,6 +152,9 @@ export const Settings = () => {
       const { clearBrandingCache } = await import('../services/systemBrandingService');
       clearBrandingCache();
       
+      // Trigger storage event for other tabs
+      window.localStorage.setItem('branding-updated', Date.now().toString());
+      
       // Update favicon dynamically
       const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
       if (faviconLink && systemBranding.logoUrl) {
@@ -160,10 +163,11 @@ export const Settings = () => {
       
       // Force reload all images with logo
       const logoUrl = systemBranding.logoUrl;
+      const timestamp = Date.now();
       document.querySelectorAll('img').forEach((img) => {
         const src = img.getAttribute('src');
-        if (src && (src.includes('logo') || src.includes('favicon'))) {
-          img.src = `${logoUrl}?t=${Date.now()}`;
+        if (src && (src.includes('logo') || src.includes('favicon') || src === logoUrl)) {
+          (img as HTMLImageElement).src = `${logoUrl}?t=${timestamp}`;
         }
       });
       
