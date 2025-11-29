@@ -149,7 +149,13 @@ export const Settings = () => {
       await api.put('/api/settings/system-branding', systemBranding);
       toast.success('Configurações de marca salvas com sucesso');
       
-      // Reload page to apply changes
+      // Update favicon dynamically
+      const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
+      if (faviconLink && systemBranding.logoUrl) {
+        faviconLink.href = `${systemBranding.logoUrl}?t=${Date.now()}`;
+      }
+      
+      // Clear cache and reload page to apply changes
       setTimeout(() => {
         window.location.reload();
       }, 1000);

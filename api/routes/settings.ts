@@ -444,8 +444,8 @@ router.post('/upload-logo', authMiddleware, authorize(['MASTER', 'ADMIN']), asyn
     upload.single('logo')(req as any, res as any, async (err: any) => {
       if (err) {
         console.error('Erro no upload:', err)
-        res.status(400).json({ error: err.message || 'Erro ao fazer upload do arquivo' })
-        return
+        // Return error but don't block - user can still save manually
+        return res.status(400).json({ error: err.message || 'Erro ao fazer upload do arquivo' })
       }
 
       const file = (req as any).file
