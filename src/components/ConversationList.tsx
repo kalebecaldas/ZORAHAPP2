@@ -76,6 +76,7 @@ interface Conversation {
   tags?: string[];
   notes?: string;
   sessionExpiry?: string;
+  channel?: 'whatsapp' | 'instagram' | 'messenger';
 }
 
 interface ConversationCardProps {

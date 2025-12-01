@@ -158,8 +158,9 @@ export class InstagramService {
   async subscribeToWebhook(callbackUrl: string, verifyToken: string): Promise<boolean> {
     try {
       // Instagram uses the same webhook subscription as Facebook Messenger
+      // Note: This endpoint may require App ID, but we use Page ID for messaging
       const { data } = await axios.post(
-        `${this.baseUrl}/${this.instagramAppId}/subscribed_apps`,
+        `${this.baseUrl}/${this.pageId}/subscribed_apps`,
         {
           callback_url: callbackUrl,
           verify_token: verifyToken,
