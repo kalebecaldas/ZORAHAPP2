@@ -24,6 +24,7 @@ import statsRoutes from './routes/stats.js'
 import usersRoutes from './routes/users.js'
 import settingsRoutes from './routes/settings.js'
 import webhookRoutes from './routes/webhook.js'
+import instagramWebhookRoutes from './routes/instagram-webhook.js'
 import coverageRoutes from './routes/coverage.js'
 import permissionsRoutes from './routes/permissions.js'
 import clinicRoutes from './routes/clinic.js'
@@ -170,6 +171,7 @@ app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, 
   })
 })
 app.use('/webhook', webhookLimiter, webhookRoutes)
+app.use('/webhook/instagram', webhookLimiter, instagramWebhookRoutes)
 
 // Serve static files from public folder (logos, favicon, etc.)
 // Must be before dist to prioritize public files

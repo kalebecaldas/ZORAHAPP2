@@ -561,20 +561,37 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       return
     }
 
-    // OTIMIZAÇÃO CRÍTICA: Enviar WhatsApp PRIMEIRO (mais importante para latência)
+    // OTIMIZAÇÃO CRÍTICA: Enviar mensagem PRIMEIRO (mais importante para latência)
     const startTime = Date.now()
-    let whatsappSent = false
-    let whatsappError: any = null
+    let messageSent = false
+    let messageError: any = null
+    let platform = 'whatsapp'
 
-    // Enviar WhatsApp IMEDIATAMENTE (não esperar banco)
+    // Detectar plataforma pelo formato do phone/userId
+    // Instagram user IDs são numéricos longos, WhatsApp são números de telefone
+    const isInstagram = /^\d{10,}$/.test(phone) && phone.length > 10 && !phone.startsWith('55')
+    
+    // Enviar mensagem IMEDIATAMENTE (não esperar banco)
     try {
-      await whatsappService.sendTextMessage(phone, text)
-      whatsappSent = true
-      const whatsappTime = Date.now() - startTime
-      console.log(`⚡ [FAST] WhatsApp enviado em ${whatsappTime}ms`)
+      if (isInstagram && process.env.INSTAGRAM_ACCESS_TOKEN) {
+        platform = 'instagram'
+        const instagramService = new InstagramService(
+          process.env.INSTAGRAM_ACCESS_TOKEN,
+          process.env.INSTAGRAM_APP_ID || ''
+        )
+        await instagramService.sendTextMessage(phone, text)
+        messageSent = true
+        const messageTime = Date.now() - startTime
+        console.log(`⚡ [FAST] Instagram enviado em ${messageTime}ms`)
+      } else {
+        await whatsappService.sendTextMessage(phone, text)
+        messageSent = true
+        const messageTime = Date.now() - startTime
+        console.log(`⚡ [FAST] WhatsApp enviado em ${messageTime}ms`)
+      }
     } catch (error) {
-      whatsappError = error
-      console.error('❌ Erro ao enviar via WhatsApp:', error)
+      messageError = error
+      console.error(`❌ Erro ao enviar via ${platform}:`, error)
     }
 
     // Enquanto isso, fazer operações de banco (podem ser feitas depois)
@@ -620,13 +637,14 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       prisma.patientInteraction.create({
         data: {
           patientId: updatedConversation.patientId,
-          type: whatsappSent ? 'MESSAGE_SENT' : 'MESSAGE_FAILED',
-          description: whatsappSent ? 'Mensagem enviada via WhatsApp' : 'Falha ao enviar mensagem via WhatsApp',
+          type: messageSent ? 'MESSAGE_SENT' : 'MESSAGE_FAILED',
+          description: messageSent ? `Mensagem enviada via ${platform === 'instagram' ? 'Instagram' : 'WhatsApp'}` : `Falha ao enviar mensagem via ${platform === 'instagram' ? 'Instagram' : 'WhatsApp'}`,
           data: {
             messageId: message.id,
             sentBy: req.user.id,
             sentByName: req.user.name,
-            ...(whatsappError ? { error: whatsappError instanceof Error ? whatsappError.message : 'Erro desconhecido' } : {})
+            platform,
+            ...(messageError ? { error: messageError instanceof Error ? messageError.message : 'Erro desconhecido' } : {})
           }
         }
       }).catch(err => console.warn('Erro ao criar log de interação:', err))
@@ -657,17 +675,20 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     }
 
     const elapsed = Date.now() - startTime
-    console.log(`⚡ [PERF] Mensagem enviada em ${elapsed}ms (WhatsApp: ${whatsappSent ? 'OK' : 'FAIL'})`)
+    console.log(`⚡ [PERF] Mensagem enviada em ${elapsed}ms (${platform === 'instagram' ? 'Instagram' : 'WhatsApp'}: ${messageSent ? 'OK' : 'FAIL'})`)
 
     // Retornar resposta
-    if (whatsappSent) {
-      res.json({ message, conversation: updatedConversation, delivery: 'ok' })
+    if (messageSent) {
+      res.json({ message, conversation: updatedConversation, delivery: 'ok', platform })
     } else {
-      const failOpen = process.env.NODE_ENV !== 'production' || !process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID || process.env.WHATSAPP_FAIL_OPEN === 'true'
+      const failOpen = process.env.NODE_ENV !== 'production' || 
+        (platform === 'whatsapp' && (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID)) ||
+        (platform === 'instagram' && !process.env.INSTAGRAM_ACCESS_TOKEN) ||
+        process.env.WHATSAPP_FAIL_OPEN === 'true'
       if (failOpen) {
-        res.json({ message, conversation: updatedConversation, delivery: 'failed' })
+        res.json({ message, conversation: updatedConversation, delivery: 'failed', platform })
       } else {
-        res.status(500).json({ error: 'Erro ao enviar mensagem via WhatsApp' })
+        res.status(500).json({ error: `Erro ao enviar mensagem via ${platform === 'instagram' ? 'Instagram' : 'WhatsApp'}` })
       }
     }
   } catch (error) {
