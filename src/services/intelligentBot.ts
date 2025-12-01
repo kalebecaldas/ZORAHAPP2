@@ -30,7 +30,11 @@ class IntelligentBotService {
 
   private initializeSocket() {
     try {
-      this.socket = io(window.location.origin, {
+      const base = (import.meta as any).env?.VITE_API_URL || 
+        (import.meta.env.DEV 
+          ? 'http://localhost:3001' 
+          : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001'))
+      this.socket = io(base, {
         transports: ['websocket', 'polling'],
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,

@@ -45,6 +45,17 @@ export default defineConfig({
             console.log('Sending Webhook Request:', req.method, req.url);
           });
         },
+      },
+      '/socket.io': {
+        target: process.env.VITE_API_URL || 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+        ws: true, // Enable WebSocket proxying
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('socket.io proxy error', err);
+          });
+        },
       }
     }
   }

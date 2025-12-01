@@ -34,7 +34,14 @@ export function useSocket() {
   useEffect(() => {
     if (!token || !user) return;
 
-    const base = (import.meta as any).env?.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001')
+    // In development, always use localhost:3001 for Socket.IO
+    // In production, use window.location.origin (which will be proxied by Vite)
+    const base = (import.meta as any).env?.VITE_API_URL || 
+      (import.meta.env.DEV 
+        ? 'http://localhost:3001' 
+        : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3001'))
+    
+    console.log(`🔌 [Socket] Connecting to: ${base}`)
     const socket = io(base, {
       path: '/socket.io',
       auth: { token },

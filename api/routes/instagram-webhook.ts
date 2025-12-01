@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename)
 
 const instagramService = new InstagramService(
   process.env.INSTAGRAM_ACCESS_TOKEN || '',
-  process.env.INSTAGRAM_APP_ID || ''
+  process.env.INSTAGRAM_PAGE_ID || process.env.INSTAGRAM_APP_ID || ''
 )
 
 const router = Router()
@@ -35,13 +35,16 @@ router.get('/', (req: Request, res: Response) => {
   res.status(403).send('Forbidden')
 })
 
-// Process incoming Instagram messages (POST)
-router.post('/', async (req: Request, res: Response) => {
-  // Respond immediately to avoid timeout
-  res.status(200).json({ received: true })
+  // Process incoming Instagram messages (POST)
+  router.post('/', async (req: Request, res: Response) => {
+    const webhookReceivedAt = Date.now()
+    const webhookTimestamp = new Date().toISOString()
+    
+    // Respond immediately to avoid timeout
+    res.status(200).json({ received: true })
 
-  try {
-    console.log('📥 Instagram webhook recebido:', JSON.stringify(req.body, null, 2))
+    try {
+      console.log(`📥 [${webhookTimestamp}] Instagram webhook recebido:`, JSON.stringify(req.body, null, 2))
     
     const entry = req.body?.entry?.[0]
     if (!entry) {
@@ -228,6 +231,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Process message using the same function as WhatsApp
     // Use Instagram user ID as "phone" for compatibility
+    const processStartAt = Date.now()
+    const processDelay = processStartAt - webhookReceivedAt
+    console.log(`⏱️ [${new Date().toISOString()}] Processando mensagem Instagram (delay desde webhook: ${processDelay}ms)`)
+    
     await processIncomingMessage(
       instagramUserId,
       text,
@@ -236,6 +243,10 @@ router.post('/', async (req: Request, res: Response) => {
       mediaUrl,
       metadata
     )
+    
+    const processEndAt = Date.now()
+    const totalTime = processEndAt - webhookReceivedAt
+    console.log(`✅ [${new Date().toISOString()}] Mensagem Instagram processada em ${totalTime}ms (processamento: ${processEndAt - processStartAt}ms)`)
 
     console.log(`✅ Mensagem Instagram processada: ${senderId} -> ${text.substring(0, 50)}...`)
   } catch (error) {

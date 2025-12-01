@@ -136,7 +136,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
       const msgs = (response.data?.messages || []).map((m: any) => ({
         id: m.id,
         conversationId: response.data.id || conversationId,
-        sender: (m.from === 'USER' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
+        // Use direction as primary source: RECEIVED = PATIENT, SENT = BOT/AGENT
+        sender: m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT'),
         messageText: m.messageText,
         messageType: m.messageType || 'TEXT',
         mediaUrl: m.mediaUrl,
@@ -186,7 +187,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
           const mapped: Message = {
             id: m.id,
             conversationId: m.conversationId || conversationId,
-            sender: (m.from === 'USER' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
+            // Use direction as primary source: RECEIVED = PATIENT, SENT = BOT/AGENT
+            sender: m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT'),
             messageText: m.messageText,
             messageType: m.messageType || 'TEXT',
             direction: m.direction,
@@ -208,7 +210,15 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
       }
 
       const onNewMessage = (payload: any) => {
-        console.log('📨 MessageList: new_message event received:', payload);
+        const timestamp = new Date().toISOString();
+        console.log(`📨 [${timestamp}] MessageList: new_message event received:`, {
+          payload,
+          conversationId,
+          conversationPhone,
+          payloadPhone: payload?.phone,
+          payloadConvId: payload?.conversation?.id,
+          messageConvId: payload?.message?.conversationId
+        });
         appendFromPayload(payload);
       }
       const onMessageSent = (payload: any) => {
@@ -692,12 +702,27 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
           </div>
         )}
 
-        {messages.map((message) => (
+        {messages.map((message) => {
+          // Debug: log message mapping
+          if (message.id.startsWith('cmin')) {
+            console.log('🔍 Message mapping:', {
+              id: message.id.substring(0, 15),
+              direction: message.direction,
+              sender: message.sender,
+              from: (message as any).from,
+              shouldBeRight: message.direction === 'SENT'
+            })
+          }
+          
+          // Use direction as the source of truth for alignment
+          const isFromBot = message.direction === 'SENT'
+          
+          return (
           <div
             key={message.id}
-            className={`flex ${message.direction === 'SENT' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${isFromBot ? 'justify-end' : 'justify-start'}`}
           >
-            <div className={`flex items-start space-x-2 max-w-[80%] ${message.direction === 'SENT' ? 'flex-row-reverse space-x-reverse' : ''
+            <div className={`flex items-start space-x-2 max-w-[80%] ${isFromBot ? 'flex-row-reverse space-x-reverse' : ''
               }`}>
               <div className={`p-2 rounded-full ${message.sender === 'BOT' ? 'bg-blue-100' :
                 message.sender === 'PATIENT' ? 'bg-gray-100' : 'bg-green-100'
@@ -705,7 +730,7 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                 {getSenderAvatar(message.sender)}
               </div>
 
-              <div className={`px-4 py-2 shadow-sm ${message.direction === 'SENT'
+              <div className={`px-4 py-2 shadow-sm ${isFromBot
                 ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
                 : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
                 }`}>
@@ -781,7 +806,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
         <div ref={messagesEndRef} />
       </div>
 

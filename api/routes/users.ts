@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import prisma from '../prisma/client.js'
-import { authMiddleware } from '../utils/auth.js'
+import { authMiddleware, hashPassword } from '../utils/auth.js'
 import { authorize, forbidModifyingMaster } from '../utils/auth.js'
 
 // In development, allow public access for listing users to ease bootstrapping
@@ -107,8 +107,11 @@ router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Requ
   try {
     const { email, name, password, role = 'ATENDENTE' } = req.body
 
+    console.log('📝 Criando usuário:', { email, name, role, hasPassword: !!password })
+
     // Validate required fields
     if (!email || !name || !password) {
+      console.warn('❌ Campos obrigatórios faltando:', { email: !!email, name: !!name, password: !!password })
       res.status(400).json({ error: 'Email, nome e senha são obrigatórios' })
       return
     }
@@ -118,19 +121,31 @@ router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Requ
     try {
       emailSchema.parse(email)
     } catch {
+      console.warn('❌ Email inválido:', email)
       res.status(400).json({ error: 'Email inválido' })
       return
     }
 
     // Validate password
     if (password.length < 6) {
+      console.warn('❌ Senha muito curta:', password.length)
       res.status(400).json({ error: 'Senha deve ter pelo menos 6 caracteres' })
       return
     }
 
     // Validate role
-    if (!['MASTER','ADMIN','SUPERVISOR','ATENDENTE'].includes(role)) {
+    const validRoles = ['MASTER','ADMIN','SUPERVISOR','ATENDENTE']
+    if (!validRoles.includes(role)) {
+      console.warn('❌ Role inválido:', role)
       res.status(400).json({ error: 'Função inválida' })
+      return
+    }
+
+    // Check permissions: ADMIN can only create ADMIN/SUPERVISOR/ATENDENTE, not MASTER
+    const currentUser = req.user
+    if (currentUser && currentUser.role === 'ADMIN' && role === 'MASTER') {
+      console.warn('❌ ADMIN tentando criar MASTER:', { userId: currentUser.id, email: currentUser.email })
+      res.status(403).json({ error: 'ADMIN não pode criar usuários MASTER' })
       return
     }
 
@@ -140,33 +155,69 @@ router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Requ
     })
 
     if (existingUser) {
+      console.warn('❌ Email já cadastrado:', email)
       res.status(400).json({ error: 'Email já cadastrado' })
       return
     }
 
     // Hash password
-    const bcrypt = await import('bcryptjs')
-    const hashedPassword = await bcrypt.hash(password, 12)
+    let hashedPassword: string
+    try {
+      hashedPassword = await hashPassword(password)
+      console.log('✅ Senha hasheada com sucesso')
+    } catch (bcryptError: any) {
+      console.error('❌ Erro ao fazer hash da senha:', bcryptError)
+      res.status(500).json({ error: 'Erro ao processar senha' })
+      return
+    }
 
     // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        password: hashedPassword,
-        role: role as any
-      }
-    })
+    try {
+      const user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          password: hashedPassword,
+          role: role // Prisma schema accepts String, validation already done above
+        }
+      })
 
-    res.status(201).json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      createdAt: user.createdAt
-    })
-  } catch (error) {
-    console.error('Erro ao criar usuário:', error)
+      console.log('✅ Usuário criado com sucesso:', { id: user.id, email: user.email, role: user.role })
+
+      res.status(201).json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt
+      })
+    } catch (prismaError: any) {
+      console.error('❌ Erro do Prisma ao criar usuário:', prismaError)
+      // Log detalhes do erro do Prisma
+      if (prismaError.code) {
+        console.error('Código do erro Prisma:', prismaError.code)
+      }
+      if (prismaError.meta) {
+        console.error('Meta do erro Prisma:', JSON.stringify(prismaError.meta, null, 2))
+      }
+      if (prismaError.message) {
+        console.error('Mensagem do erro Prisma:', prismaError.message)
+      }
+      // Re-throw para ser capturado pelo catch externo
+      throw prismaError
+    }
+  } catch (error: any) {
+    console.error('❌ Erro ao criar usuário:', error)
+    // Retornar mensagem de erro mais específica se possível
+    if (error.code === 'P2002') {
+      res.status(400).json({ error: 'Email já cadastrado' })
+      return
+    }
+    if (error.message) {
+      console.error('Mensagem de erro:', error.message)
+      res.status(500).json({ error: `Erro interno: ${error.message}` })
+      return
+    }
     res.status(500).json({ error: 'Erro interno' })
   }
 })

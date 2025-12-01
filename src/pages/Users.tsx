@@ -264,6 +264,7 @@ const Users: React.FC = () => {
                   <input
                     type="email"
                     required
+                    autoComplete="username"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
@@ -297,6 +298,7 @@ const Users: React.FC = () => {
                     <input
                       type="password"
                       required={!editingUser}
+                      autoComplete={editingUser ? "new-password" : "new-password"}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"

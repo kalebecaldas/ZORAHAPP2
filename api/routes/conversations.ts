@@ -6,6 +6,7 @@ import prisma from '../prisma/client.js'
 const prismaAny = prisma as any
 import { authMiddleware } from '../utils/auth.js'
 import { WhatsAppService } from '../services/whatsapp.js'
+import { InstagramService } from '../services/instagram.js'
 import { AIService } from '../services/ai.js'
 import type { AIContext } from '../services/ai.js'
 import axios from 'axios'
@@ -26,6 +27,12 @@ const router = Router()
 const whatsappService = new WhatsAppService(
   process.env.META_ACCESS_TOKEN || '',
   process.env.META_PHONE_NUMBER_ID || ''
+)
+
+// Instagram service instance
+const instagramService = new InstagramService(
+  process.env.INSTAGRAM_ACCESS_TOKEN || '',
+  process.env.INSTAGRAM_PAGE_ID || process.env.INSTAGRAM_APP_ID || ''
 )
 
 // AI service instance
@@ -577,7 +584,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
         platform = 'instagram'
         const instagramService = new InstagramService(
           process.env.INSTAGRAM_ACCESS_TOKEN,
-          process.env.INSTAGRAM_APP_ID || ''
+          process.env.INSTAGRAM_PAGE_ID || process.env.INSTAGRAM_APP_ID || ''
         )
         await instagramService.sendTextMessage(phone, text)
         messageSent = true
@@ -761,6 +768,10 @@ export async function processIncomingMessage(
         console.error(`❌ Erro ao buscar workflow padrão:`, err)
       }
 
+      // Determine channel from metadata or default to whatsapp
+      const channel = metadata?.platform === 'instagram' ? 'instagram' : 
+                     (metadata?.platform === 'messenger' ? 'messenger' : 'whatsapp')
+
       conversation = await prisma.conversation.create({
         data: {
           phone,
@@ -772,7 +783,7 @@ export async function processIncomingMessage(
           sessionExpiryTime: sessionExpiryTime,
           sessionStatus: 'active',
           lastUserActivity: now,
-          channel: 'whatsapp',
+          channel: channel,
           workflowId: defaultWorkflowId, // ✅ Set workflowId na criação
           currentWorkflowNode: defaultStartNode,
           workflowContext: {},
@@ -804,11 +815,18 @@ export async function processIncomingMessage(
           }
         })
       } else if (!sessionExpired) {
-        // Update last activity
+        // Determine channel from metadata or keep existing
+        const channel = metadata?.platform === 'instagram' ? 'instagram' : 
+                       (metadata?.platform === 'messenger' ? 'messenger' : 
+                       (conversation.channel || 'whatsapp'))
+        
+        // Update last activity and channel if needed
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: {
-            lastUserActivity: now
+            lastUserActivity: now,
+            // Update channel if it's different and we have metadata indicating the platform
+            ...(metadata?.platform && conversation.channel !== channel ? { channel } : {})
           }
         })
 
@@ -829,37 +847,26 @@ export async function processIncomingMessage(
       }
     }
 
-    // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem
+    // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem (OTIMIZADO: busca apenas por ID específico)
     let message = null
     if (messageId) {
-      // Buscar mensagens recentes do mesmo telefone
-      const recentMessages = await prisma.message.findMany({
+      // Buscar apenas mensagem com o mesmo ID (mais rápido que buscar todas)
+      const existingMessage = await prisma.message.findFirst({
         where: {
-          phoneNumber: phone,
-          direction: 'RECEIVED',
+          metadata: {
+            path: ['whatsappMessageId'],
+            equals: messageId,
+          },
           createdAt: {
-            gte: new Date(Date.now() - 5 * 60 * 1000) // Últimos 5 minutos
-          }
+            gte: new Date(Date.now() - 5 * 60 * 1000), // Últimos 5 minutos
+          },
         },
         select: {
           id: true,
-          metadata: true,
-          messageText: true
         },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: 10
       })
 
-      // Verificar se alguma mensagem tem o mesmo whatsappMessageId ou mesmo texto recente
-      const isDuplicate = recentMessages.some(msg => {
-        const msgMetadata = msg.metadata as any
-        return msgMetadata?.whatsappMessageId === messageId || 
-               (msg.messageText === text && msgMetadata?.whatsappMessageId) // Mesmo texto com ID já processado
-      })
-
-      if (isDuplicate) {
+      if (existingMessage) {
         console.log(`⚠️ Mensagem duplicada detectada em processIncomingMessage: ${messageId} de ${phone}`)
         // Retornar logs vazios mas não processar novamente
         return workflowLogs
@@ -892,6 +899,7 @@ export async function processIncomingMessage(
     const shouldProcessWithBot = conversation.status === 'BOT_QUEUE';
 
     // Emitir eventos em tempo real IMEDIATAMENTE (antes de outras operações)
+    const emitStartAt = Date.now()
     try {
       const realtime = getRealtime()
       const messagePayload = {
@@ -917,10 +925,16 @@ export async function processIncomingMessage(
         phone
       }
 
-      console.log(`📡 Emitindo new_message com mediaUrl:`, message.mediaUrl, `tipo:`, message.messageType)
+      const emitTimestamp = Date.now();
+      console.log(`📡 [${new Date().toISOString()}] Emitindo new_message com mediaUrl:`, message.mediaUrl, `tipo:`, message.messageType)
+      console.log(`📡 [${new Date().toISOString()}] Payload completo:`, JSON.stringify(messagePayload, null, 2))
+      
       realtime.io.to(`conv:${phone}`).emit('new_message', messagePayload)
       realtime.io.to(`conv:${conversation.id}`).emit('new_message', messagePayload)
-      console.log(`📡 [ROOMS] Evento new_message emitido para conv:${phone} e conv:${conversation.id}`)
+      
+      const emitDuration = Date.now() - emitStartAt;
+      const totalTimeFromMessage = Date.now() - (new Date(message.timestamp).getTime() || Date.now());
+      console.log(`📡 [${new Date().toISOString()}] ✅ Evento new_message emitido para conv:${phone} e conv:${conversation.id} (emit: ${emitDuration}ms, total desde criação: ${totalTimeFromMessage}ms)`)
     } catch (e) {
       console.warn('Realtime update failed:', e)
     }
@@ -974,7 +988,11 @@ export async function processIncomingMessage(
         }
       } catch { }
       const logs = await advanceWorkflow(conversation, text)
-      workflowLogs.push(...logs)
+      if (Array.isArray(logs)) {
+        workflowLogs.push(...logs)
+      } else {
+        workflowLogs.push('Erro ao executar workflow')
+      }
     } else if (shouldProcessWithBot) {
       // ✅ TENTAR BUSCAR WORKFLOW ANTES DE CAIR NO FALLBACK
       try {
@@ -996,7 +1014,11 @@ export async function processIncomingMessage(
           conversation.workflowId = def.id // Update local reference
           // Agora processar com workflow
           const logs = await advanceWorkflow(conversation, text)
-          workflowLogs.push(...logs)
+          if (Array.isArray(logs)) {
+            workflowLogs.push(...logs)
+          } else {
+            workflowLogs.push('Erro ao executar workflow')
+          }
         } else {
           console.warn(`⚠️ Nenhum workflow ativo encontrado, usando fallback hardcoded`)
       // Fallback para conversas sem workflow mas ainda na fila do bot
@@ -1293,21 +1315,71 @@ async function sendAIMessage(conversation: any, text: string): Promise<void> {
       }
     })
 
-    // Emit update (even if WhatsApp fails)
+    // Emit update (even if sending fails) - use same format as other messages
     try {
       const realtime = getRealtime()
-      realtime.io.to(`conv:${conversation.phone}`).emit('ai_message_sent', {
-        message: aiMessage
-      })
+      const messagePayload = {
+        message: {
+          id: aiMessage.id,
+          conversationId: aiMessage.conversationId,
+          phoneNumber: aiMessage.phoneNumber,
+          messageText: aiMessage.messageText,
+          messageType: aiMessage.messageType || 'TEXT',
+          mediaUrl: aiMessage.mediaUrl,
+          metadata: aiMessage.metadata,
+          direction: aiMessage.direction, // 'SENT' for bot messages
+          from: aiMessage.from, // 'BOT'
+          timestamp: aiMessage.timestamp.toISOString()
+        },
+        conversation: {
+          id: conversation.id,
+          phone: conversation.phone,
+          status: conversation.status,
+          lastMessage: text,
+          lastTimestamp: new Date().toISOString()
+        },
+        phone: conversation.phone
+      }
+      realtime.io.to(`conv:${conversation.phone}`).emit('new_message', messagePayload)
+      realtime.io.to(`conv:${conversation.id}`).emit('new_message', messagePayload)
+      console.log(`📡 [${new Date().toISOString()}] ✅ Evento new_message emitido para mensagem do bot (conv:${conversation.phone})`)
     } catch (e) {
       console.warn('Realtime update failed:', e)
     }
 
-    // Try to send via WhatsApp (don't fail if it doesn't work)
+    // Detect platform by checking the last received message
+    let platform: 'whatsapp' | 'instagram' = 'whatsapp'
     try {
-      await whatsappService.sendTextMessage(conversation.phone, text)
-    } catch (whatsappError) {
-      console.error('Erro ao enviar mensagem WhatsApp:', whatsappError)
+      const lastReceivedMessage = await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          direction: 'RECEIVED',
+          from: 'USER'
+        },
+        orderBy: { timestamp: 'desc' }
+      })
+
+      if (lastReceivedMessage?.metadata) {
+        const metadata = lastReceivedMessage.metadata as any
+        if (metadata.instagramMessageId || metadata.platform === 'instagram') {
+          platform = 'instagram'
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao detectar plataforma, usando WhatsApp como padrão:', e)
+    }
+
+    // Try to send via the correct platform (don't fail if it doesn't work)
+    try {
+      if (platform === 'instagram') {
+        await instagramService.sendTextMessage(conversation.phone, text)
+        console.log(`✅ Mensagem Instagram enviada para ${conversation.phone}`)
+      } else {
+        await whatsappService.sendTextMessage(conversation.phone, text)
+        console.log(`✅ Mensagem WhatsApp enviada para ${conversation.phone}`)
+      }
+    } catch (sendError: any) {
+      console.error(`Erro ao enviar mensagem ${platform === 'instagram' ? 'Instagram' : 'WhatsApp'}:`, sendError)
       // Don't throw - message was already saved to database
     }
 

@@ -680,6 +680,20 @@ Responda com 1 ou 2, ou digite o nome da unidade.`;
           nextNodeId = connections.find(c => c.port === 'true')?.targetId;
           return { nextNodeId, response: responseMessage };
         }
+        // Verificar se é uma mensagem genérica (saudação) - se for, não enviar mensagem de erro
+        // Apenas enviar erro se o usuário realmente tentou escolher algo inválido (ex: "3", "4", etc)
+        const genericGreetings = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'oi!', 'olá!', 'ola!', 'hey', 'hi', 'hello'];
+        const isGenericGreeting = genericGreetings.some(g => lowerMessage.trim() === g || lowerMessage.trim().startsWith(g + ' '));
+        const isInvalidChoice = /^[3-9]$/.test(trimmedMsg) || /^[0-9]{2,}$/.test(trimmedMsg); // Números 3-9 ou números com 2+ dígitos
+        
+        // Só enviar mensagem de erro se for uma escolha inválida explícita, não se for apenas uma saudação
+        if (isGenericGreeting && !isInvalidChoice) {
+          // Para mensagens genéricas, não enviar resposta - apenas avançar silenciosamente
+          // A mensagem de boas-vindas já foi enviada no node START
+          nextNodeId = connections.find(c => c.port === 'false')?.targetId;
+          return { nextNodeId, response: '' }; // Resposta vazia = não enviar mensagem
+        }
+        
         // Mensagem de erro também deve vir do node, mas usar fallback se não houver
         responseMessage = node.content.finalMessage || node.content.message || 'Por favor, escolha uma de nossas unidades.';
         nextNodeId = connections.find(c => c.port === 'false')?.targetId;
