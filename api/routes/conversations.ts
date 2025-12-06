@@ -20,6 +20,9 @@ import { WorkflowEngine } from '../../src/services/workflow/core/WorkflowEngine.
 import type { WorkflowNode } from '../../src/services/workflow/core/types.js'
 import { prismaClinicDataService } from '../services/prismaClinicDataService.js'
 import { sessionManager } from '../services/conversationSession.js'
+import { intelligentRouter } from '../services/intelligentRouter.js'
+import { conversationContextService } from '../services/conversationContext.js'
+import { messageCacheService } from '../services/messageCache.js'
 
 const router = Router()
 
@@ -252,12 +255,58 @@ router.get('/:phone', listAuth, async (req: Request, res: Response): Promise<voi
       return
     }
 
+    // ⚠️ NÃO zerar aqui - apenas quando agente explicitamente marcar como lida
+    // O frontend deve chamar POST /:phone/mark-read quando abrir a conversa
+
     // Reverse messages to get chronological order
     conversation.messages.reverse()
 
     res.json(conversation)
   } catch (error) {
     console.error('Erro ao buscar conversa:', error)
+    res.status(500).json({ error: 'Erro interno' })
+  }
+})
+
+// ✅ Marcar conversa como lida (zerar unreadCount)
+router.post('/:phone/mark-read', listAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone } = req.params
+
+    const conversation = await prisma.conversation.findFirst({
+      where: { phone }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // Zerar contador apenas se > 0
+    if (conversation.unreadCount > 0) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { unreadCount: 0 }
+      })
+
+      // Emitir evento para atualizar badge em tempo real
+      try {
+        const realtime = getRealtime()
+        realtime.io.emit('conversation:updated', {
+          conversationId: conversation.id,
+          unreadCount: 0
+        })
+        console.log(`📢 Conversa marcada como lida: ${conversation.id}`)
+      } catch (e) {
+        console.warn('⚠️ Erro ao emitir evento:', e)
+      }
+
+      res.json({ success: true, unreadCount: 0 })
+    } else {
+      res.json({ success: true, unreadCount: 0, message: 'Já estava zerado' })
+    }
+  } catch (error) {
+    console.error('Erro ao marcar como lida:', error)
     res.status(500).json({ error: 'Erro interno' })
   }
 })
@@ -320,6 +369,74 @@ router.get('/id/:id', listAuth, async (req: Request, res: Response): Promise<voi
   } catch (error) {
     console.error('Error fetching conversation by ID:', error)
     res.status(500).json({ error: 'Erro ao buscar conversa' })
+  }
+})
+
+// ⚡ NEW: Paginated messages endpoint (optimized for performance)
+router.get('/id/:id/messages', listAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    const { limit = 50, offset = 0 } = req.query
+
+    const limitNum = Math.min(Number(limit), 100) // Max 100 messages per request
+    const offsetNum = Number(offset)
+
+    console.log(`📄 Buscando mensagens paginadas: conversationId=${id}, limit=${limitNum}, offset=${offsetNum}`)
+
+    // Use cache for first page (offset = 0)
+    if (offsetNum === 0) {
+      const cached = await messageCacheService.getOrSet(
+        `messages:${id}`,
+        async () => {
+          return await prisma.message.findMany({
+            where: { conversationId: id },
+            select: {
+              id: true,
+              messageText: true,
+              messageType: true,
+              mediaUrl: true,
+              metadata: true,
+              direction: true,
+              from: true,
+              timestamp: true,
+              createdAt: true
+            },
+            orderBy: { timestamp: 'desc' },
+            take: limitNum
+          })
+        }
+      )
+
+      const hasMore = cached.length === limitNum
+      res.json({ messages: cached.reverse(), hasMore, total: cached.length })
+      return
+    }
+
+    // For subsequent pages, query directly (no cache)
+    const messages = await prisma.message.findMany({
+      where: { conversationId: id },
+      select: {
+        id: true,
+        messageText: true,
+        messageType: true,
+        mediaUrl: true,
+        metadata: true,
+        direction: true,
+        from: true,
+        timestamp: true,
+        createdAt: true
+      },
+      orderBy: { timestamp: 'desc' },
+      take: limitNum,
+      skip: offsetNum
+    })
+
+    const hasMore = messages.length === limitNum
+    res.json({ messages: messages.reverse(), hasMore, total: messages.length })
+
+  } catch (error) {
+    console.error('Error fetching paginated messages:', error)
+    res.status(500).json({ error: 'Erro ao buscar mensagens' })
   }
 })
 
@@ -469,6 +586,53 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
       }
     })
 
+    // ✅ Criar mensagem do sistema para cada ação
+    try {
+      const { createSystemMessage } = await import('../utils/systemMessages.js')
+      const currentAgentName = req.user?.name || 'Agente'
+
+      switch (action) {
+        case 'take':
+          await createSystemMessage(conversation.id, 'AGENT_ASSIGNED', {
+            agentName: currentAgentName
+          })
+          break
+
+        case 'transfer':
+          if (assignTo) {
+            const targetUser = await prisma.user.findUnique({ where: { id: assignTo } })
+            await createSystemMessage(conversation.id, 'TRANSFERRED_TO_AGENT', {
+              agentName: currentAgentName,
+              targetAgentName: targetUser?.name || 'Novo agente'
+            })
+          }
+          break
+
+        case 'to_bot':
+          await createSystemMessage(conversation.id, 'TRANSFERRED_TO_QUEUE', {
+            agentName: currentAgentName,
+            queueName: 'BOT_QUEUE'
+          })
+          break
+
+        case 'return':
+          await createSystemMessage(conversation.id, 'RETURNED_TO_QUEUE', {
+            agentName: currentAgentName,
+            queueName: 'PRINCIPAL'
+          })
+          break
+
+        case 'close':
+          await createSystemMessage(conversation.id, 'CONVERSATION_CLOSED', {
+            agentName: currentAgentName
+          })
+          break
+      }
+    } catch (systemMsgError) {
+      console.error('Erro ao criar mensagem do sistema:', systemMsgError)
+      // Não falha a requisição se a mensagem do sistema falhar
+    }
+
     // Log action
     console.log('Prisma models available:', Object.keys(prisma))
     if (conversation.patientId) {
@@ -577,7 +741,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     // Detectar plataforma pelo formato do phone/userId
     // Instagram user IDs são numéricos longos, WhatsApp são números de telefone
     const isInstagram = /^\d{10,}$/.test(phone) && phone.length > 10 && !phone.startsWith('55')
-    
+
     // Enviar mensagem IMEDIATAMENTE (não esperar banco)
     try {
       if (isInstagram && process.env.INSTAGRAM_ACCESS_TOKEN) {
@@ -629,6 +793,9 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
         timestamp: new Date()
       }
     })
+
+    // ⚡ Invalidar cache de mensagens
+    messageCacheService.invalidate(conversation.id)
 
     // Atualizar conversa (sem include pesado)
     const updatedConversation = await prisma.conversation.update({
@@ -688,7 +855,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     if (messageSent) {
       res.json({ message, conversation: updatedConversation, delivery: 'ok', platform })
     } else {
-      const failOpen = process.env.NODE_ENV !== 'production' || 
+      const failOpen = process.env.NODE_ENV !== 'production' ||
         (platform === 'whatsapp' && (!process.env.META_ACCESS_TOKEN || !process.env.META_PHONE_NUMBER_ID)) ||
         (platform === 'instagram' && !process.env.INSTAGRAM_ACCESS_TOKEN) ||
         process.env.WHATSAPP_FAIL_OPEN === 'true'
@@ -769,8 +936,8 @@ export async function processIncomingMessage(
       }
 
       // Determine channel from metadata or default to whatsapp
-      const channel = metadata?.platform === 'instagram' ? 'instagram' : 
-                     (metadata?.platform === 'messenger' ? 'messenger' : 'whatsapp')
+      const channel = metadata?.platform === 'instagram' ? 'instagram' :
+        (metadata?.platform === 'messenger' ? 'messenger' : 'whatsapp')
 
       conversation = await prisma.conversation.create({
         data: {
@@ -802,33 +969,113 @@ export async function processIncomingMessage(
         }
       }
     } else {
-      // Check session status and update
+      // ✅ NOVO: Se conversa existe mas sessão expirou, criar nova conversa
       const sessionExpired = conversation.sessionExpiryTime && new Date(conversation.sessionExpiryTime) < now
 
-      if (sessionExpired && conversation.sessionStatus !== 'expired') {
-        console.log(`⏰ Sessão expirada para conversa ${conversation.id}`)
-        conversation = await prisma.conversation.update({
-          where: { id: conversation.id },
+      if (sessionExpired) {
+        console.log(`🔄 Sessão expirada detectada para ${phone} - Criando nova conversa`)
+
+        // Fechar conversa antiga se ainda não estiver fechada
+        if (conversation.status !== 'FECHADA') {
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              sessionStatus: 'expired',
+              status: 'FECHADA',
+              lastUserActivity: now
+            }
+          })
+
+          // Emitir evento de conversa fechada
+          try {
+            const realtime = getRealtime()
+            realtime.io.emit('conversation:updated', {
+              conversationId: conversation.id,
+              status: 'FECHADA',
+              reason: 'session_expired'
+            })
+          } catch (e) {
+            console.warn('⚠️ Erro ao emitir evento de conversa fechada:', e)
+          }
+        }
+
+        // Get workflow BEFORE creating conversation to ensure workflowId is set
+        let defaultWorkflowId: string | null = null
+        let defaultStartNode: string = 'start'
+        try {
+          const wf = await getDefaultWorkflow()
+          if (wf) {
+            defaultWorkflowId = wf.id
+            const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
+            const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
+            const startNode = nodes.find((n: any) => n.type === 'START')
+            defaultStartNode = startNode?.id || 'start'
+            console.log(`✅ Workflow encontrado: ${wf.id}, startNode: ${defaultStartNode}`)
+          } else {
+            console.warn(`⚠️ Nenhum workflow ativo encontrado no banco`)
+          }
+        } catch (err) {
+          console.error(`❌ Erro ao buscar workflow padrão:`, err)
+        }
+
+        // Criar NOVA conversa
+        const channel = metadata?.platform === 'instagram' ? 'instagram' :
+          (metadata?.platform === 'messenger' ? 'messenger' : 'whatsapp')
+
+        const newSessionExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+        conversation = await prisma.conversation.create({
           data: {
-            sessionStatus: 'expired',
-            lastUserActivity: now
+            phone,
+            status: 'BOT_QUEUE',
+            patientId: patient?.id || null,
+            lastMessage: text,
+            lastTimestamp: now,
+            sessionStartTime: now,
+            sessionExpiryTime: newSessionExpiryTime,
+            sessionStatus: 'active',
+            lastUserActivity: now,
+            channel: channel,
+            workflowId: defaultWorkflowId, // ✅ Set workflowId na criação
+            currentWorkflowNode: defaultStartNode,
+            workflowContext: {},
+            awaitingInput: false
           }
         })
-      } else if (!sessionExpired) {
+
+        console.log(`✨ Nova conversa criada após expiração: ${conversation.id}`)
+
+        // Start session in memory manager
+        if (patient?.id) {
+          try {
+            await sessionManager.startSession(conversation.id, patient.id)
+          } catch (err) {
+            console.warn(`⚠️ Erro ao iniciar sessão:`, err)
+          }
+        }
+      } else {
+        // Session still active - update activity
         // Determine channel from metadata or keep existing
-        const channel = metadata?.platform === 'instagram' ? 'instagram' : 
-                       (metadata?.platform === 'messenger' ? 'messenger' : 
-                       (conversation.channel || 'whatsapp'))
-        
-        // Update last activity and channel if needed
+        const channel = metadata?.platform === 'instagram' ? 'instagram' :
+          (metadata?.platform === 'messenger' ? 'messenger' :
+            (conversation.channel || 'whatsapp'))
+
+        // ✅ NOVO: Reset session expiry quando paciente envia mensagem
+        const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // +24h
+
+        // Update last activity, session expiry and channel if needed
         await prisma.conversation.update({
           where: { id: conversation.id },
           data: {
             lastUserActivity: now,
+            sessionExpiryTime: newExpiryTime, // ✅ Reset timer
+            sessionStatus: 'active',
             // Update channel if it's different and we have metadata indicating the platform
             ...(metadata?.platform && conversation.channel !== channel ? { channel } : {})
           }
         })
+
+        console.log(`⏰ Sessão resetada para ${conversation.id} - Nova expiração: ${newExpiryTime.toISOString()}`)
 
         // Update session in memory manager
         try {
@@ -894,6 +1141,31 @@ export async function processIncomingMessage(
       }
     })
 
+    // ⚡ Invalidar cache de mensagens
+    messageCacheService.invalidate(conversation.id)
+
+    // ✅ Incrementar contador de mensagens não lidas
+    const updatedConversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        unreadCount: { increment: 1 }
+      }
+    })
+
+    // ✅ Emitir evento GLOBAL para atualizar badge na lista de conversas
+    try {
+      const realtime = getRealtime()
+      realtime.io.emit('conversation:updated', {
+        conversationId: conversation.id,
+        unreadCount: updatedConversation.unreadCount,
+        lastMessage: text,
+        lastTimestamp: new Date().toISOString()
+      })
+      console.log(`📢 Badge atualizado: ${conversation.id} unreadCount=${updatedConversation.unreadCount}`)
+    } catch (e) {
+      console.warn('⚠️ Erro ao emitir badge update:', e)
+    }
+
     // IMPORTANTE: Emitir evento Socket.IO IMEDIATAMENTE após criar a mensagem
     // Isso reduz a latência percebida pelo usuário
     const shouldProcessWithBot = conversation.status === 'BOT_QUEUE';
@@ -928,10 +1200,10 @@ export async function processIncomingMessage(
       const emitTimestamp = Date.now();
       console.log(`📡 [${new Date().toISOString()}] Emitindo new_message com mediaUrl:`, message.mediaUrl, `tipo:`, message.messageType)
       console.log(`📡 [${new Date().toISOString()}] Payload completo:`, JSON.stringify(messagePayload, null, 2))
-      
+
       realtime.io.to(`conv:${phone}`).emit('new_message', messagePayload)
       realtime.io.to(`conv:${conversation.id}`).emit('new_message', messagePayload)
-      
+
       const emitDuration = Date.now() - emitStartAt;
       const totalTimeFromMessage = Date.now() - (new Date(message.timestamp).getTime() || Date.now());
       console.log(`📡 [${new Date().toISOString()}] ✅ Evento new_message emitido para conv:${phone} e conv:${conversation.id} (emit: ${emitDuration}ms, total desde criação: ${totalTimeFromMessage}ms)`)
@@ -967,80 +1239,410 @@ export async function processIncomingMessage(
       return workflowLogs
     }
 
-    // Processar apenas se estiver na fila do bot
-    if (conversation.workflowId && shouldProcessWithBot) {
-      try {
-        const def = await getDefaultWorkflow()
-        if (def && def.id !== conversation.workflowId) {
-          const cfg = (typeof (def as any).config === 'string') ? (() => { try { return JSON.parse((def as any).config) } catch { return {} } })() : ((def as any).config || {})
-          const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
-          const start = nodes.find((n: any) => n.type === 'START')
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: {
-              workflowId: def.id,
-              currentWorkflowNode: start?.id || 'start',
-              workflowContext: {},
-              awaitingInput: false
+    // ✅ NOVA LÓGICA: Usar Roteador Inteligente
+    console.log(`🤖 Processando mensagem com Roteador Inteligente...`)
+
+    try {
+      // Rotear mensagem usando IA conversacional
+      const decision = await intelligentRouter.route(text, conversation.id, phone)
+
+      console.log(`📊 Decisão do roteador: ${decision.type}`)
+      console.log(`🔍 DEBUG: decision completa =`, JSON.stringify(decision, null, 2))
+
+      switch (decision.type) {
+        case 'TRANSFER_TO_HUMAN':
+          // Transferir para fila de humanos
+          console.log(`👤 Transferindo para fila: ${decision.queue}`)
+
+
+          // ✅ CADASTRO COMPLETO: Criar/atualizar paciente com dados coletados
+          if (decision.initialData && Object.keys(decision.initialData).length > 0) {
+            console.log(`📝 Salvando cadastro do paciente:`, decision.initialData)
+
+            try {
+              // Extrair dados do cadastro das entities
+              const entities = decision.initialData as any
+
+              // Parse de data de nascimento (dd/mm/aaaa para Date)
+              let birthDate: Date | undefined
+              if (entities.nascimento) {
+                try {
+                  const [dia, mes, ano] = entities.nascimento.split('/')
+                  if (dia && mes && ano) {
+                    birthDate = new Date(parseInt(ano), parseInt(mes) - 1, parseInt(dia))
+                  }
+                } catch (e) {
+                  console.warn('⚠️ Erro ao parsear data de nascimento:', entities.nascimento)
+                }
+              }
+
+              // Preparar dados do cadastro
+              const cadastroData: any = {}
+
+              if (entities.nome) cadastroData.name = entities.nome
+              if (entities.cpf) cadastroData.cpf = entities.cpf.replace(/\D/g, '') // Remove formatação
+              if (entities.email) cadastroData.email = entities.email
+              if (birthDate) cadastroData.birthDate = birthDate
+              if (entities.convenio) cadastroData.insuranceCompany = entities.convenio
+              if (entities.numero_convenio) cadastroData.insuranceNumber = entities.numero_convenio
+
+              // Verificar se paciente já existe
+              let patient = await prisma.patient.findUnique({
+                where: { phone }
+              })
+
+              if (!patient) {
+                // Criar novo paciente com dados completos
+                patient = await prisma.patient.create({
+                  data: {
+                    phone,
+                    name: cadastroData.name || 'Aguardando cadastro',
+                    ...cadastroData
+                  }
+                })
+                console.log(`✅ Paciente criado: ${patient.id} - ${patient.name}`)
+              } else {
+                // Atualizar paciente existente (não sobrescrever dados já preenchidos)
+                const updateData: any = {}
+                if (cadastroData.name && (!patient.name || patient.name === 'Aguardando cadastro')) {
+                  updateData.name = cadastroData.name
+                }
+                if (cadastroData.cpf && !patient.cpf) updateData.cpf = cadastroData.cpf
+                if (cadastroData.email && !patient.email) updateData.email = cadastroData.email
+                if (cadastroData.birthDate && !patient.birthDate) updateData.birthDate = cadastroData.birthDate
+                if (cadastroData.insuranceCompany && !patient.insuranceCompany) {
+                  updateData.insuranceCompany = cadastroData.insuranceCompany
+                }
+                if (cadastroData.insuranceNumber && !patient.insuranceNumber) {
+                  updateData.insuranceNumber = cadastroData.insuranceNumber
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                  patient = await prisma.patient.update({
+                    where: { id: patient.id },
+                    data: updateData
+                  })
+                  console.log(`✅ Paciente atualizado: ${patient.id} - ${patient.name}`)
+                }
+              }
+
+              // Vincular conversa ao paciente
+              await prisma.conversation.update({
+                where: { id: conversation.id },
+                data: { patientId: patient.id }
+              })
+
+              console.log(`🔗 Conversa vinculada ao paciente ${patient.id}`)
+            } catch (patientError) {
+              console.error('⚠️ Erro ao criar/atualizar paciente:', patientError)
+              // Continua mesmo se falhar
             }
-          })
-          conversation.workflowId = def.id // Update local reference
-        }
-      } catch { }
-      const logs = await advanceWorkflow(conversation, text)
-      if (Array.isArray(logs)) {
-        workflowLogs.push(...logs)
-      } else {
-        workflowLogs.push('Erro ao executar workflow')
-      }
-    } else if (shouldProcessWithBot) {
-      // ✅ TENTAR BUSCAR WORKFLOW ANTES DE CAIR NO FALLBACK
-      try {
-        const def = await getDefaultWorkflow()
-        if (def) {
-          console.log(`🔄 Conversa sem workflowId, atribuindo workflow ativo: ${def.id}`)
-          const cfg = (typeof (def as any).config === 'string') ? (() => { try { return JSON.parse((def as any).config) } catch { return {} } })() : ((def as any).config || {})
-          const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
-          const start = nodes.find((n: any) => n.type === 'START')
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: {
-              workflowId: def.id,
-              currentWorkflowNode: start?.id || 'start',
-              workflowContext: {},
-              awaitingInput: false
-            }
-          })
-          conversation.workflowId = def.id // Update local reference
-          // Agora processar com workflow
-          const logs = await advanceWorkflow(conversation, text)
-          if (Array.isArray(logs)) {
-            workflowLogs.push(...logs)
-          } else {
-            workflowLogs.push('Erro ao executar workflow')
           }
-        } else {
-          console.warn(`⚠️ Nenhum workflow ativo encontrado, usando fallback hardcoded`)
-      // Fallback para conversas sem workflow mas ainda na fila do bot
+
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              status: decision.queue === 'AGUARDANDO' ? 'AGUARDANDO' : 'PRINCIPAL',
+              assignedToId: null,
+              workflowContext: {
+                ...conversation.workflowContext as any,
+                transferReason: decision.reason,
+                collectedData: decision.initialData // Salvar dados coletados
+              }
+            }
+          })
+
+          // Enviar mensagem de resposta (com tratamento de erro para desenvolvimento)
+          try {
+            await whatsappService.sendTextMessage(phone, decision.response)
+          } catch (sendError) {
+            console.warn('⚠️ Erro ao enviar via WhatsApp (modo dev/teste):', sendError instanceof Error ? sendError.message : sendError)
+            // Em desenvolvimento, continuar mesmo se falhar o envio
+          }
+
+          // Salvar mensagem no banco
+          const botMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              phoneNumber: phone,
+              messageText: decision.response,
+              direction: 'SENT',
+              from: 'BOT',
+              timestamp: new Date()
+            }
+          })
+
+          // ✅ CRIAR CARD COM DADOS DO PACIENTE
+          console.log(`🔍 DEBUG: decision.initialData =`, decision.initialData);
+          console.log(`🔍 DEBUG: initialData keys =`, decision.initialData ? Object.keys(decision.initialData) : 'undefined');
+
+          if (decision.initialData && Object.keys(decision.initialData).length > 0) {
+            console.log(`📋 Criando card de dados do paciente...`)
+
+            try {
+              const { createSystemMessage } = await import('../utils/systemMessages.js')
+
+              // Buscar paciente para pegar dados completos
+              const patient = await prisma.patient.findUnique({
+                where: { phone }
+              })
+
+              if (patient) {
+                // Formatar CPF
+                const formatCPF = (cpf: string | null) => {
+                  if (!cpf) return null
+                  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+                }
+
+                // Formatar data
+                const formatDate = (date: Date | null) => {
+                  if (!date) return null
+                  return new Date(date).toLocaleDateString('pt-BR')
+                }
+
+                const cardData = {
+                  patientData: {
+                    name: patient.name,
+                    phone: patient.phone,
+                    cpf: formatCPF(patient.cpf),
+                    email: patient.email,
+                    birthDate: formatDate(patient.birthDate),
+                    insuranceCompany: patient.insuranceCompany,
+                    insuranceNumber: patient.insuranceNumber
+                  }
+                };
+
+                console.log(`🔍 DEBUG: Criando card com dados:`, JSON.stringify(cardData, null, 2));
+
+                await createSystemMessage(conversation.id, 'PATIENT_DATA_CARD', cardData)
+
+                console.log(`✅ Card de dados do paciente criado: ${patient.name}`)
+              }
+            } catch (cardError) {
+              console.error('⚠️ Erro ao criar card de dados:', cardError)
+            }
+          }
+
+          // ✅ CRIAR MENSAGEM INTERNA COM CONTEXTO DA INTENÇÃO
+          try {
+            const { createSystemMessage } = await import('../utils/systemMessages.js')
+            
+            // Buscar resumo da conversa (últimas 5 mensagens)
+            const recentMessages = await prisma.message.findMany({
+              where: { conversationId: conversation.id },
+              orderBy: { createdAt: 'desc' },
+              take: 5
+            })
+            
+            // Criar resumo da conversa
+            const conversationSummary = recentMessages
+              .reverse() // Ordem cronológica
+              .map(msg => {
+                const role = msg.direction === 'RECEIVED' ? 'Paciente' : 'Bot'
+                const content = msg.messageText.substring(0, 100) + (msg.messageText.length > 100 ? '...' : '')
+                return `${role}: ${content}`
+              })
+              .join('\n')
+            
+            // Criar contexto da intenção usando dados do decision (que já contém aiContext)
+            const intentContext = {
+              intent: decision.aiContext?.intent || 'CONVERSA_LIVRE',
+              sentiment: decision.aiContext?.sentiment || 'neutral',
+              confidence: decision.aiContext?.confidence || 0.5,
+              entities: decision.initialData || decision.aiContext?.entities || {},
+              conversationSummary: conversationSummary || 'Sem histórico disponível',
+              collectedData: decision.initialData || {}
+            }
+            
+            console.log(`📋 Criando mensagem interna com contexto da intenção...`)
+            console.log(`📋 Contexto:`, JSON.stringify(intentContext, null, 2))
+            
+            await createSystemMessage(conversation.id, 'BOT_INTENT_CONTEXT', {
+              intentContext
+            })
+            
+            console.log(`✅ Mensagem interna de contexto criada`)
+          } catch (contextError) {
+            console.error('⚠️ Erro ao criar mensagem de contexto:', contextError)
+            // Não bloquear o fluxo se falhar
+          }
+
+          // Invalidar cache
+          messageCacheService.invalidate(conversation.id)
+
+          // 🧠 EXTRAÇÃO AUTOMÁTICA DE MEMÓRIAS (Real-Time)
+          // A cada 5 mensagens, extrair fatos importantes
+          const messageCount = await prisma.message.count({
+            where: { conversationId: conversation.id }
+          })
+
+          if (messageCount % 5 === 0) {
+            console.log(`🧠 Gatilho de memórias atingido (${messageCount} mensagens)`)
+
+              // Executar de forma assíncrona (não bloquear resposta)
+              ; (async () => {
+                try {
+                  const { memoryService } = await import('../services/memoryService.js')
+
+                  // Buscar últimas 10 mensagens
+                  const recentMessages = await prisma.message.findMany({
+                    where: { conversationId: conversation.id },
+                    orderBy: { createdAt: 'desc' },
+                    take: 10
+                  })
+
+                  const formattedMessages = recentMessages.reverse().map(m =>
+                    `${m.from}: ${m.messageText}`
+                  )
+
+                  await memoryService.extractMemories(
+                    conversation.id,
+                    phone,
+                    formattedMessages
+                  )
+
+                  console.log(`✅ Memórias extraídas para ${phone}`)
+                } catch (memError) {
+                  console.error('⚠️ Erro ao extrair memórias (não afeta conversa):', memError)
+                }
+              })()
+          }
+
+          // Emitir eventos de atualização em tempo real
+          try {
+            const realtime = getRealtime()
+
+            // Evento de transferência
+            realtime.io.emit('conversation_transferred', {
+              conversationId: conversation.id,
+              queue: decision.queue,
+              reason: decision.reason
+            })
+
+            // ✅ NOVO: Evento de nova mensagem
+            realtime.io.emit('message:new', {
+              conversationId: conversation.id,
+              message: {
+                id: botMessage.id,
+                text: decision.response,
+                from: 'BOT',
+                direction: 'SENT',
+                timestamp: botMessage.timestamp
+              }
+            })
+
+            // ✅ NOVO: Evento de conversa atualizada
+            realtime.io.emit('conversation:updated', {
+              conversationId: conversation.id,
+              status: decision.queue === 'AGUARDANDO' ? 'AGUARDANDO' : 'PRINCIPAL'
+            })
+
+            // Evento legado (manter compatibilidade)
+            realtime.io.to(`conv:${phone}`).emit('bot_message_sent', {
+              conversationId: conversation.id,
+              message: decision.response,
+              type: 'TRANSFER_TO_HUMAN'
+            })
+          } catch (e) {
+            console.warn('Realtime transfer event failed:', e)
+          }
+
+          workflowLogs.push(`Transferido para ${decision.queue}: ${decision.reason}`)
+          break
+
+        // ⚠️ REMOVIDO: case 'START_WORKFLOW' - Workflows foram desabilitados para usar apenas IA
+        // TODO: Se workflows forem reativados no futuro, restaurar este código
+
+        case 'AI_CONVERSATION':
+        default:
+          // Resposta direta da IA
+          console.log(`💬 Resposta da IA conversacional`)
+
+          // Atualizar contexto se necessário
+          if (decision.awaitingInput && decision.expectedData) {
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: {
+                awaitingInput: true,
+                workflowContext: decision.expectedData
+              }
+            })
+          }
+
+          // Enviar mensagem de resposta (com tratamento de erro)
+          try {
+            await whatsappService.sendTextMessage(phone, decision.response)
+          } catch (sendError) {
+            console.warn('⚠️ Erro ao enviar via WhatsApp (modo dev/teste):', sendError instanceof Error ? sendError.message : sendError)
+          }
+
+          // Salvar mensagem no banco
+          const aiMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              phoneNumber: phone,
+              messageText: decision.response,
+              direction: 'SENT',
+              from: 'BOT',
+              timestamp: new Date()
+            }
+          })
+
+          // Invalidar cache
+          messageCacheService.invalidate(conversation.id)
+
+          // ✅ Emitir eventos de atualização em tempo real
+          try {
+            const realtime = getRealtime()
+
+            // Evento de nova mensagem
+            realtime.io.emit('message:new', {
+              conversationId: conversation.id,
+              message: {
+                id: aiMessage.id,
+                text: decision.response,
+                from: 'BOT',
+                direction: 'SENT',
+                timestamp: aiMessage.timestamp
+              }
+            })
+
+            // Evento de conversa atualizada
+            realtime.io.emit('conversation:updated', {
+              conversationId: conversation.id,
+              status: conversation.status
+            })
+          } catch (e) {
+            console.warn('Realtime AI message event failed:', e)
+          }
+
+          workflowLogs.push('Resposta da IA conversacional enviada')
+          break
+      }
+
+      // Emitir evento de nova mensagem do bot
+      try {
+        const realtime = getRealtime()
+        realtime.io.to(`conv:${phone}`).emit('bot_message_sent', {
+          conversationId: conversation.id,
+          message: decision.response,
+          type: decision.type
+        })
+      } catch (e) {
+        console.warn('Realtime bot message event failed:', e)
+      }
+
+    } catch (error) {
+      console.error('❌ Erro ao processar com roteador inteligente:', error)
+
+      // Fallback: usar lógica antiga
+      console.warn('⚠️ Usando fallback para lógica antiga')
       const handled = await handleAppointmentFlow(conversation, patient, text)
       if (!handled) {
         if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
           await processWithAI(conversation, message, patient)
         } else {
           await sendAutoResponse(conversation, patient)
-            }
-          }
-        }
-      } catch (err) {
-        console.error(`❌ Erro ao buscar workflow para conversa sem workflowId:`, err)
-        // Fallback em caso de erro
-        const handled = await handleAppointmentFlow(conversation, patient, text)
-        if (!handled) {
-          if (process.env.AI_ENABLE_CLASSIFIER === 'true') {
-            await processWithAI(conversation, message, patient)
-          } else {
-            await sendAutoResponse(conversation, patient)
-          }
         }
       }
     }
@@ -1989,6 +2591,85 @@ router.get('/sessions/stats', authMiddleware, async (req: Request, res: Response
   } catch (error) {
     console.error('Erro ao buscar estatísticas de sessão:', error)
     res.status(500).json({ error: 'Erro ao buscar estatísticas' })
+  }
+})
+
+/**
+ * POST /:phone/close
+ * Encerra uma conversa e envia mensagem de encerramento
+ */
+router.post('/:phone/close', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone } = req.params
+    const userId = req.user?.id
+
+    // Buscar conversa
+    const conversation = await prisma.conversation.findFirst({
+      where: { phone },
+      include: { assignedTo: true }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // Buscar configurações do sistema
+    const settings = await prisma.systemSettings.findFirst()
+    const closingMessage = settings?.closingMessage ||
+      'Obrigado pelo contato! Estamos à disposição. 😊'
+
+    // Atualizar status da conversa
+    const updatedConversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        status: 'FECHADA',
+        sessionStatus: 'closed'
+      },
+      include: { assignedTo: true }
+    })
+
+    // Criar mensagem do sistema
+    const { createSystemMessage } = await import('../utils/systemMessages.js')
+    await createSystemMessage(conversation.id, 'CONVERSATION_CLOSED', {
+      agentName: conversation.assignedTo?.name || req.user?.name || 'Sistema'
+    })
+
+    // Enviar mensagem de encerramento para o paciente
+    // TODO: Implementar envio de mensagem WhatsApp com credenciais corretas
+    console.log(`📨 Mensagem de encerramento para ${phone}: ${closingMessage}`)
+    /*
+    try {
+      const { WhatsAppService } = await import('../services/whatsapp.js')
+      const whatsappService = new WhatsAppService(accessToken, phoneNumberId)
+      await whatsappService.sendTextMessage(phone, closingMessage)
+    } catch (error) {
+      console.error('Erro ao enviar mensagem de encerramento:', error)
+      // Continua mesmo se falhar o envio
+    }
+    */
+
+    // Emitir evento Socket.IO
+    try {
+      const { getRealtime } = await import('../realtime.js')
+      const { io } = getRealtime()
+      io.emit('conversation:closed', {
+        conversationId: conversation.id,
+        phone,
+        closedBy: req.user?.name
+      })
+    } catch (error) {
+      console.error('Erro ao emitir evento Socket.IO:', error)
+    }
+
+    res.json({
+      success: true,
+      conversation: updatedConversation,
+      message: 'Conversa encerrada com sucesso'
+    })
+  } catch (error) {
+    console.error('Erro ao encerrar conversa:', error)
+    res.status(500).json({ error: 'Erro ao encerrar conversa' })
   }
 })
 

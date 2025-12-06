@@ -56,15 +56,22 @@ model Conversation {
 }
 
 model Message {
-  id           String         @id @default(uuid())
+  id             String           @id @default(uuid())
   conversationId String
-  conversation Conversation   @relation(fields: [conversationId], references: [id])
-  phoneNumber  String
-  messageText  String
-  direction    MessageDirection
-  from         MessageFrom
-  timestamp    DateTime       @default(now())
-  createdAt    DateTime       @default(now())
+  conversation   Conversation     @relation(fields: [conversationId], references: [id])
+  phoneNumber    String
+  messageText    String
+  messageType    String           @default("TEXT") // TEXT, IMAGE, DOCUMENT, AUDIO, VIDEO, SYSTEM
+  mediaUrl       String?          // URL da mídia
+  metadata       Json?            // Metadados adicionais
+  direction      MessageDirection
+  from           MessageFrom
+  timestamp      DateTime         @default(now())
+  createdAt      DateTime         @default(now())
+  
+  // Campos para mensagens do sistema
+  systemMessageType String?       // PATIENT_DATA_CARD, AGENT_ASSIGNED, etc
+  systemMetadata    Json?         // { patientData: {...} }
 }
 
 model PatientInteraction {
@@ -127,12 +134,14 @@ enum ConversationStatus {
 enum MessageDirection {
   RECEIVED
   SENT
+  SYSTEM
 }
 
 enum MessageFrom {
   USER
   AGENT
   BOT
+  SYSTEM
 }
 
 enum ProcedureStatus {

@@ -11,6 +11,7 @@ import {
   Workflow,
   LogOut,
   Bot,
+  Brain,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -28,13 +29,13 @@ const Sidebar: React.FC = () => {
   const getInitialCollapsedState = () => {
     const hasVisitedConversations = sessionStorage.getItem('hasVisitedConversations');
     const isConversationsPage = location.pathname.startsWith('/conversations');
-    
+
     // Se é a primeira vez acessando conversas OU já está na página de conversas, recolher
     if (isConversationsPage && !hasVisitedConversations) {
       sessionStorage.setItem('hasVisitedConversations', 'true');
       return true;
     }
-    
+
     // Se já visitou antes, usar preferência salva ou padrão expandido
     const savedState = sessionStorage.getItem('sidebarCollapsed');
     return savedState === 'true';
@@ -70,10 +71,11 @@ const Sidebar: React.FC = () => {
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/conversations', icon: MessageSquare, label: 'Conversas' },
     { path: '/patients', icon: Users, label: 'Pacientes' },
-    { path: '/workflows', icon: Workflow, label: 'Workflows' },
+    // { path: '/workflows', icon: Workflow, label: 'Workflows' }, // Temporariamente desabilitado
     { path: '/stats', icon: BarChart3, label: 'Estatísticas' },
     ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: UserCog, label: 'Usuários' }] : []),
     { path: '/settings', icon: Settings, label: 'Configurações' },
+    { path: '/ai-config', icon: Brain, label: 'Configuração da IA' },
     { path: '/test', icon: Bot, label: 'Teste' },
   ];
 
@@ -170,12 +172,12 @@ const Sidebar: React.FC = () => {
         <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="flex-shrink-0">
-              <img 
-                src={`${branding.logoUrl}?t=${Date.now()}`} 
-                alt={`${branding.systemName} Logo`} 
-                className="h-8 w-8" 
+              <img
+                src={`${branding.logoUrl}?t=${Date.now()}`}
+                alt={`${branding.systemName} Logo`}
+                className="h-8 w-8"
                 key={branding.logoUrl}
-                onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+                onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }}
               />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>

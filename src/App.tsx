@@ -3,7 +3,7 @@ import { Toaster } from 'sonner';
 import { useAuth } from "./hooks/useAuth";
 import Sidebar from "./components/Sidebar";
 import { Login } from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
+import DashboardIntelligent from "./pages/DashboardIntelligent";
 import ConversationsNew from "./pages/ConversationsNew";
 import { Patients } from "./pages/Patients";
 import { Workflows } from "./pages/Workflows";
@@ -12,6 +12,7 @@ import { Stats } from "./pages/Stats";
 import { Settings } from "./pages/Settings";
 import { Users } from "./pages/Users";
 import { TestChat } from "./pages/TestChat";
+import AIConfig from "./pages/AIConfig";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -44,7 +45,7 @@ function AppRoutes() {
       <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/dashboard" element={
         <ProtectedRoute>
-          <Dashboard />
+          <DashboardIntelligent />
         </ProtectedRoute>
       } />
       <Route path="/conversations" element={
@@ -90,6 +91,11 @@ function AppRoutes() {
       <Route path="/test" element={
         <ProtectedRoute>
           <TestChat />
+        </ProtectedRoute>
+      } />
+      <Route path="/ai-config" element={
+        <ProtectedRoute>
+          <AIConfig />
         </ProtectedRoute>
       } />
       <Route path="/" element={<Navigate to="/dashboard" />} />

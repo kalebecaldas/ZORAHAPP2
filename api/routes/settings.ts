@@ -309,41 +309,249 @@ router.post('/ai/test', authMiddleware, async (req: Request, res: Response): Pro
   }
 })
 
-// Get clinic data JSON
+// Get clinic data from DATABASE (not JSON file anymore)
 router.get('/clinic-data', settingsAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const data = await fs.readFile(CLINIC_DATA_PATH, 'utf-8')
-    res.json(JSON.parse(data))
+    // Buscar todas as clínicas do banco
+    const clinics = await prisma.clinic.findMany({
+      include: {
+        clinicInsurances: {
+          include: {
+            insurance: true
+          }
+        },
+        offeredProcedures: {
+          include: {
+            procedure: true
+          }
+        }
+      }
+    })
+
+    // Buscar todos os convênios
+    const allInsurances = await prisma.insuranceCompany.findMany({
+      where: { isActive: true },
+      orderBy: { displayName: 'asc' }
+    })
+
+    // Buscar todos os procedimentos
+    const allProcedures = await prisma.procedure.findMany({
+      include: {
+        offeredBy: {
+          include: {
+            clinic: true
+          }
+        }
+      }
+    })
+
+    // Buscar TODOS os preços (ClinicInsuranceProcedure)
+    const allPrices = await prisma.clinicInsuranceProcedure.findMany({
+      include: {
+        clinic: true,
+        insurance: true,
+        procedure: true
+      }
+    })
+
+    // Formatar dados no formato esperado pelo frontend
+    const formattedData = {
+      name: clinics[0]?.displayName || 'Clínica IAAM',
+      businessHours: {
+        weekdays: '07:30 - 19:30',
+        saturday: '07:30 - 12:00',
+        sunday: 'Fechado'
+      },
+      units: clinics.map(clinic => ({
+        id: clinic.code,
+        name: clinic.displayName,
+        phone: clinic.phone,
+        mapsUrl: ''
+      })),
+      insurance: allInsurances
+        .filter(ins => !ins.discount)
+        .map(ins => ins.displayName),
+      discountInsurance: allInsurances
+        .filter(ins => ins.discount)
+        .map(ins => ins.displayName),
+      procedures: allProcedures.map(proc => {
+        // Buscar preços deste procedimento
+        const procedurePrices = allPrices.filter(p => p.procedureCode === proc.code)
+
+        // Organizar preços por unidade/convênio
+        const pricesByUnit: Record<string, any> = {}
+        const packagesByUnit: Record<string, any> = {}
+
+        procedurePrices.forEach(price => {
+          const unitKey = price.clinic.code
+
+          // Se for PARTICULAR, guardar o preço direto
+          if (price.insuranceCode === 'PARTICULAR') {
+            pricesByUnit[unitKey] = price.price
+
+            if (price.hasPackage && price.packageInfo) {
+              packagesByUnit[unitKey] = price.packageInfo
+            }
+          }
+        })
+
+        // Buscar convênios que aceitam este procedimento
+        const acceptedInsurances = procedurePrices
+          .filter(p => p.insuranceCode !== 'PARTICULAR')
+          .map(p => p.insurance.displayName) // ✅ USAR displayName ao invés de code
+
+        // Remover duplicatas
+        const uniqueInsurances = [...new Set(acceptedInsurances)]
+
+        return {
+          id: proc.code,
+          name: proc.name,
+          description: proc.description || '',
+          duration: proc.duration || 60,
+          availableUnits: proc.offeredBy.map(cp => cp.clinic.code),
+          prices: pricesByUnit,
+          packages: packagesByUnit,
+          convenios: uniqueInsurances
+        }
+      })
+    }
+
+    res.json(formattedData)
   } catch (error) {
-    console.error('Erro ao ler clinicData.json:', error)
-    res.status(500).json({ error: 'Erro ao ler dados da clínica' })
+    console.error('Erro ao buscar dados da clínica do banco:', error)
+    res.status(500).json({ error: 'Erro ao buscar dados da clínica' })
   }
 })
 
-// Update clinic data JSON
+// Update clinic data in DATABASE (not JSON file anymore)
 router.post('/clinic-data', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('📝 Recebendo atualização de clinic-data...')
+
     // Only admin can update settings
-    if (req.user.role !== 'ADMIN') {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'MASTER') {
+      console.warn('❌ Permissão negada:', req.user.role)
       res.status(403).json({ error: 'Permissão insuficiente' })
       return
     }
 
-    const newData = req.body
+    const { name, businessHours, units, insurance, discountInsurance, procedures } = req.body
+    console.log('📦 Dados recebidos:', {
+      hasName: !!name,
+      hasBusinessHours: !!businessHours,
+      unitsCount: units?.length || 0,
+      insuranceCount: insurance?.length || 0,
+      proceduresCount: procedures?.length || 0
+    })
 
-    // Basic validation to ensure it's a valid object
-    if (!newData || typeof newData !== 'object') {
-      res.status(400).json({ error: 'Dados inválidos' })
-      return
+    // Atualizar unidades (clínicas)
+    if (units && Array.isArray(units)) {
+      console.log(`🏥 Atualizando ${units.length} unidades...`)
+      for (const unit of units) {
+        const existingClinic = await prisma.clinic.findFirst({
+          where: { code: unit.id }
+        })
+
+        if (existingClinic) {
+          await prisma.clinic.update({
+            where: { id: existingClinic.id },
+            data: {
+              displayName: unit.name,
+              phone: unit.phone
+            }
+          })
+          console.log(`✅ Unidade atualizada: ${unit.name}`)
+        } else {
+          await prisma.clinic.create({
+            data: {
+              code: unit.id,
+              name: unit.id,
+              displayName: unit.name,
+              phone: unit.phone,
+              address: '',
+              neighborhood: '',
+              city: 'Manaus',
+              state: 'AM',
+              zipCode: '',
+              openingHours: {},
+              specialties: [],
+              accessibility: {}
+            }
+          })
+          console.log(`✅ Unidade criada: ${unit.name}`)
+        }
+      }
     }
 
-    // Write to file
-    await fs.writeFile(CLINIC_DATA_PATH, JSON.stringify(newData, null, 2), 'utf-8')
+    // Atualizar convênios
+    if (insurance && Array.isArray(insurance)) {
+      console.log(`💳 Processando ${insurance.length} convênios...`)
+      for (const ins of insurance) {
+        const code = ins.toLowerCase().replace(/\s+/g, '_')
+        const existing = await prisma.insuranceCompany.findFirst({
+          where: { displayName: ins }
+        })
 
+        if (!existing) {
+          await prisma.insuranceCompany.create({
+            data: {
+              code,
+              name: code,
+              displayName: ins,
+              discount: false
+            }
+          })
+        }
+      }
+    }
+
+    if (discountInsurance && Array.isArray(discountInsurance)) {
+      console.log(`💳 Processando ${discountInsurance.length} convênios com desconto...`)
+      for (const ins of discountInsurance) {
+        const code = ins.toLowerCase().replace(/\s+/g, '_')
+        const existing = await prisma.insuranceCompany.findFirst({
+          where: { displayName: ins }
+        })
+
+        if (!existing) {
+          await prisma.insuranceCompany.create({
+            data: {
+              code,
+              name: code,
+              displayName: ins,
+              discount: true,
+              discountPercentage: 20
+            }
+          })
+        } else {
+          await prisma.insuranceCompany.update({
+            where: { id: existing.id },
+            data: {
+              discount: true,
+              discountPercentage: 20
+            }
+          })
+        }
+      }
+    }
+
+    // Log da alteração
+    await prisma.auditLog.create({
+      data: {
+        actorId: req.user!.id,
+        action: 'SETTINGS_CLINIC_DATA_UPDATED',
+        details: { updatedAt: new Date().toISOString() }
+      }
+    })
+
+    console.log('✅ Dados da clínica atualizados com sucesso!')
     res.json({ success: true, message: 'Dados da clínica atualizados com sucesso' })
   } catch (error) {
-    console.error('Erro ao salvar clinicData.json:', error)
-    res.status(500).json({ error: 'Erro ao salvar dados da clínica' })
+    console.error('❌ Erro ao salvar dados da clínica no banco:', error)
+    res.status(500).json({
+      error: 'Erro ao salvar dados da clínica',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
   }
 })
 
@@ -354,7 +562,7 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
     try {
       const data = await fs.readFile(SYSTEM_BRANDING_PATH, 'utf-8')
       const branding = JSON.parse(data)
-      
+
       // Verify if logo file exists, if not, fallback to favicon
       if (branding.logoUrl && branding.logoUrl !== '/favicon.svg') {
         try {
@@ -363,7 +571,7 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
           const logoPath = path.join(process.cwd(), 'public', 'logos', logoFilename)
           await fs.access(logoPath)
           console.log(`✅ Logo file verified: ${logoPath}`)
-          
+
           // Also verify the file is readable
           const stats = await fs.stat(logoPath)
           if (stats.size === 0) {
@@ -377,7 +585,7 @@ router.get('/system-branding', settingsAuth, async (req: Request, res: Response)
           // The frontend will handle the error with onError handler
         }
       }
-      
+
       res.json(branding)
     } catch (fileError) {
       // File doesn't exist, return defaults
@@ -415,10 +623,10 @@ router.put('/system-branding', settingsWriteAuth, authorize(['MASTER', 'ADMIN'])
       data: {
         actorId: req.user!.id,
         action: 'SETTINGS_SYSTEM_BRANDING_UPDATED',
-        details: { 
+        details: {
           systemName: data.systemName,
           logoUrl: data.logoUrl,
-          updatedAt: new Date().toISOString() 
+          updatedAt: new Date().toISOString()
         }
       }
     })
@@ -460,7 +668,7 @@ router.post('/upload-logo', authMiddleware, authorize(['MASTER', 'ADMIN']), asyn
         const allowedTypes = /jpeg|jpg|png|svg/
         const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase())
         const mimetype = allowedTypes.test(file.mimetype) || file.mimetype === 'image/svg+xml'
-        
+
         if (extname && mimetype) {
           cb(null, true)
         } else {
@@ -504,10 +712,10 @@ router.post('/upload-logo', authMiddleware, authorize(['MASTER', 'ADMIN']), asyn
           data: {
             actorId: req.user!.id,
             action: 'SETTINGS_LOGO_UPLOADED',
-            details: { 
+            details: {
               logoUrl,
               filename: file.filename,
-              updatedAt: new Date().toISOString() 
+              updatedAt: new Date().toISOString()
             }
           }
         })

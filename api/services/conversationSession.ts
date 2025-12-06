@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../prisma/client.js';
 import { sessionLogger } from '../utils/logger';
-
-const prisma = new PrismaClient();
 
 export interface SessionConfig {
   maxSessionDuration: number; // 24 hours in milliseconds

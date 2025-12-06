@@ -1,0 +1,109 @@
+/* 🎨 PALETA DE CORES MINIMALISTA - ZORAHAPP */
+
+:root {
+  /* Cores Neutras */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8F9FA;
+  --bg-tertiary: #F1F3F5;
+  
+  /* Texto */
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-tertiary: #9CA3AF;
+  
+  /* Accent (Azul Suave) */
+  --accent-primary: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-light: #DBEAFE;
+  
+  /* Bordas */
+  --border-light: #E5E7EB;
+  --border-medium: #D1D5DB;
+  
+  /* Estados */
+  --success: #10B981;
+  --success-light: #D1FAE5;
+  --warning: #F59E0B;
+  --warning-light: #FEF3C7;
+  --error: #EF4444;
+  --error-light: #FEE2E2;
+  
+  /* Sombras Sutis */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+/* Aplicar em cards de conversa */
+.conversation-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.conversation-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-medium);
+}
+
+.conversation-card.selected {
+  background: var(--accent-light);
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-md);
+}
+
+/* Badge de mensagens não lidas */
+.unread-badge {
+  background: var(--error);
+  color: white;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* Mensagens do chat */
+.message-sent {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.message-received {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+}
+
+/* Botões minimalistas */
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-medium);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-secondary);
+  border-color: var(--border-medium);
+}

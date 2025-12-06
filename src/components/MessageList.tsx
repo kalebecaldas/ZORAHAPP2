@@ -48,7 +48,10 @@ interface Patient {
   name: string;
   phone: string;
   email?: string;
+  cpf?: string;
+  birthDate?: string;
   insuranceCompany?: string;
+  insuranceNumber?: string;
   preferences?: any;
 }
 
@@ -539,18 +542,114 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
   return (
     <div className={`flex-1 flex flex-col h-full transition-opacity duration-400 ${(updatingUI || transferring) ? 'opacity-75' : 'opacity-100'}`}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 p-4">
+      <div className="bg-white border-b border-gray-200 p-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 flex-1">
             <div className="bg-gray-200 p-2 rounded-full">
               <User className="h-6 w-6 text-gray-600" />
             </div>
-            <div>
-              <h3 className="font-semibold text-gray-900">{conversation.patient.name}</h3>
-              <p className="text-sm text-gray-500">{conversation.patient.phone}</p>
-              {conversation.patient.insuranceCompany && (
-                <p className="text-xs text-gray-400">{conversation.patient.insuranceCompany}</p>
-              )}
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-blue-900">{conversation.patient.name || conversation.patient.phone}</h3>
+                {conversation.patient.name && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(conversation.patient.name);
+                      toast.success('Nome copiado!');
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded transition-colors"
+                    title="Copiar nome"
+                  >
+                    <svg className="h-3 w-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-600 mt-1">
+                <span className="flex items-center gap-1">
+                  📱 {conversation.patient.phone}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(conversation.patient.phone);
+                      toast.success('Telefone copiado!');
+                    }}
+                    className="p-0.5 hover:bg-gray-100 rounded"
+                  >
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </button>
+                </span>
+                {conversation.patient.cpf && (
+                  <span className="flex items-center gap-1">
+                    🆔 {conversation.patient.cpf}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(conversation.patient.cpf!);
+                        toast.success('CPF copiado!');
+                      }}
+                      className="p-0.5 hover:bg-gray-100 rounded"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+                {conversation.patient.email && (
+                  <span className="flex items-center gap-1">
+                    📧 {conversation.patient.email}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(conversation.patient.email!);
+                        toast.success('Email copiado!');
+                      }}
+                      className="p-0.5 hover:bg-gray-100 rounded"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+                {conversation.patient.birthDate && (
+                  <span className="flex items-center gap-1">
+                    🎂 {new Date(conversation.patient.birthDate).toLocaleDateString('pt-BR')}
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(new Date(conversation.patient.birthDate!).toLocaleDateString('pt-BR'));
+                        toast.success('Data de nascimento copiada!');
+                      }}
+                      className="p-0.5 hover:bg-gray-100 rounded"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+                {conversation.patient.insuranceCompany && (
+                  <span className="flex items-center gap-1">
+                    💳 {conversation.patient.insuranceCompany}
+                    {conversation.patient.insuranceNumber && ` (${conversation.patient.insuranceNumber})`}
+                    <button
+                      onClick={() => {
+                        const text = conversation.patient.insuranceNumber
+                          ? `${conversation.patient.insuranceCompany} - ${conversation.patient.insuranceNumber}`
+                          : conversation.patient.insuranceCompany!;
+                        navigator.clipboard.writeText(text);
+                        toast.success('Convênio copiado!');
+                      }}
+                      className="p-0.5 hover:bg-gray-100 rounded"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </button>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -713,99 +812,99 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
               shouldBeRight: message.direction === 'SENT'
             })
           }
-          
+
           // Use direction as the source of truth for alignment
           const isFromBot = message.direction === 'SENT'
-          
+
           return (
-          <div
-            key={message.id}
-            className={`flex ${isFromBot ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`flex items-start space-x-2 max-w-[80%] ${isFromBot ? 'flex-row-reverse space-x-reverse' : ''
-              }`}>
-              <div className={`p-2 rounded-full ${message.sender === 'BOT' ? 'bg-blue-100' :
-                message.sender === 'PATIENT' ? 'bg-gray-100' : 'bg-green-100'
+            <div
+              key={message.id}
+              className={`flex ${isFromBot ? 'justify-end' : 'justify-start'}`}
+            >
+              <div className={`flex items-start space-x-2 max-w-[80%] ${isFromBot ? 'flex-row-reverse space-x-reverse' : ''
                 }`}>
-                {getSenderAvatar(message.sender)}
-              </div>
-
-              <div className={`px-4 py-2 shadow-sm ${isFromBot
-                ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
-                : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
-                }`}>
-                {/* Show text only if it exists and is not a media-only message */}
-                {message.messageText && !message.messageText.startsWith('[IMAGE]') && !message.messageText.startsWith('[AUDIO]') && !message.messageText.startsWith('[DOCUMENT]') && (
-                  <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
-                )}
-
-                {/* File att attachments & Media */}
-                {message.messageType === 'AUDIO' && (
-                  <div className="mt-2 min-w-[200px]">
-                    {message.mediaUrl ? (
-                      <audio controls src={message.mediaUrl} className="w-full h-8" />
-                    ) : (
-                      <p className="text-xs italic opacity-75">🎤 Áudio não disponível</p>
-                    )}
-                  </div>
-                )}
-
-                {(() => {
-                  if (message.messageType === 'IMAGE') {
-                    console.log('🖼️ Renderizando IMAGE:', { id: message.id.substring(0, 10), hasUrl: !!message.mediaUrl, url: message.mediaUrl })
-                  }
-                  return null;
-                })()}
-                {message.messageType === 'IMAGE' && (
-                  <div className="mt-2">
-                    {message.mediaUrl ? (
-                      <img
-                        src={message.mediaUrl}
-                        alt="Imagem"
-                        className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                        onClick={() => window.open(message.mediaUrl!, '_blank')}
-                      />
-                    ) : (
-                      <p className="text-xs italic opacity-75">📷 Imagem não disponível</p>
-                    )}
-                  </div>
-                )}
-
-                {message.metadata?.files && (
-                  <div className="mt-2 space-y-1">
-                    {message.metadata.files.map((file: any, index: number) => (
-                      <a
-                        key={index}
-                        href={file.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`flex items-center space-x-2 p-2 rounded hover:bg-opacity-80 transition-colors ${message.direction === 'SENT' ? 'bg-blue-500' : 'bg-gray-200'
-                          }`}
-                      >
-                        {file.type?.startsWith('image/') ? <ImageIcon className="h-4 w-4" /> : <File className="h-4 w-4" />}
-                        <div className="flex flex-col overflow-hidden">
-                          <span className="text-xs truncate font-medium">{file.originalName}</span>
-                          <span className="text-[10px] opacity-75">{Math.round(file.size / 1024)}KB</span>
-                        </div>
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                <div className={`flex items-center space-x-1 mt-1 ${message.direction === 'SENT' ? 'justify-end' : 'justify-start'
+                <div className={`p-2 rounded-full ${message.sender === 'BOT' ? 'bg-blue-100' :
+                  message.sender === 'PATIENT' ? 'bg-gray-100' : 'bg-green-100'
                   }`}>
-                  <span className={`text-xs ${message.direction === 'SENT' ? 'text-blue-100' : 'text-gray-500'
+                  {getSenderAvatar(message.sender)}
+                </div>
+
+                <div className={`px-4 py-2 shadow-sm ${isFromBot
+                  ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
+                  : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
+                  }`}>
+                  {/* Show text only if it exists and is not a media-only message */}
+                  {message.messageText && !message.messageText.startsWith('[IMAGE]') && !message.messageText.startsWith('[AUDIO]') && !message.messageText.startsWith('[DOCUMENT]') && (
+                    <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
+                  )}
+
+                  {/* File att attachments & Media */}
+                  {message.messageType === 'AUDIO' && (
+                    <div className="mt-2 min-w-[200px]">
+                      {message.mediaUrl ? (
+                        <audio controls src={message.mediaUrl} className="w-full h-8" />
+                      ) : (
+                        <p className="text-xs italic opacity-75">🎤 Áudio não disponível</p>
+                      )}
+                    </div>
+                  )}
+
+                  {(() => {
+                    if (message.messageType === 'IMAGE') {
+                      console.log('🖼️ Renderizando IMAGE:', { id: message.id.substring(0, 10), hasUrl: !!message.mediaUrl, url: message.mediaUrl })
+                    }
+                    return null;
+                  })()}
+                  {message.messageType === 'IMAGE' && (
+                    <div className="mt-2">
+                      {message.mediaUrl ? (
+                        <img
+                          src={message.mediaUrl}
+                          alt="Imagem"
+                          className="max-w-full rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => window.open(message.mediaUrl!, '_blank')}
+                        />
+                      ) : (
+                        <p className="text-xs italic opacity-75">📷 Imagem não disponível</p>
+                      )}
+                    </div>
+                  )}
+
+                  {message.metadata?.files && (
+                    <div className="mt-2 space-y-1">
+                      {message.metadata.files.map((file: any, index: number) => (
+                        <a
+                          key={index}
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`flex items-center space-x-2 p-2 rounded hover:bg-opacity-80 transition-colors ${message.direction === 'SENT' ? 'bg-blue-500' : 'bg-gray-200'
+                            }`}
+                        >
+                          {file.type?.startsWith('image/') ? <ImageIcon className="h-4 w-4" /> : <File className="h-4 w-4" />}
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-xs truncate font-medium">{file.originalName}</span>
+                            <span className="text-[10px] opacity-75">{Math.round(file.size / 1024)}KB</span>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className={`flex items-center space-x-1 mt-1 ${message.direction === 'SENT' ? 'justify-end' : 'justify-start'
                     }`}>
-                    {new Date(message.timestamp).toLocaleTimeString('pt-BR', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                  {message.direction === 'SENT' && getStatusIcon(message.status)}
+                    <span className={`text-xs ${message.direction === 'SENT' ? 'text-blue-100' : 'text-gray-500'
+                      }`}>
+                      {new Date(message.timestamp).toLocaleTimeString('pt-BR', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                    {message.direction === 'SENT' && getStatusIcon(message.status)}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           )
         })}
         <div ref={messagesEndRef} />

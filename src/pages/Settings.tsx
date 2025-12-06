@@ -8,6 +8,7 @@ import {
   Monitor, Upload, Image as ImageIcon
 } from 'lucide-react';
 import { TemplateManager } from '../components/TemplateManager';
+import SystemSettingsTab from '../components/settings/SystemSettingsTab';
 
 interface Unit {
   id: string;
@@ -147,29 +148,29 @@ export const Settings = () => {
     try {
       setSaving(true);
       const response = await api.put('/api/settings/system-branding', systemBranding);
-      
+
       // Wait a bit for the file to be written
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
       // Clear cache and force reload
       const { clearBrandingCache, getSystemBranding } = await import('../services/systemBrandingService');
-      
+
       // Get fresh data from server
       const freshBranding = await getSystemBranding(true);
-      
+
       // Update local state
       setSystemBranding(freshBranding);
-      
+
       // Clear cache and notify all components
       clearBrandingCache();
-      
+
       // Update favicon dynamically
       const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
       if (faviconLink && freshBranding.logoUrl) {
         const timestamp = Date.now();
         faviconLink.href = `${freshBranding.logoUrl}?t=${timestamp}`;
       }
-      
+
       // Force reload all images with logo
       const logoUrl = freshBranding.logoUrl;
       const timestamp = Date.now();
@@ -180,9 +181,9 @@ export const Settings = () => {
           (img as HTMLImageElement).src = `${logoUrl}?t=${timestamp}`;
         }
       });
-      
+
       toast.success('Configurações de marca salvas com sucesso');
-      
+
       // Reload page to apply changes everywhere
       setTimeout(() => {
         window.location.reload();
@@ -224,17 +225,17 @@ export const Settings = () => {
 
       if (response.data.logoUrl) {
         setSystemBranding({ ...systemBranding, logoUrl: response.data.logoUrl });
-        
+
         // Clear cache and force reload
         const { clearBrandingCache } = await import('../services/systemBrandingService');
         clearBrandingCache();
-        
+
         // Force browser to reload favicon and images
         const faviconLink = document.querySelector("link[rel='icon']") as HTMLLinkElement;
         if (faviconLink) {
           faviconLink.href = `${response.data.logoUrl}?t=${Date.now()}`;
         }
-        
+
         // Force reload all images with the logo
         document.querySelectorAll('img').forEach((img) => {
           const src = img.getAttribute('src');
@@ -242,9 +243,9 @@ export const Settings = () => {
             (img as HTMLImageElement).src = `${response.data.logoUrl}?t=${Date.now()}`;
           }
         });
-        
+
         toast.success('Logo enviada com sucesso!');
-        
+
         // Reload page after a short delay to ensure all components update
         setTimeout(() => {
           window.location.reload();
@@ -285,14 +286,15 @@ export const Settings = () => {
             { id: 'procedimentos', label: 'Procedimentos', icon: FileText },
             { id: 'chatbot', label: 'Chat + Bot', icon: Bot },
             { id: 'templates', label: 'Templates', icon: LayoutTemplate },
-            { id: 'sistema', label: 'Sistema', icon: Monitor },
+            { id: 'configuracoes', label: 'Configurações', icon: SettingsIcon },
+            { id: 'sistema', label: 'Branding', icon: Monitor },
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === item.id
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-blue-50 text-blue-700'
+                : 'text-gray-600 hover:bg-gray-50'
                 }`}
             >
               <item.icon className="w-5 h-5" />
@@ -654,13 +656,21 @@ export const Settings = () => {
             </div>
           )}
 
+
+          {/* Tab Configurações */}
+          {activeTab === 'configuracoes' && (
+            <div className="p-6">
+              <SystemSettingsTab />
+            </div>
+          )}
+
           {activeTab === 'sistema' && (
             <div className="p-6 space-y-8">
               <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold">Configurações do Sistema</h2>
-                <button 
-                  onClick={handleSaveSystemBranding} 
-                  disabled={saving} 
+                <button
+                  onClick={handleSaveSystemBranding}
+                  disabled={saving}
                   className="btn-primary flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
                   <Save className="w-4 h-4" /> Salvar
@@ -690,13 +700,13 @@ export const Settings = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Logo do Sistema
                   </label>
-                  
+
                   {/* Preview da Logo */}
                   <div className="mb-4 flex items-center space-x-4">
                     <div className="border-2 border-gray-200 rounded-lg p-4 bg-gray-50">
-                      <img 
-                        src={systemBranding.logoUrl} 
-                        alt="Logo Preview" 
+                      <img
+                        src={systemBranding.logoUrl}
+                        alt="Logo Preview"
                         className="h-12 w-12 object-contain"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = '/favicon.svg';
@@ -759,9 +769,9 @@ export const Settings = () => {
                     {/* Preview Sidebar */}
                     <div className="bg-white rounded-lg p-3 border border-gray-200">
                       <div className="flex items-center space-x-3">
-                        <img 
-                          src={systemBranding.logoUrl} 
-                          alt="Logo" 
+                        <img
+                          src={systemBranding.logoUrl}
+                          alt="Logo"
                           className="h-8 w-8"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = '/favicon.svg';

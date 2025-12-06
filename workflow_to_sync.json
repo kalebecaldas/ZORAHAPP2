@@ -4,272 +4,6 @@
   "description": "Workflow limpo e otimizado com arquitetura modular",
   "isActive": true,
   "config": {
-    "edges": [
-      {
-        "id": "e1",
-        "data": {
-          "port": "main"
-        },
-        "source": "start",
-        "target": "clinic_selection"
-      },
-      {
-        "id": "e2",
-        "data": {
-          "port": "true"
-        },
-        "source": "clinic_selection",
-        "target": "unidade_vieiralves"
-      },
-      {
-        "id": "e3",
-        "data": {
-          "port": "false"
-        },
-        "source": "clinic_selection",
-        "target": "unidade_sao_jose"
-      },
-      {
-        "id": "e4",
-        "data": {
-          "port": "main"
-        },
-        "source": "unidade_vieiralves",
-        "target": "gpt_classifier"
-      },
-      {
-        "id": "e5",
-        "data": {
-          "port": "main"
-        },
-        "source": "unidade_sao_jose",
-        "target": "gpt_classifier"
-      },
-      {
-        "id": "e6",
-        "data": {
-          "port": "1"
-        },
-        "source": "gpt_classifier",
-        "target": "info_valores"
-      },
-      {
-        "id": "e7",
-        "data": {
-          "port": "2"
-        },
-        "source": "gpt_classifier",
-        "target": "info_convenios"
-      },
-      {
-        "id": "e8",
-        "data": {
-          "port": "3"
-        },
-        "source": "gpt_classifier",
-        "target": "info_localizacao"
-      },
-      {
-        "id": "e9",
-        "data": {
-          "port": "5"
-        },
-        "source": "gpt_classifier",
-        "target": "check_patient"
-      },
-      {
-        "id": "e10",
-        "data": {
-          "port": "6"
-        },
-        "source": "gpt_classifier",
-        "target": "transfer_human"
-      },
-      {
-        "id": "e14",
-        "data": {
-          "port": "main"
-        },
-        "source": "check_patient",
-        "target": "patient_decision"
-      },
-      {
-        "id": "e15",
-        "data": {
-          "port": "true"
-        },
-        "source": "patient_decision",
-        "target": "msg_paciente_encontrado"
-      },
-      {
-        "id": "e16",
-        "data": {
-          "port": "false"
-        },
-        "source": "patient_decision",
-        "target": "msg_solicita_cadastro"
-      },
-      {
-        "id": "e18",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_solicita_cadastro",
-        "target": "collect_nome"
-      },
-      {
-        "id": "e19",
-        "data": {
-          "port": "main"
-        },
-        "source": "collect_nome",
-        "target": "collect_cpf"
-      },
-      {
-        "id": "e20",
-        "data": {
-          "port": "main"
-        },
-        "source": "collect_cpf",
-        "target": "collect_nascimento"
-      },
-      {
-        "id": "e21",
-        "data": {
-          "port": "main"
-        },
-        "source": "collect_nascimento",
-        "target": "collect_email"
-      },
-      {
-        "id": "e22",
-        "data": {
-          "port": "main"
-        },
-        "source": "collect_email",
-        "target": "collect_convenio"
-      },
-      {
-        "id": "e23",
-        "data": {
-          "port": "main"
-        },
-        "source": "collect_convenio",
-        "target": "confirma_cadastro"
-      },
-      {
-        "id": "e24",
-        "data": {
-          "port": "main"
-        },
-        "source": "confirma_cadastro",
-        "target": "validate_cadastro"
-      },
-      {
-        "id": "e25",
-        "data": {
-          "port": "true"
-        },
-        "source": "validate_cadastro",
-        "target": "create_patient"
-      },
-      {
-        "id": "e26",
-        "data": {
-          "port": "false"
-        },
-        "source": "validate_cadastro",
-        "target": "collect_nome"
-      },
-      {
-        "id": "e27",
-        "data": {
-          "port": "main"
-        },
-        "source": "create_patient",
-        "target": "msg_cadastro_sucesso"
-      },
-      {
-        "id": "info_valores_to_msg_valores",
-        "data": {
-          "port": "main"
-        },
-        "source": "info_valores",
-        "target": "msg_valores_formatado"
-      },
-      {
-        "id": "msg_valores_to_gpt",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_valores_formatado",
-        "target": "gpt_classifier"
-      },
-      {
-        "id": "info_convenios_to_msg_convenios",
-        "data": {
-          "port": "main"
-        },
-        "source": "info_convenios",
-        "target": "msg_convenios_formatado"
-      },
-      {
-        "id": "msg_convenios_to_gpt",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_convenios_formatado",
-        "target": "gpt_classifier"
-      },
-      {
-        "id": "info_localizacao_to_msg_localizacao",
-        "data": {
-          "port": "main"
-        },
-        "source": "info_localizacao",
-        "target": "msg_localizacao_formatado"
-      },
-      {
-        "id": "msg_localizacao_to_gpt",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_localizacao_formatado",
-        "target": "gpt_classifier"
-      },
-      {
-        "id": "msg_cadastro_sucesso_action_get_procedimentos_insurance",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_cadastro_sucesso",
-        "target": "action_get_procedimentos_insurance"
-      },
-      {
-        "id": "action_get_procedimentos_insurance_msg_procedimentos_insurance",
-        "data": {
-          "port": "main"
-        },
-        "source": "action_get_procedimentos_insurance",
-        "target": "msg_procedimentos_insurance"
-      },
-      {
-        "id": "msg_procedimentos_insurance_transfer_to_queue",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_procedimentos_insurance",
-        "target": "transfer_to_queue"
-      },
-      {
-        "id": "edge-msg_paciente_encontrado-action_get_procedimentos_insurance",
-        "data": {
-          "port": "main"
-        },
-        "source": "msg_paciente_encontrado",
-        "target": "action_get_procedimentos_insurance"
-      }
-    ],
     "nodes": [
       {
         "id": "start",
@@ -1277,6 +1011,272 @@
           "y": 2460
         },
         "connections": []
+      }
+    ],
+    "edges": [
+      {
+        "id": "e1",
+        "data": {
+          "port": "main"
+        },
+        "source": "start",
+        "target": "clinic_selection"
+      },
+      {
+        "id": "e2",
+        "data": {
+          "port": "true"
+        },
+        "source": "clinic_selection",
+        "target": "unidade_vieiralves"
+      },
+      {
+        "id": "e3",
+        "data": {
+          "port": "false"
+        },
+        "source": "clinic_selection",
+        "target": "unidade_sao_jose"
+      },
+      {
+        "id": "e4",
+        "data": {
+          "port": "main"
+        },
+        "source": "unidade_vieiralves",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "e5",
+        "data": {
+          "port": "main"
+        },
+        "source": "unidade_sao_jose",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "e6",
+        "data": {
+          "port": "1"
+        },
+        "source": "gpt_classifier",
+        "target": "info_valores"
+      },
+      {
+        "id": "e7",
+        "data": {
+          "port": "2"
+        },
+        "source": "gpt_classifier",
+        "target": "info_convenios"
+      },
+      {
+        "id": "e8",
+        "data": {
+          "port": "3"
+        },
+        "source": "gpt_classifier",
+        "target": "info_localizacao"
+      },
+      {
+        "id": "e9",
+        "data": {
+          "port": "5"
+        },
+        "source": "gpt_classifier",
+        "target": "check_patient"
+      },
+      {
+        "id": "e10",
+        "data": {
+          "port": "6"
+        },
+        "source": "gpt_classifier",
+        "target": "transfer_human"
+      },
+      {
+        "id": "e14",
+        "data": {
+          "port": "main"
+        },
+        "source": "check_patient",
+        "target": "patient_decision"
+      },
+      {
+        "id": "e15",
+        "data": {
+          "port": "true"
+        },
+        "source": "patient_decision",
+        "target": "msg_paciente_encontrado"
+      },
+      {
+        "id": "e16",
+        "data": {
+          "port": "false"
+        },
+        "source": "patient_decision",
+        "target": "msg_solicita_cadastro"
+      },
+      {
+        "id": "e18",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_solicita_cadastro",
+        "target": "collect_nome"
+      },
+      {
+        "id": "e19",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_nome",
+        "target": "collect_cpf"
+      },
+      {
+        "id": "e20",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_cpf",
+        "target": "collect_nascimento"
+      },
+      {
+        "id": "e21",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_nascimento",
+        "target": "collect_email"
+      },
+      {
+        "id": "e22",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_email",
+        "target": "collect_convenio"
+      },
+      {
+        "id": "e23",
+        "data": {
+          "port": "main"
+        },
+        "source": "collect_convenio",
+        "target": "confirma_cadastro"
+      },
+      {
+        "id": "e24",
+        "data": {
+          "port": "main"
+        },
+        "source": "confirma_cadastro",
+        "target": "validate_cadastro"
+      },
+      {
+        "id": "e25",
+        "data": {
+          "port": "true"
+        },
+        "source": "validate_cadastro",
+        "target": "create_patient"
+      },
+      {
+        "id": "e26",
+        "data": {
+          "port": "false"
+        },
+        "source": "validate_cadastro",
+        "target": "collect_nome"
+      },
+      {
+        "id": "e27",
+        "data": {
+          "port": "main"
+        },
+        "source": "create_patient",
+        "target": "msg_cadastro_sucesso"
+      },
+      {
+        "id": "info_valores_to_msg_valores",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_valores",
+        "target": "msg_valores_formatado"
+      },
+      {
+        "id": "msg_valores_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_valores_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "info_convenios_to_msg_convenios",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_convenios",
+        "target": "msg_convenios_formatado"
+      },
+      {
+        "id": "msg_convenios_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_convenios_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "info_localizacao_to_msg_localizacao",
+        "data": {
+          "port": "main"
+        },
+        "source": "info_localizacao",
+        "target": "msg_localizacao_formatado"
+      },
+      {
+        "id": "msg_localizacao_to_gpt",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_localizacao_formatado",
+        "target": "gpt_classifier"
+      },
+      {
+        "id": "msg_cadastro_sucesso_action_get_procedimentos_insurance",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_cadastro_sucesso",
+        "target": "action_get_procedimentos_insurance"
+      },
+      {
+        "id": "action_get_procedimentos_insurance_msg_procedimentos_insurance",
+        "data": {
+          "port": "main"
+        },
+        "source": "action_get_procedimentos_insurance",
+        "target": "msg_procedimentos_insurance"
+      },
+      {
+        "id": "msg_procedimentos_insurance_transfer_to_queue",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_procedimentos_insurance",
+        "target": "transfer_to_queue"
+      },
+      {
+        "id": "edge-msg_paciente_encontrado-action_get_procedimentos_insurance",
+        "data": {
+          "port": "main"
+        },
+        "source": "msg_paciente_encontrado",
+        "target": "action_get_procedimentos_insurance"
       }
     ]
   }

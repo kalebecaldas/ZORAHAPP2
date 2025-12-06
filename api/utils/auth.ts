@@ -11,7 +11,7 @@ declare global {
         id: string
         email: string
         name: string
-        role: 'ADMIN' | 'AGENT'
+        role: 'MASTER' | 'ADMIN' | 'SUPERVISOR' | 'ATENDENTE'
       }
     }
   }

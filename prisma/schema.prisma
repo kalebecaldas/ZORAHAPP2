@@ -26,6 +26,23 @@ model User {
   
   conversations Conversation[]
   auditLogs    AuditLog[]
+  quickReplies QuickReply[]
+}
+
+// ✅ NOVO: Sistema de Atalhos (Respostas Rápidas)
+model QuickReply {
+  id        String   @id @default(cuid())
+  userId    String
+  shortcut  String   // Ex: "saudacao", "horario", "preco"
+  text      String   // Ex: "Olá! Meu nome é..."
+  isGlobal  Boolean  @default(false) // Se true, disponível para todos os usuários
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, shortcut])
+  @@index([userId])
 }
 
 model Patient {
@@ -73,6 +90,9 @@ model Conversation {
   channel           String    @default("whatsapp")  // 'whatsapp', 'instagram', 'messenger'
   channelMetadata   Json?
   
+  // ✅ NOVO: Contador de mensagens não lidas
+  unreadCount       Int       @default(0)
+  
   assignedTo User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages   Message[]
@@ -83,13 +103,17 @@ model Message {
   conversationId String
   phoneNumber    String
   messageText    String
-  messageType    String    @default("TEXT") // TEXT, IMAGE, DOCUMENT, AUDIO, VIDEO
+  messageType    String    @default("TEXT") // TEXT, IMAGE, DOCUMENT, AUDIO, VIDEO, SYSTEM
   mediaUrl       String?   // URL da mídia (para imagens, documentos, áudio, vídeo)
   metadata       Json?     // Metadados adicionais (filename, mimetype, caption, etc)
   direction      String
   from           String
   timestamp      DateTime  @default(now())
   createdAt      DateTime  @default(now())
+  
+  // ✅ NOVO: Mensagens do sistema
+  systemMessageType String?  // AGENT_ASSIGNED, TRANSFERRED_TO_QUEUE, TRANSFERRED_TO_AGENT, TIMEOUT_INACTIVITY, etc
+  systemMetadata    Json?    // { agentName, queueName, targetAgentName, reason }
   
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
@@ -277,3 +301,127 @@ model Template {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ============================================
+// CONFIGURAÇÃO DA IA CONVERSACIONAL
+// ============================================
+
+model AIConfiguration {
+  id                String   @id @default(cuid())
+  
+  // Identificação
+  name              String   @default("Configuração Principal")
+  description       String?
+  
+  // Prompt Base
+  systemPrompt      String   @db.Text
+  personality       String   @default("Empática e profissional")
+  tone              String   @default("Conversacional e amigável")
+  
+  // Comportamento
+  useEmojis         Boolean  @default(true)
+  offerPackages     Boolean  @default(true)
+  askInsurance      Boolean  @default(true)
+  maxResponseLength Int      @default(500)
+  
+  // Regras de Negócio (JSON configurável)
+  businessRules     Json?
+  
+  // Configurações Avançadas
+  temperature       Float    @default(0.7)
+  maxTokens         Int      @default(1000)
+  
+  // Controle
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  // Relações
+  examples          AIExample[]
+  transferRules     TransferRule[]
+}
+
+// Exemplos de conversas para treinar a IA (Few-Shot Learning)
+model AIExample {
+  id              String   @id @default(cuid())
+  configId        String
+  config          AIConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  name            String
+  description     String?
+  category        String   @default("GERAL") // AGENDAMENTO, INFORMACAO, ATRASO, etc
+  
+  // Exemplo de Conversa
+  userMessage     String   @db.Text
+  expectedIntent  String   // INFORMACAO, AGENDAR, CANCELAR, etc
+  expectedAction  String   // continue, transfer_human, start_workflow, collect_data
+  botResponse     String   @db.Text
+  
+  // Entidades Esperadas
+  entities        Json     // { procedimento, convenio, clinica, data, horario }
+  
+  // Metadados
+  confidence      Float    @default(0.95)
+  priority        Int      @default(0) // Ordem de importância
+  
+  // Controle
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([configId, isActive])
+  @@index([category])
+}
+
+// Regras de Transferência para Humano
+model TransferRule {
+  id              String   @id @default(cuid())
+  configId        String
+  config          AIConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
+  
+  // Identificação
+  name            String
+  description     String?
+  
+  // Condições de Ativação
+  keywords        String[] // Palavras-chave que ativam a regra
+  intents         String[] // Intenções que ativam a regra
+  minConfidence   Float    @default(0.6)
+  
+  // Ação
+  targetQueue     String   // AGUARDANDO, PRIORITY_QUEUE, HUMAN_QUEUE
+  priority        Int      @default(0) // Prioridade da regra (maior = mais importante)
+  
+  // Mensagem de Transferência
+  transferMessage String?  @db.Text
+  
+  // Controle
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([configId, isActive])
+  @@index([priority])
+}
+
+// ✅ NOVO: Configurações do Sistema
+model SystemSettings {
+  id                        String   @id @default(cuid())
+  
+  // Timeout de inatividade
+  inactivityTimeoutMinutes  Int      @default(10)
+  
+  // Mensagem de encerramento
+  closingMessage            String   @default("Obrigado pelo contato! Estamos à disposição. 😊") @db.Text
+  
+  // Outras configurações
+  autoAssignEnabled         Boolean  @default(true)
+  maxConversationsPerAgent  Int      @default(5)
+  
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  
+  @@map("system_settings")
+}
+

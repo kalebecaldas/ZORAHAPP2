@@ -1,49 +1,32 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     Phone, User, Bot, Clock, Users, UserCheck, Archive,
     Send, Paperclip, Mic, StopCircle, X, Image as ImageIcon,
     File, Trash2, Video, MoreVertical, PhoneCall, AlertCircle,
-    Shield, CheckCircle2, History, FileText
+    Shield, CheckCircle2, History, FileText, Zap
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
 import { toast } from 'sonner';
 import ConversationHistoryModal from '../components/ConversationHistoryModal';
+import QuickRepliesModal from '../components/QuickRepliesModal';
+import '../styles/minimal-theme.css'; // ✅ Importar CSS do badge
+import SystemMessage from '../components/chat/SystemMessage';
 
-// Types
-interface Message {
-    id: string;
-    conversationId: string;
-    sender: 'BOT' | 'PATIENT' | 'AGENT';
-    messageText: string;
-    messageType: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO';
-    mediaUrl?: string | null;
-    direction: 'SENT' | 'RECEIVED';
-    timestamp: string;
-    status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
-    metadata?: any;
-}
+// ✅ NOVOS: Hooks refatorados
+import { useConversations } from '../hooks/conversations/useConversations';
+import { useMessages } from '../hooks/conversations/useMessages';
+import { useAudioRecorder } from '../hooks/conversations/useAudioRecorder';
 
-interface Conversation {
-    id: string;
-    phone: string;
-    status: 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'FECHADA';
-    assignedToId?: string;
-    assignedTo?: { id: string; name: string };
-    patient?: { id: string; name: string; phone: string; insuranceCompany?: string };
-    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-    lastMessage?: string;
-    lastTimestamp?: string;
-    createdAt: string;
-    updatedAt: string;
-    sessionStartTime?: string | null;
-    sessionExpiryTime?: string | null;
-    sessionStatus?: string;
-    lastUserActivity?: string | null;
-    channel?: string;
-}
+// ✅ NOVOS: Componentes refatorados
+import { ConversationHeader } from '../components/conversations/ConversationHeader';
+import { QueueTabs } from '../components/conversations/QueueTabs';
+
+// ✅ Types importados dos hooks
+import type { Conversation } from '../hooks/conversations/useConversations';
+import type { Message } from '../hooks/conversations/useMessages';
 
 type QueueType = 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSAS' | 'ENCERRADOS';
 
@@ -81,12 +64,28 @@ const ConversationsPage: React.FC = () => {
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [availableAgents, setAvailableAgents] = useState<any[]>([]);
     const [transferTarget, setTransferTarget] = useState<string>('');
-    
+
     // Session state
     const [sessionInfo, setSessionInfo] = useState<any>(null);
-    
+
     // History modal
     const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+    // ✅ Quick Replies modal
+    const [showQuickRepliesModal, setShowQuickRepliesModal] = useState(false);
+
+    // ✅ Quick Replies autocomplete
+    const [quickReplies, setQuickReplies] = useState<any[]>([]);
+    const [showAutocomplete, setShowAutocomplete] = useState(false);
+    const [filteredReplies, setFilteredReplies] = useState<any[]>([]);
+    const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
+
+    // ✅ Lazy Loading para Encerrados
+    const [closedConversations, setClosedConversations] = useState<Conversation[]>([]);
+    const [closedPage, setClosedPage] = useState(1);
+    const [closedTotal, setClosedTotal] = useState(0);
+    const [loadingClosed, setLoadingClosed] = useState(false);
+    const [hasMoreClosed, setHasMoreClosed] = useState(true);
 
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -95,12 +94,19 @@ const ConversationsPage: React.FC = () => {
     const [autoSendAfterStop, setAutoSendAfterStop] = useState(false);
     const processedMessageIdsRef = useRef<Set<string>>(new Set());
 
+    // ✅ Verificar se sessão expirou
+    const isSessionExpired = useMemo(() => {
+        if (!selectedConversation?.sessionExpiryTime) return false;
+        return new Date(selectedConversation.sessionExpiryTime) < new Date();
+    }, [selectedConversation]);
+
     // Permission check
     const canWrite = !!(
         selectedConversation?.assignedTo &&
         user?.id &&
         selectedConversation.assignedTo.id === user.id &&
-        selectedConversation.status === 'EM_ATENDIMENTO'
+        selectedConversation.status === 'EM_ATENDIMENTO' &&
+        !isSessionExpired // ✅ Bloquear se sessão expirada
     );
 
     // Memoizar condições para evitar re-renderizações desnecessárias e melhorar performance
@@ -112,33 +118,54 @@ const ConversationsPage: React.FC = () => {
         return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
     }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
 
-    // Queue configurations
-    const queueConfigs = {
-        BOT_QUEUE: { label: 'Bot', icon: Bot, color: 'blue', bgClass: 'bg-blue-50', textClass: 'text-blue-700', borderClass: 'border-blue-200' },
-        PRINCIPAL: { label: 'Aguardando', icon: Clock, color: 'yellow', bgClass: 'bg-yellow-50', textClass: 'text-yellow-700', borderClass: 'border-yellow-200' },
-        EM_ATENDIMENTO: { label: 'Em Atend.', icon: Users, color: 'purple', bgClass: 'bg-purple-50', textClass: 'text-purple-700', borderClass: 'border-purple-200' },
-        MINHAS_CONVERSAS: { label: 'Minhas', icon: UserCheck, color: 'green', bgClass: 'bg-green-50', textClass: 'text-green-700', borderClass: 'border-green-200' },
-        ENCERRADOS: { label: 'Encerrados', icon: Archive, color: 'gray', bgClass: 'bg-gray-50', textClass: 'text-gray-700', borderClass: 'border-gray-200' }
-    };
-
-    // Dynamic color for Principal queue based on count
-    const getPrincipalQueueStyle = (count: number) => {
-        if (count === 0) return { bg: 'bg-gray-50', text: 'text-gray-500', border: 'border-gray-200', pulse: false };
-        if (count <= 3) return { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', pulse: false };
-        if (count <= 7) return { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300', pulse: false };
-        return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', pulse: true };
-    };
 
     // Fetch conversations
+    // Fetch conversations
+    // ✅ Fetch active conversations (for counts and active queues)
     const fetchConversations = async () => {
         try {
-            const response = await api.get('/api/conversations');
-            setConversations(response.data.conversations || []);
+            // Fetch only active conversations to reduce load
+            const response = await api.get('/api/conversations?status=ACTIVE&limit=100');
+            const convs = response.data.conversations || [];
+
+            // 🔍 DEBUG: Verificar unreadCount
+            console.log('🔍 Conversas recebidas:', convs.map((c: any) => ({
+                phone: c.phone,
+                unreadCount: c.unreadCount,
+                lastMessage: c.lastMessage?.substring(0, 20)
+            })));
+
+            setConversations(convs);
         } catch (error) {
             console.error('Error fetching conversations:', error);
             toast.error('Erro ao carregar conversas');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // ✅ Fetch closed conversations with pagination and search
+    const fetchClosedConversations = async (page = 1, append = false, search = '') => {
+        try {
+            setLoadingClosed(true);
+            const response = await api.get(`/api/conversations?status=CLOSED&page=${page}&limit=20&search=${search}`);
+
+            const newConversations = response.data.conversations || [];
+            const total = response.data.pagination.total;
+
+            setClosedTotal(total);
+            setHasMoreClosed(newConversations.length === 20); // If less than limit, no more pages
+
+            if (append) {
+                setClosedConversations(prev => [...prev, ...newConversations]);
+            } else {
+                setClosedConversations(newConversations);
+            }
+        } catch (error) {
+            console.error('Error fetching closed conversations:', error);
+            toast.error('Erro ao carregar conversas encerradas');
+        } finally {
+            setLoadingClosed(false);
         }
     };
 
@@ -187,6 +214,14 @@ const ConversationsPage: React.FC = () => {
                 setSelectedConversation(null);
                 setMessages([]);
             }
+
+            // ✅ Marcar conversa como lida
+            try {
+                await api.post(`/api/conversations/${conversationPhone}/mark-read`);
+                console.log('📖 Conversa marcada como lida:', conversationPhone);
+            } catch (error) {
+                console.warn('⚠️ Erro ao marcar como lida:', error);
+            }
         } catch (error: any) {
             console.error('Error fetching messages:', error);
             console.error('Error details:', {
@@ -195,7 +230,7 @@ const ConversationsPage: React.FC = () => {
                 data: error?.response?.data,
                 message: error?.message
             });
-            
+
             // Check if it's a 404 or auth error
             if (error?.response?.status === 404) {
                 toast.error('Conversa não encontrada');
@@ -216,42 +251,45 @@ const ConversationsPage: React.FC = () => {
         }
     };
 
-    // Filter conversations by queue
+    // ✅ Filter conversations by queue FIRST, then apply search
     const filteredConversations = conversations.filter(c => {
-        // Search filter
-        if (searchQuery && c.patient) {
-            const search = searchQuery.toLowerCase();
-            const matchesSearch =
-                c.patient.name?.toLowerCase().includes(search) ||
-                c.phone.includes(search);
-            if (!matchesSearch) return false;
+        // 1️⃣ Filtrar por fila ativa PRIMEIRO
+        if (activeQueue === 'MINHAS_CONVERSAS') {
+            if (c.assignedToId !== user?.id) return false;
+        } else if (activeQueue === 'ENCERRADOS') {
+            if (c.status !== 'FECHADA') return false;
+        } else if (activeQueue === 'PRINCIPAL') {
+            if (c.status !== 'PRINCIPAL' || c.assignedToId !== null) return false;
+        } else if (activeQueue === 'EM_ATENDIMENTO') {
+            if (c.status !== 'EM_ATENDIMENTO' || c.assignedToId === null) return false;
+        } else if (activeQueue === 'BOT_QUEUE') {
+            if (c.status !== 'BOT_QUEUE') return false;
+        } else {
+            // Default case if activeQueue is not recognized, or no specific filter applies
+            return false;
         }
 
-        // Queue filter
-        switch (activeQueue) {
-            case 'BOT_QUEUE':
-                return c.status === 'BOT_QUEUE';
-            case 'PRINCIPAL':
-                return c.status === 'PRINCIPAL' && !c.assignedToId;
-            case 'EM_ATENDIMENTO':
-                return c.status === 'EM_ATENDIMENTO' && c.assignedToId !== null;
-            case 'MINHAS_CONVERSAS':
-                return c.assignedToId === user?.id;
-            case 'ENCERRADOS':
-                return c.status === 'FECHADA';
-            default:
-                return false;
+        // 2️⃣ DEPOIS aplicar busca (somente na fila filtrada)
+        if (searchQuery && c.patient) {
+            const search = searchQuery.toLowerCase();
+            return (
+                c.patient.name?.toLowerCase().includes(search) ||
+                c.phone.includes(search)
+            );
         }
+
+        return true;
     });
 
     const getQueueCount = (queue: QueueType) => {
+        if (queue === ('ENCERRADOS' as QueueType)) return closedTotal; // ✅ Usar total do backend
         return conversations.filter(c => {
             switch (queue) {
                 case 'BOT_QUEUE': return c.status === 'BOT_QUEUE';
                 case 'PRINCIPAL': return c.status === 'PRINCIPAL' && !c.assignedToId;
                 case 'EM_ATENDIMENTO': return c.status === 'EM_ATENDIMENTO' && c.assignedToId !== null;
                 case 'MINHAS_CONVERSAS': return c.assignedToId === user?.id;
-                case 'ENCERRADOS': return c.status === 'FECHADA';
+                case 'ENCERRADOS' as QueueType: return c.status === 'FECHADA';
                 default: return false;
             }
         }).length;
@@ -357,7 +395,7 @@ const ConversationsPage: React.FC = () => {
         try {
             const response = await api.get(`/api/conversations/${conversationId}/session`);
             const session = response.data.session;
-            
+
             // Ensure timeRemainingFormatted is calculated if missing
             if (!session.timeRemainingFormatted && session.timeRemaining) {
                 const formatMs = (ms: number): string => {
@@ -367,7 +405,7 @@ const ConversationsPage: React.FC = () => {
                 };
                 session.timeRemainingFormatted = formatMs(session.timeRemaining);
             }
-            
+
             setSessionInfo(session);
         } catch (error) {
             console.error('Error fetching session info:', error);
@@ -398,7 +436,7 @@ const ConversationsPage: React.FC = () => {
                 timestamp: now,
                 status: 'PENDING', // Será atualizado quando receber confirmação
             };
-            
+
             setMessages(prev => [...prev, optimisticMessage]);
             setNewMessage(''); // Limpar campo imediatamente
         }
@@ -436,17 +474,17 @@ const ConversationsPage: React.FC = () => {
             // O evento Socket.IO vai substituir a mensagem temporária pela real
         } catch (error) {
             console.error('Error sending message:', error);
-            
+
             // Remover mensagem otimista em caso de erro
             if (messageText) {
                 setMessages(prev => prev.filter(m => m.id !== tempId));
             }
-            
+
             // Restaurar texto no campo
             if (messageText) {
                 setNewMessage(messageText);
             }
-            
+
             toast.error('Erro ao enviar mensagem');
         } finally {
             setSending(false);
@@ -533,6 +571,45 @@ const ConversationsPage: React.FC = () => {
         return () => clearInterval(interval);
     }, []);
 
+    // ✅ Carregar atalhos ao montar componente
+    useEffect(() => {
+        const fetchQuickReplies = async () => {
+            try {
+                const response = await api.get('/api/quick-replies');
+                setQuickReplies(response.data);
+            } catch (error) {
+                console.error('Erro ao carregar atalhos:', error);
+            }
+        };
+        fetchQuickReplies();
+    }, []);
+
+    // ✅ Detectar autocomplete ao digitar /
+    useEffect(() => {
+        if (newMessage.startsWith('/')) {
+            const query = newMessage.slice(1).toLowerCase();
+            const matches = quickReplies.filter(qr =>
+                qr.shortcut.toLowerCase().includes(query)
+            );
+            setFilteredReplies(matches);
+            setShowAutocomplete(matches.length > 0);
+            setSelectedAutocompleteIndex(0);
+        } else {
+            setShowAutocomplete(false);
+        }
+    }, [newMessage, quickReplies]);
+
+    // ✅ Carregar conversas encerradas quando mudar para a aba ou buscar
+    useEffect(() => {
+        if (activeQueue === 'ENCERRADOS') {
+            setClosedPage(1);
+            const timeoutId = setTimeout(() => {
+                fetchClosedConversations(1, false, searchQuery);
+            }, 500);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [activeQueue, searchQuery]);
+
 
     useEffect(() => {
         if (phone) {
@@ -587,12 +664,12 @@ const ConversationsPage: React.FC = () => {
                 payloadConvId: payload?.conversation?.id,
                 messageConvId: payload?.message?.conversationId
             });
-            
+
             const phoneMatch = payload?.phone === selectedConversation.phone;
             const idMatch = payload?.message?.conversationId === selectedConversation.id || payload?.conversation?.id === selectedConversation.id;
-            
+
             console.log(`🔍 Match check: phoneMatch=${phoneMatch}, idMatch=${idMatch}`);
-            
+
             if (phoneMatch || idMatch) {
                 console.log(`✅ Match found! Processing message...`);
                 const messageData = payload?.message || payload;
@@ -620,7 +697,7 @@ const ConversationsPage: React.FC = () => {
                         status: messageData.direction === 'SENT' ? 'SENT' : 'PENDING',
                         metadata: messageData.metadata
                     };
-                    
+
                     // Verificar se a mensagem já existe ou substituir mensagem otimista
                     setMessages(prev => {
                         // Verificar duplicatas PRIMEIRO
@@ -628,7 +705,7 @@ const ConversationsPage: React.FC = () => {
                             console.log('⚠️ Mensagem já existe, ignorando duplicata:', newMessage.id);
                             return prev; // Não fazer nada se já existe
                         }
-                        
+
                         // Remover mensagens temporárias (optimistic updates) com mesmo texto
                         const filtered = prev.filter(m => {
                             // Se for mensagem temporária e o texto corresponder, remover
@@ -638,12 +715,12 @@ const ConversationsPage: React.FC = () => {
                             }
                             return true;
                         });
-                        
+
                         // Adicionar a mensagem real
                         console.log('✅ Adicionando mensagem ao estado:', newMessage.id);
                         return [...filtered, newMessage];
                     });
-                    
+
                     // Atualizar última mensagem da conversa
                     if (payload?.conversation) {
                         setSelectedConversation(prev => prev ? {
@@ -684,7 +761,7 @@ const ConversationsPage: React.FC = () => {
                 onNewMessage(payload);
             }
         };
-        
+
         const onNewMessageReceived = (payload: any) => {
             // Processar todas as mensagens recebidas via new_message
             // O filtro por conversa é feito dentro de onNewMessage
@@ -696,6 +773,88 @@ const ConversationsPage: React.FC = () => {
         socket.on('conversation_updated', onConversationUpdated);
         socket.on('queue_updated', onConversationUpdated);
 
+        // ✅ NOVOS EVENTOS: Escutar eventos do backend
+        socket.on('message:new', (data) => {
+            console.log('📨 [message:new] Evento recebido:', data);
+
+            // Processar como nova mensagem
+            onNewMessage({ message: data.message, conversation: { id: data.conversationId } });
+
+            // ✅ Se for mensagem do PACIENTE e não estamos na conversa, incrementar unreadCount
+            if (data.message?.direction === 'RECEIVED' && selectedConversation?.id !== data.conversationId) {
+                console.log('📊 Incrementando unreadCount para conversa:', data.conversationId);
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId) {
+                        return {
+                            ...c,
+                            unreadCount: (c.unreadCount ?? 0) + 1,
+                            lastMessage: data.message.messageText,
+                            lastTimestamp: data.message.timestamp
+                        };
+                    }
+                    return c;
+                }));
+            }
+        });
+
+        socket.on('conversation:updated', (data) => {
+            console.log('🔄 [conversation:updated] Evento recebido:', data);
+
+            // Atualizar conversa localmente se tivermos os dados
+            if (data.conversationId) {
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId) {
+                        console.log('📊 Atualizando conversa local:', c.id, 'unreadCount:', data.unreadCount);
+                        return {
+                            ...c,
+                            // Atualizar campos que vêm no evento
+                            ...(data.status && { status: data.status }),
+                            ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
+                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
+                        };
+                    }
+                    return c;
+                }));
+
+                // Também atualizar closedConversations se for conversa encerrada
+                if (data.status === 'FECHADA') {
+                    setClosedConversations(prev => prev.map(c => {
+                        if (c.id === data.conversationId) {
+                            return {
+                                ...c,
+                                ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
+                                ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                                ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
+                            };
+                        }
+                        return c;
+                    }));
+                }
+            }
+
+            // Fallback: refetch se não tivermos conversationId
+            if (!data.conversationId) {
+                fetchConversations();
+            }
+        });
+
+        // Listener para timeout de inatividade
+        socket.on('conversation:timeout', (data) => {
+            console.log('⏰ [conversation:timeout] Conversa retornou por inatividade:', data);
+
+            // Remover conversa da lista atual
+            setConversations(prev => prev.filter(c => c.id !== data.conversationId));
+
+            // Mostrar notificação
+            toast.warning(`⏰ Conversa retornou para fila por inatividade`, {
+                description: `Agente: ${data.previousAgent || 'Desconhecido'}`
+            });
+
+            // Atualizar lista de conversas
+            fetchConversations();
+        });
+
         return () => {
             socket.emit('leave_conversation', selectedConversation.phone);
             socket.emit('leave_conversation', selectedConversation.id);
@@ -703,8 +862,26 @@ const ConversationsPage: React.FC = () => {
             socket.off('new_message', onNewMessageReceived);
             socket.off('conversation_updated', onConversationUpdated);
             socket.off('queue_updated', onConversationUpdated);
+            socket.off('message:new');
+            socket.off('conversation:updated');
         };
     }, [socket, selectedConversation]);
+
+    // ✅ Intersection Observer for Lazy Loading
+    const observer = useRef<IntersectionObserver>();
+    const lastConversationElementRef = useCallback((node: HTMLDivElement) => {
+        if (loadingClosed) return;
+        if (observer.current) observer.current.disconnect();
+        observer.current = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting && hasMoreClosed && activeQueue === 'ENCERRADOS') {
+                setClosedPage(prev => prev + 1);
+                fetchClosedConversations(closedPage + 1, true, searchQuery);
+            }
+        });
+        if (node) observer.current.observe(node);
+    }, [loadingClosed, hasMoreClosed, activeQueue, closedPage, searchQuery]);
+
+    const conversationsToRender = activeQueue === 'ENCERRADOS' ? closedConversations : filteredConversations;
 
     return (
         <div className="flex h-screen bg-gray-50 overflow-x-hidden">
@@ -717,20 +894,15 @@ const ConversationsPage: React.FC = () => {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 3px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
-        }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
+          background-color: rgba(156, 163, 175, 0.5);
+          border-radius: 20px;
         }
         .animate-pulse-slow {
-          animation: pulse-slow 2s ease-in-out infinite;
+            animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .7; }
         }
       `}</style>
 
@@ -741,63 +913,55 @@ const ConversationsPage: React.FC = () => {
                     <h1 className="text-xl font-bold text-gray-900 mb-3">Conversas</h1>
                     <input
                         type="text"
-                        placeholder="Buscar por nome, telefone..."
+                        placeholder="Buscar conversas..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </div>
 
-                {/* Queue Tabs */}
-                <div className="px-3 py-2 border-b border-gray-200">
-                    <div className="flex gap-1.5">
-                        {(Object.keys(queueConfigs) as QueueType[]).map((queue) => {
-                            const config = queueConfigs[queue];
-                            const Icon = config.icon;
-                            const count = getQueueCount(queue);
-                            const isActive = activeQueue === queue;
-
-                            // Special styling for Principal queue
-                            let queueStyle = { bg: config.bgClass, text: config.textClass, border: config.borderClass, pulse: false };
-                            if (queue === 'PRINCIPAL') {
-                                queueStyle = getPrincipalQueueStyle(count);
-                            }
-
-                            return (
-                                <button
-                                    key={queue}
-                                    onClick={() => setActiveQueue(queue)}
-                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${isActive
-                                        ? `${queueStyle.bg} ${queueStyle.text} border ${queueStyle.border} ${queueStyle.pulse ? 'animate-pulse-slow' : ''}`
-                                        : 'text-gray-600 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                                    {isActive && <span className="whitespace-nowrap">{config.label}</span>}
-                                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-semibold ${isActive ? 'bg-white/60' : 'bg-gray-200'
-                                        } ${queue === 'PRINCIPAL' && count > 0 ? 'bg-red-500 text-white animate-pulse' : ''}`}>
-                                        {count}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
+                {/* Queue Tabs - REFATORADO ✅ */}
+                <QueueTabs
+                    activeQueue={activeQueue}
+                    onQueueChange={setActiveQueue}
+                    counts={{
+                        BOT_QUEUE: getQueueCount('BOT_QUEUE'),
+                        PRINCIPAL: getQueueCount('PRINCIPAL'),
+                        EM_ATENDIMENTO: getQueueCount('EM_ATENDIMENTO'),
+                        MINHAS_CONVERSAS: getQueueCount('MINHAS_CONVERSAS'),
+                        ENCERRADOS: closedTotal
+                    }}
+                />
 
                 {/* Conversations List */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    {filteredConversations.length === 0 ? (
+                    {conversationsToRender.length === 0 ? (
                         <div className="p-8 text-center text-gray-500 text-sm">
-                            Nenhuma conversa nesta fila
+                            {loadingClosed ? 'Carregando...' : 'Nenhuma conversa nesta fila'}
                         </div>
                     ) : (
-                        filteredConversations.map((conversation) => {
+                        conversationsToRender.map((conversation, index) => {
                             const isSelected = selectedConversation?.id === conversation.id;
+
+                            // ✅ Ref para último elemento (lazy loading)
+                            const isLast = index === conversationsToRender.length - 1;
+                            const ref = (isLast && activeQueue === 'ENCERRADOS') ? lastConversationElementRef : null;
                             const canAssume = (conversation.status === 'BOT_QUEUE' || conversation.status === 'PRINCIPAL') && !conversation.assignedToId;
+
+                            // 🔍 DEBUG: Log do badge
+                            const shouldShowBadge = (conversation.unreadCount ?? 0) > 0;
+                            if (shouldShowBadge) {
+                                console.log('🔴 Badge deve aparecer:', {
+                                    phone: conversation.phone,
+                                    unreadCount: conversation.unreadCount,
+                                    isSelected
+                                });
+                            }
 
                             return (
                                 <div
                                     key={conversation.id}
+                                    ref={ref}
                                     onClick={() => navigate(`/conversations/${conversation.phone}`)}
                                     className={`mx-2 my-2 p-3 border rounded-lg cursor-pointer transition-all ${isSelected
                                         ? 'bg-blue-100 border-blue-300 border-l-4 border-l-blue-600 shadow-md'
@@ -817,26 +981,34 @@ const ConversationsPage: React.FC = () => {
                                                     {/* Channel icon */}
                                                     {conversation.channel === 'whatsapp' && (
                                                         <svg className="w-3.5 h-3.5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                                                         </svg>
                                                     )}
                                                     {conversation.channel === 'instagram' && (
                                                         <svg className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                                                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
                                                         </svg>
                                                     )}
                                                     {conversation.channel === 'messenger' && (
                                                         <svg className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                            <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
+                                                            <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z" />
                                                         </svg>
                                                     )}
                                                 </div>
                                                 <p className="text-xs text-gray-500">{conversation.phone}</p>
                                             </div>
                                         </div>
-                                        <span className="text-xs text-gray-400">
-                                            {conversation.lastTimestamp ? formatTimestamp(conversation.lastTimestamp) : ''}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-400">
+                                                {conversation.lastTimestamp ? formatTimestamp(conversation.lastTimestamp) : ''}
+                                            </span>
+                                            {/* ✅ Badge de mensagens não lidas */}
+                                            {(conversation.unreadCount ?? 0) > 0 && (
+                                                <span className="inline-flex items-center justify-center w-5 h-5 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-semibold rounded-full shadow-sm">
+                                                    {conversation.unreadCount! > 9 ? '9+' : conversation.unreadCount}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {conversation.lastMessage && (
@@ -855,17 +1027,17 @@ const ConversationsPage: React.FC = () => {
                                             {/* Channel icon */}
                                             {conversation.channel === 'whatsapp' && (
                                                 <svg className="w-3 h-3 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                                                 </svg>
                                             )}
                                             {conversation.channel === 'instagram' && (
                                                 <svg className="w-3 h-3 text-pink-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                                                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
                                                 </svg>
                                             )}
                                             {conversation.channel === 'messenger' && (
                                                 <svg className="w-3 h-3 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
+                                                    <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z" />
                                                 </svg>
                                             )}
                                             {conversation.status === 'PRINCIPAL' ? 'Fila Principal' :
@@ -910,179 +1082,16 @@ const ConversationsPage: React.FC = () => {
             {/* Main Chat Area */}
             {selectedConversation ? (
                 <div className="flex-1 flex flex-col">
-                    {/* Chat Header */}
-                    <div className="bg-white border-b border-gray-200 px-6 py-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                                    <User className="h-5 w-5 text-gray-500" />
-                                </div>
-                                <div>
-                                    <h2 className="font-semibold text-gray-900">
-                                        {selectedConversation.patient?.name || selectedConversation.phone}
-                                    </h2>
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-sm text-gray-500">{selectedConversation.phone}</p>
-                                        {/* Channel icon - small and next to phone */}
-                                        {selectedConversation.channel === 'whatsapp' && (
-                                            <svg className="w-3.5 h-3.5 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                            </svg>
-                                        )}
-                                        {selectedConversation.channel === 'instagram' && (
-                                            <svg className="w-3.5 h-3.5 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                                            </svg>
-                                        )}
-                                        {selectedConversation.channel === 'messenger' && (
-                                            <svg className="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
-                                            </svg>
-                                        )}
-                                        {/* Session status tag */}
-                                        {sessionInfo && (() => {
-                                            const formatTime = (ms: number | null | undefined): string => {
-                                                if (!ms || ms <= 0) return 'Expirada';
-                                                const hours = Math.floor(ms / (1000 * 60 * 60));
-                                                const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
-                                                return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-                                            };
-                                            
-                                            const timeFormatted = sessionInfo.timeRemainingFormatted || 
-                                                (sessionInfo.timeRemaining ? formatTime(sessionInfo.timeRemaining) : null);
-                                            
-                                            if (!timeFormatted && !sessionInfo.canSendMessage) {
-                                                return (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                                                        ⏰ Expirada
-                                                    </span>
-                                                );
-                                            }
-                                            
-                                            if (!timeFormatted) {
-                                                return null; // Não mostrar se não houver tempo
-                                            }
-                                            
-                                            const isWarning = sessionInfo.status === 'warning' || 
-                                                (sessionInfo.timeRemaining && sessionInfo.timeRemaining < 3600000);
-                                            const isExpired = sessionInfo.status === 'expired' || !sessionInfo.canSendMessage;
-                                            
-                                            return (
-                                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                                                    isExpired ? 'bg-red-50 text-red-700 border border-red-200' :
-                                                    isWarning ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' :
-                                                    'bg-green-50 text-green-700 border border-green-200'
-                                                }`}>
-                                                    {isExpired ? '⏰ Expirada' :
-                                                     isWarning ? `⚠️ ${timeFormatted}` :
-                                                     `✅ ${timeFormatted}`}
-                                                </span>
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${canWrite
-                                    ? 'bg-green-100 text-green-700'
-                                    : selectedConversation.assignedTo && selectedConversation.assignedTo.id !== user?.id
-                                        ? 'bg-purple-100 text-purple-700'
-                                        : selectedConversation.status === 'BOT_QUEUE'
-                                            ? 'bg-blue-100 text-blue-700'
-                                            : selectedConversation.status === 'PRINCIPAL'
-                                                ? 'bg-yellow-100 text-yellow-700'
-                                                : 'bg-gray-100 text-gray-700'
-                                    }`}>
-                                    {/* Channel icon */}
-                                    {selectedConversation.channel === 'whatsapp' && (
-                                        <svg className="w-3.5 h-3.5 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                                        </svg>
-                                    )}
-                                    {selectedConversation.channel === 'instagram' && (
-                                        <svg className="w-3.5 h-3.5 text-pink-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                                        </svg>
-                                    )}
-                                    {selectedConversation.channel === 'messenger' && (
-                                        <svg className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z"/>
-                                        </svg>
-                                    )}
-                                    {canWrite ? 'Com você' :
-                                        selectedConversation.assignedTo && selectedConversation.assignedTo.id !== user?.id
-                                            ? selectedConversation.assignedTo.name
-                                            : selectedConversation.status === 'BOT_QUEUE' ? 'Bot'
-                                                : selectedConversation.status === 'PRINCIPAL' ? 'Aguardando'
-                                                    : selectedConversation.status === 'FECHADA' ? 'Encerrado' : 'Aguardando'}
-                                </span>
-
-                                {/* History button - always clickable */}
-                                <button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        console.log('🔍 History button clicked!', {
-                                            hasConversation: !!selectedConversation,
-                                            conversationId: selectedConversation?.id,
-                                            phone: selectedConversation?.phone,
-                                            patientId: selectedConversation?.patient?.id,
-                                            currentModalState: showHistoryModal
-                                        });
-                                        if (selectedConversation) {
-                                            setShowHistoryModal(true);
-                                            console.log('✅ Modal state set to true');
-                                        } else {
-                                            console.log('❌ No conversation selected');
-                                        }
-                                    }}
-                                    disabled={!selectedConversation}
-                                    className={`p-2 rounded-lg transition-colors group ${
-                                        selectedConversation 
-                                            ? 'hover:bg-purple-50 cursor-pointer' 
-                                            : 'opacity-50 cursor-not-allowed'
-                                    }`}
-                                    title={selectedConversation ? "Ver histórico de conversas" : "Selecione uma conversa"}
-                                >
-                                    <History className={`h-5 w-5 ${
-                                        selectedConversation 
-                                            ? 'text-purple-600 group-hover:text-purple-700' 
-                                            : 'text-gray-400'
-                                    }`} />
-                                </button>
-
-                                {/* Transfer button - only if user has write access */}
-                                {canWrite && (
-                                    <button
-                                        onClick={() => setShowTransferModal(true)}
-                                        className="p-2 hover:bg-blue-50 rounded-lg transition-colors group"
-                                        title="Transferir conversa"
-                                    >
-                                        <Users className="h-5 w-5 text-blue-600 group-hover:text-blue-700" />
-                                    </button>
-                                )}
-
-                                {/* Close button - only if user has write access */}
-                                {canWrite && (
-                                    <button
-                                        onClick={() => setShowCloseModal(true)}
-                                        className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
-                                        title="Encerrar conversa"
-                                    >
-                                        <Archive className="h-5 w-5 text-red-600 group-hover:text-red-700" />
-                                    </button>
-                                )}
-
-                                {/* More options */}
-                                <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                                    <MoreVertical className="h-5 w-5 text-gray-600" />
-                                </button>
-
-                            </div>
-                        </div>
-                    </div>
+                    {/* Chat Header - REFATORADO ✅ */}
+                    <ConversationHeader
+                        conversation={selectedConversation}
+                        sessionInfo={sessionInfo}
+                        canWrite={canWrite}
+                        userId={user?.id}
+                        onShowHistory={() => setShowHistoryModal(true)}
+                        onShowTransfer={() => setShowTransferModal(true)}
+                        onShowClose={() => setShowCloseModal(true)}
+                    />
 
                     {/* Messages */}
                     <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-3 bg-gray-50 custom-scrollbar">
@@ -1092,6 +1101,19 @@ const ConversationsPage: React.FC = () => {
                             const isAgent = message.sender === 'AGENT';
                             const isBot = message.sender === 'BOT';
                             const isPatient = message.sender === 'PATIENT';
+
+                            // Renderizar mensagem do sistema
+                            if (message.messageType === 'SYSTEM') {
+                                return (
+                                    <SystemMessage
+                                        key={message.id}
+                                        type={message.systemMessageType || 'INFO'}
+                                        content={message.messageText}
+                                        metadata={message.systemMetadata}
+                                        timestamp={message.timestamp}
+                                    />
+                                );
+                            }
 
                             return (
                                 <div key={message.id} className={`flex ${isFromBot ? 'justify-end' : 'justify-start'}`}>
@@ -1198,6 +1220,23 @@ const ConversationsPage: React.FC = () => {
                             </div>
                         )}
 
+                        {/* ✅ Aviso de Sessão Expirada */}
+                        {isSessionExpired && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+                                <div className="flex items-center gap-2">
+                                    <AlertCircle className="h-5 w-5 text-red-600" />
+                                    <div>
+                                        <p className="text-sm font-medium text-red-700">
+                                            Sessão Expirada (24h sem atividade)
+                                        </p>
+                                        <p className="text-xs text-red-600 mt-1">
+                                            Esta conversa foi encerrada. Se o paciente enviar uma nova mensagem, será criada uma nova conversa.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-2">
                             <input
                                 ref={fileInputRef}
@@ -1234,6 +1273,17 @@ const ConversationsPage: React.FC = () => {
                                 <Paperclip className="h-5 w-5 text-gray-600" />
                             </button>
 
+                            {/* ✅ Botão de Atalhos Rápidos */}
+                            <button
+                                type="button"
+                                onClick={() => setShowQuickRepliesModal(true)}
+                                disabled={!canWrite}
+                                className="p-2 hover:bg-purple-50 rounded-lg transition-colors disabled:opacity-50 group"
+                                title={!canWrite ? 'Assuma a conversa para usar atalhos' : 'Atalhos rápidos'}
+                            >
+                                <Zap className="h-5 w-5 text-purple-600 group-hover:text-purple-700" />
+                            </button>
+
                             <div className="flex-1 relative">
                                 {isRecording ? (
                                     <div className="flex items-center justify-center py-2">
@@ -1252,8 +1302,40 @@ const ConversationsPage: React.FC = () => {
                                             // Atualização direta sem debounce para resposta instantânea
                                             setNewMessage(e.target.value);
                                         }}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey && (canSend || isRecording)) {
+                                        onKeyDown={(e) => {
+                                            // ✅ Autocomplete com Tab ou Enter
+                                            if (showAutocomplete && filteredReplies.length > 0) {
+                                                if (e.key === 'Tab' || e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const selected = filteredReplies[selectedAutocompleteIndex];
+                                                    setNewMessage(selected.text);
+                                                    setShowAutocomplete(false);
+                                                    return;
+                                                }
+                                                // Navegar com setas
+                                                if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    setSelectedAutocompleteIndex(prev =>
+                                                        prev < filteredReplies.length - 1 ? prev + 1 : 0
+                                                    );
+                                                    return;
+                                                }
+                                                if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    setSelectedAutocompleteIndex(prev =>
+                                                        prev > 0 ? prev - 1 : filteredReplies.length - 1
+                                                    );
+                                                    return;
+                                                }
+                                                // Escape para fechar
+                                                if (e.key === 'Escape') {
+                                                    setShowAutocomplete(false);
+                                                    return;
+                                                }
+                                            }
+
+                                            // Enter para enviar (se não estiver no autocomplete)
+                                            if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete && (canSend || isRecording)) {
                                                 if (isRecording) {
                                                     setAutoSendAfterStop(true);
                                                     stopRecording();
@@ -1266,6 +1348,39 @@ const ConversationsPage: React.FC = () => {
                                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         disabled={!canWrite}
                                     />
+                                )}
+
+                                {/* ✅ Dropdown de Autocomplete */}
+                                {showAutocomplete && filteredReplies.length > 0 && (
+                                    <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
+                                        {filteredReplies.map((reply, index) => (
+                                            <div
+                                                key={reply.id}
+                                                onClick={() => {
+                                                    setNewMessage(reply.text);
+                                                    setShowAutocomplete(false);
+                                                }}
+                                                className={`px-4 py-2 cursor-pointer transition-colors ${index === selectedAutocompleteIndex
+                                                    ? 'bg-blue-50 border-l-2 border-blue-500'
+                                                    : 'hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <code className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-mono">
+                                                        /{reply.shortcut}
+                                                    </code>
+                                                    <span className="text-sm text-gray-700 truncate">
+                                                        {reply.text.substring(0, 50)}{reply.text.length > 50 ? '...' : ''}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
+                                            <p className="text-xs text-gray-500">
+                                                ↑↓ Navegar • Tab/Enter Selecionar • Esc Fechar
+                                            </p>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
 
@@ -1446,6 +1561,16 @@ const ConversationsPage: React.FC = () => {
                     />
                 </>
             )}
+            {/* ✅ Modal de Atalhos Rápidos */}
+            <QuickRepliesModal
+                isOpen={showQuickRepliesModal}
+                onClose={() => setShowQuickRepliesModal(false)}
+                onSelect={(text) => {
+                    setNewMessage(text);
+                    setShowQuickRepliesModal(false);
+                }}
+            />
+
         </div>
 
     );

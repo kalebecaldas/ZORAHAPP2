@@ -1,6 +1,7 @@
 import { createServer } from 'http'
 import app from './app.js'
 import { initRealtime } from './realtime.js'
+import { startInactivityMonitor, stopInactivityMonitor } from './services/inactivityMonitor.js'
 
 /**
  * start server with port
@@ -22,7 +23,7 @@ const httpServer = createServer(app as any)
 
 // Inicializar realtime com tratamento de erro
 try {
-initRealtime(httpServer)
+  initRealtime(httpServer)
   console.log('✅ Socket.IO inicializado')
 } catch (error) {
   console.error('⚠️ Erro ao inicializar Socket.IO:', error)
@@ -51,12 +52,19 @@ httpServer.on('error', (error: NodeJS.ErrnoException) => {
   }
 })
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, async () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`)
   console.log(`📱 WhatsApp Webhook: http://localhost:${PORT}/webhook`)
   console.log(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`)
   console.log(`💚 Health Check: http://localhost:${PORT}/api/health`)
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`)
+
+  // Iniciar monitor de inatividade
+  try {
+    await startInactivityMonitor()
+  } catch (error) {
+    console.error('⚠️ Erro ao iniciar monitor de inatividade:', error)
+  }
 })
 
 /**
@@ -64,6 +72,7 @@ httpServer.listen(PORT, () => {
  */
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM recebido')
+  stopInactivityMonitor()
   httpServer.close(() => {
     console.log('✅ Servidor fechado')
     process.exit(0)
@@ -72,6 +81,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT recebido')
+  stopInactivityMonitor()
   httpServer.close(() => {
     console.log('✅ Servidor fechado')
     process.exit(0)

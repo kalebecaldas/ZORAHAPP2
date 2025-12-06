@@ -1,9 +1,7 @@
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../prisma/client.js';
 import path from 'path';
-
-const prisma = new PrismaClient();
 
 // Log levels
 export enum LogLevel {

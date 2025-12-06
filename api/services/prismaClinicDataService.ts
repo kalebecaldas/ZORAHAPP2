@@ -1,26 +1,52 @@
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import prisma from '../prisma/client.js'
 
 export const prismaClinicDataService = {
     async getProcedures() {
         const procedures = await prisma.procedure.findMany({
             include: {
-                offeredBy: true
+                offeredBy: true,
+                clinicProcedures: {
+                    include: {
+                        clinic: true
+                    }
+                }
             }
         })
 
         // Map to format expected by bot
-        return procedures.map(p => ({
-            id: p.code,
-            name: p.name,
-            description: p.description,
-            basePrice: p.basePrice,
-            duration: p.duration,
-            requiresEvaluation: p.requiresEvaluation,
-            categories: typeof p.categories === 'string' ? JSON.parse(p.categories) : p.categories,
-            insuranceAccepted: [] // Populated dynamically if needed
-        }))
+        return procedures.map(p => {
+            // Buscar pacotes de todas as clínicas que oferecem este procedimento
+            const packages: any[] = []
+
+            for (const cp of p.clinicProcedures) {
+                if (cp.hasPackage && cp.packageInfo) {
+                    try {
+                        const packageData = typeof cp.packageInfo === 'string'
+                            ? JSON.parse(cp.packageInfo)
+                            : cp.packageInfo
+
+                        if (Array.isArray(packageData)) {
+                            packages.push(...packageData)
+                        }
+                    } catch (e) {
+                        // Silenciosamente ignora packageInfo em formato inválido (texto puro)
+                        // Isso acontece quando o usuário digitou texto ao invés de JSON
+                    }
+                }
+            }
+
+            return {
+                id: p.code,
+                name: p.name,
+                description: p.description,
+                basePrice: p.basePrice,
+                duration: p.duration,
+                requiresEvaluation: p.requiresEvaluation,
+                categories: typeof p.categories === 'string' ? JSON.parse(p.categories) : p.categories,
+                packages: packages.length > 0 ? packages : undefined, // ✅ NOVO: Incluir pacotes
+                insuranceAccepted: [] // Populated dynamically if needed
+            }
+        })
     },
 
     async getInsuranceCompanies() {
@@ -121,5 +147,209 @@ export const prismaClinicDataService = {
     async getClinicIdByCode(code: string): Promise<string> {
         const clinic = await prisma.clinic.findUnique({ where: { code } })
         return clinic ? clinic.id : ''
+    },
+
+    /**
+     * Busca clínica por nome (case-insensitive)
+     */
+    async getClinicByName(name: string) {
+        const clinic = await prisma.clinic.findFirst({
+            where: {
+                OR: [
+                    { name: { contains: name, mode: 'insensitive' } },
+                    { displayName: { contains: name, mode: 'insensitive' } }
+                ],
+                isActive: true
+            }
+        })
+
+        if (!clinic) return null
+
+        return {
+            id: clinic.code,
+            name: clinic.name,
+            displayName: clinic.displayName,
+            address: clinic.address,
+            neighborhood: clinic.neighborhood,
+            city: clinic.city,
+            state: clinic.state,
+            phone: clinic.phone,
+            email: clinic.email,
+            openingHours: typeof clinic.openingHours === 'string' ? JSON.parse(clinic.openingHours) : clinic.openingHours,
+            coordinates: typeof clinic.coordinates === 'string' ? JSON.parse(clinic.coordinates) : clinic.coordinates,
+            specialties: typeof clinic.specialties === 'string' ? JSON.parse(clinic.specialties) : clinic.specialties,
+            parkingAvailable: clinic.parkingAvailable,
+            accessibility: typeof clinic.accessibility === 'string' ? JSON.parse(clinic.accessibility) : clinic.accessibility
+        }
+    },
+
+    /**
+     * Busca todos os procedimentos de uma clínica com um convênio específico
+     */
+    async getProceduresByClinicAndInsurance(clinicCode: string, insuranceCode: string) {
+        const clinicId = await this.getClinicIdByCode(clinicCode)
+        if (!clinicId) return []
+
+        const procedures = await prisma.clinicInsuranceProcedure.findMany({
+            where: {
+                clinicId,
+                insuranceCode,
+                isActive: true
+            },
+            include: {
+                procedure: true,
+                insurance: true
+            }
+        })
+
+        return procedures.map(p => ({
+            id: p.procedure.code,
+            name: p.procedure.name,
+            description: p.procedure.description,
+            price: p.price,
+            hasPackage: p.hasPackage,
+            packageInfo: p.packageInfo,
+            duration: p.procedure.duration,
+            requiresEvaluation: p.procedure.requiresEvaluation
+        }))
+    },
+
+    /**
+     * Busca informações de pacote para um procedimento específico
+     */
+    async getPackageInfo(clinicCode: string, procedureCode: string, insuranceCode: string = 'PARTICULAR') {
+        const clinicId = await this.getClinicIdByCode(clinicCode)
+        if (!clinicId) return null
+
+        const packageData = await prisma.clinicInsuranceProcedure.findFirst({
+            where: {
+                clinicId,
+                procedureCode,
+                insuranceCode,
+                hasPackage: true,
+                isActive: true
+            },
+            include: {
+                procedure: true
+            }
+        })
+
+        if (!packageData) return null
+
+        return {
+            procedureName: packageData.procedure.name,
+            regularPrice: packageData.price,
+            hasPackage: packageData.hasPackage,
+            packageInfo: packageData.packageInfo,
+            packageDescription: packageData.packageInfo
+        }
+    },
+
+    /**
+     * Busca todas as clínicas ativas
+     */
+    async getAllClinics() {
+        const clinics = await prisma.clinic.findMany({
+            where: { isActive: true },
+            orderBy: { name: 'asc' }
+        })
+
+        return clinics.map(c => ({
+            id: c.code,
+            name: c.name,
+            displayName: c.displayName,
+            address: c.address,
+            neighborhood: c.neighborhood,
+            city: c.city,
+            state: c.state,
+            phone: c.phone,
+            email: c.email,
+            openingHours: typeof c.openingHours === 'string' ? JSON.parse(c.openingHours) : c.openingHours,
+            coordinates: typeof c.coordinates === 'string' ? JSON.parse(c.coordinates) : c.coordinates,
+            specialties: typeof c.specialties === 'string' ? JSON.parse(c.specialties) : c.specialties
+        }))
+    },
+
+    /**
+     * Busca todos os procedimentos oferecidos por uma clínica
+     */
+    async getProceduresByClinic(clinicCode: string) {
+        const clinicId = await this.getClinicIdByCode(clinicCode)
+        if (!clinicId) return []
+
+        // Buscar procedimentos com preços particulares
+        const procedures = await prisma.clinicInsuranceProcedure.findMany({
+            where: {
+                clinicId,
+                insuranceCode: 'PARTICULAR',
+                isActive: true
+            },
+            include: {
+                procedure: true
+            },
+            orderBy: {
+                procedure: { name: 'asc' }
+            }
+        })
+
+        return procedures.map(p => {
+            // Parse packageInfo se existir
+            let packages = undefined
+            if (p.hasPackage && p.packageInfo) {
+                try {
+                    const packageData = typeof p.packageInfo === 'string'
+                        ? JSON.parse(p.packageInfo)
+                        : p.packageInfo
+
+                    if (Array.isArray(packageData)) {
+                        packages = packageData
+                    }
+                } catch (e) {
+                    // Silenciosamente ignora packageInfo em formato inválido
+                }
+            }
+
+            return {
+                id: p.procedure.code,
+                name: p.procedure.name,
+                description: p.procedure.description,
+                price: p.price,
+                hasPackage: p.hasPackage,
+                packages, // ✅ Retornar array de pacotes parseado
+                duration: p.procedure.duration,
+                requiresEvaluation: p.procedure.requiresEvaluation,
+                importantInfo: p.procedure.importantInfo
+            }
+        })
+    },
+
+    /**
+     * Busca convênios aceitos por uma clínica
+     */
+    async getInsurancesByClinic(clinicCode: string) {
+        const clinicId = await this.getClinicIdByCode(clinicCode)
+        if (!clinicId) return []
+
+        // Buscar convênios únicos que têm procedimentos nesta clínica
+        const insurances = await prisma.clinicInsuranceProcedure.findMany({
+            where: {
+                clinicId,
+                isActive: true
+            },
+            include: {
+                insurance: true
+            },
+            distinct: ['insuranceCode']
+        })
+
+        return insurances
+            .filter(i => !i.insurance.isParticular) // Excluir "PARTICULAR"
+            .map(i => ({
+                id: i.insurance.code,
+                name: i.insurance.name,
+                displayName: i.insurance.displayName,
+                discount: i.insurance.discount,
+                discountPercentage: i.insurance.discountPercentage
+            }))
     }
 }

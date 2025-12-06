@@ -13,7 +13,7 @@ const usersAuth = process.env.NODE_ENV === 'development'
 // Conditionally apply authorization: in development, skip role checks for listing
 const usersAuthorizeList = process.env.NODE_ENV === 'development'
   ? ((req: Request, res: Response, next: any) => next())
-  : authorize(['MASTER','ADMIN'])
+  : authorize(['MASTER', 'ADMIN'])
 
 const router = Router()
 
@@ -69,7 +69,7 @@ router.get('/', usersAuth, usersAuthorizeList, async (req: Request, res: Respons
 })
 
 // Get user by ID
-router.get('/:id', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Request, res: Response): Promise<void> => {
+router.get('/:id', authMiddleware, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
 
@@ -103,7 +103,7 @@ router.get('/:id', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Re
 })
 
 // Create user: ADMIN can criar ADMIN/SUPERVISOR/ATENDENTE; MASTER pode criar qualquer nível
-router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Request, res: Response): Promise<void> => {
+router.post('/', authMiddleware, authorize(['MASTER', 'ADMIN']), async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, name, password, role = 'ATENDENTE' } = req.body
 
@@ -134,7 +134,7 @@ router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Requ
     }
 
     // Validate role
-    const validRoles = ['MASTER','ADMIN','SUPERVISOR','ATENDENTE']
+    const validRoles = ['MASTER', 'ADMIN', 'SUPERVISOR', 'ATENDENTE']
     if (!validRoles.includes(role)) {
       console.warn('❌ Role inválido:', role)
       res.status(400).json({ error: 'Função inválida' })
@@ -223,7 +223,7 @@ router.post('/', authMiddleware, authorize(['MASTER','ADMIN']), async (req: Requ
 })
 
 // Update user (ADMIN/MASTER); não permite modificar MASTER a menos que ator seja MASTER
-router.put('/:id', authMiddleware, authorize(['MASTER','ADMIN']), forbidModifyingMaster(), async (req: Request, res: Response): Promise<void> => {
+router.put('/:id', authMiddleware, authorize(['MASTER', 'ADMIN']), forbidModifyingMaster(), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
     const { name, role, password } = req.body
@@ -239,7 +239,7 @@ router.put('/:id', authMiddleware, authorize(['MASTER','ADMIN']), forbidModifyin
     }
 
     // Validate role if provided
-    if (role && !['MASTER','ADMIN','SUPERVISOR','ATENDENTE'].includes(role)) {
+    if (role && !['MASTER', 'ADMIN', 'SUPERVISOR', 'ATENDENTE'].includes(role)) {
       res.status(400).json({ error: 'Função inválida' })
       return
     }
@@ -281,7 +281,7 @@ router.put('/:id', authMiddleware, authorize(['MASTER','ADMIN']), forbidModifyin
 })
 
 // Delete user (ADMIN/MASTER); não permite deletar MASTER a menos que ator seja MASTER
-router.delete('/:id', authMiddleware, authorize(['MASTER','ADMIN']), forbidModifyingMaster(), async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id', authMiddleware, authorize(['MASTER', 'ADMIN']), forbidModifyingMaster(), async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params
 

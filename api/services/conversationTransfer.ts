@@ -1,8 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../prisma/client.js';
 import { transferLogger } from '../utils/logger';
-
-const prisma = new PrismaClient();
 
 interface TransferRequest {
   conversationId: string;

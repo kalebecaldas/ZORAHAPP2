@@ -130,7 +130,7 @@ export function TestChat() {
     const messageText = text.trim()
     setText('') // Clear immediately
     setSimulating(true)
-    
+
     // Adicionar log da mensagem enviada
     setTestLog(prev => [...prev, `📤 Enviando: "${messageText}"`])
 
@@ -167,18 +167,18 @@ export function TestChat() {
     try {
       const response = await api.post('/webhook', payload)
       toast.success('Mensagem simulada enviada')
-      
+
       // Capturar logs do workflow se disponíveis
       if (response.data?.workflowLogs) {
         response.data.workflowLogs.forEach((log: string) => {
           setTestLog(prev => [...prev, `🔄 ${log}`])
         })
       }
-      
+
       // Aguardar um pouco para o processamento
       await new Promise(resolve => setTimeout(resolve, 500))
       await loadConversation()
-      
+
       // Verificar última mensagem do bot para adicionar log
       const msgs = await getConversation()
       const lastBotMsg = [...msgs].reverse().find(m => m.from === 'BOT' && m.direction === 'SENT')
@@ -361,8 +361,8 @@ export function TestChat() {
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Mensagem</label>
-              <textarea 
-                value={text} 
+              <textarea
+                value={text}
                 onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -372,9 +372,9 @@ export function TestChat() {
                     }
                   }
                 }}
-                className="w-full border rounded-md px-3 py-2" 
-                rows={3} 
-                placeholder="Digite a mensagem (Enter para enviar)" 
+                className="w-full border rounded-md px-3 py-2"
+                rows={3}
+                placeholder="Digite a mensagem (Enter para enviar)"
               />
             </div>
 

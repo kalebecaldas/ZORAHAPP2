@@ -232,13 +232,13 @@ router.get('/available-slots', async (req, res) => {
     }
     let baseHours = openingMap[dayOfWeek];
     let effectiveHours = baseHours;
-    const { availabilityStore } = await import('./clinic.js');
-    const availabilityMap = availabilityStore || {};
-    const availabilityKey = `${String((location as any).code || locationId)}:${String((procedure as any).code || procedureId)}`;
-    const procAvailability = availabilityMap[availabilityKey] || {};
-    if (procAvailability && procAvailability[dayOfWeek]) {
-      effectiveHours = procAvailability[dayOfWeek];
-    }
+    // Availability overrides removed - using opening hours directly from clinic data
+    // const availabilityMap = {};
+    // const availabilityKey = `${String((location as any).code || locationId)}:${String((procedure as any).code || procedureId)}`;
+    // const procAvailability = availabilityMap[availabilityKey] || {};
+    // if (procAvailability && procAvailability[dayOfWeek]) {
+    //   effectiveHours = procAvailability[dayOfWeek];
+    // }
     if (!effectiveHours || effectiveHours === 'Fechado') {
       return res.json({
         success: true,

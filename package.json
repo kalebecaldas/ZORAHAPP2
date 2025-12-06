@@ -15,7 +15,8 @@
     "up": "npm run kill-ports && npm run dev",
     "start": "npm run deploy:prod",
     "start:prod": "npm run deploy:prod",
-    "deploy:prod": "npx prisma db push && npx tsx scripts/import_workflow_definitivo.ts && npx tsx api/server.ts",
+    "deploy:prod": "npx prisma db push && npx tsx scripts/seed_complete.ts && npx tsx scripts/import_workflow_definitivo.ts && npx tsx api/server.ts",
+    "seed:complete": "tsx scripts/seed_complete.ts",
     "db:cleanup-clinic": "npx prisma db execute --schema=prisma/schema.prisma --file=prisma/cleanup_clinic.sql",
     "start:dev": "./scripts/start-server.sh",
     "start:win": "scripts\\start-server.bat",
@@ -34,8 +35,14 @@
     "delete:workflows:except": "tsx scripts/delete_all_workflows_except.ts",
     "delete:workflows:railway": "tsx scripts/delete_workflows_railway.ts",
     "fix:conversation-channels": "tsx scripts/fix_conversation_channels.ts",
+    "check:active-workflow": "tsx scripts/check_active_workflow.ts",
+    "list:workflows": "tsx scripts/list_all_workflows.ts",
+    "export:workflow-28": "tsx scripts/export_active_workflow_28.ts",
+    "check:default-workflow": "tsx scripts/check_default_workflow.ts",
     "test:gpt-models": "tsx scripts/test_gpt_models.ts",
-    "seed:procedure-template": "tsx scripts/seed_procedure_template.ts"
+    "seed:procedure-template": "tsx scripts/seed_procedure_template.ts",
+    "seed:ai-config": "tsx scripts/seed_ai_configuration.ts",
+    "verify:ai-config": "tsx scripts/verify_ai_config.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
@@ -61,6 +68,7 @@
     "lucide-react": "^0.511.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
+    "node-cache": "^5.1.2",
     "openai": "^6.9.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

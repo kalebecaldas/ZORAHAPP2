@@ -33,6 +33,10 @@ import aliasRoutes from './routes/aliases.js'
 import testRoutes from './routes/test.js'
 import appointmentsRoutes from './routes/appointments.js'
 import templatesRoutes from './routes/templates.js'
+import aiConfigRoutes from './routes/aiConfig.js'
+import quickRepliesRoutes from './routes/quick-replies.js' // ✅ NOVO
+import analyticsRoutes from './routes/analytics.js' // ✅ Analytics avançado
+import systemSettingsRoutes from './routes/systemSettings.js' // ✅ Configurações do sistema
 import { authMiddleware } from './utils/auth.js'
 
 // for esm mode
@@ -159,6 +163,10 @@ app.use('/api/permissions', authenticatedLimiter, permissionsRoutes)
 app.use('/api/clinic', authenticatedLimiter, clinicRoutes)
 app.use('/api/messages', authenticatedLimiter, messagesRoutes)
 app.use('/api/templates', authenticatedLimiter, templatesRoutes)
+app.use('/api/ai-config', authenticatedLimiter, aiConfigRoutes)
+app.use('/api/quick-replies', authenticatedLimiter, quickRepliesRoutes) // ✅ NOVO
+app.use('/api/analytics', authenticatedLimiter, analyticsRoutes) // ✅ Analytics avançado
+app.use('/api/settings/system', authenticatedLimiter, systemSettingsRoutes) // ✅ Configurações do sistema
 app.use('/api', authenticatedLimiter, aliasRoutes)
 
 // Debug auth endpoint
@@ -198,11 +206,11 @@ app.use(express.static(clientDistPath, {
 // IMPORTANT: This must be LAST and must NOT match static file routes
 app.get('*', (req: Request, res: Response, next: NextFunction) => {
   // Skip API routes, webhook routes, and static file routes
-  if (req.path.startsWith('/api') || 
-      req.path.startsWith('/webhook') || 
-      req.path.startsWith('/logos/') ||
-      req.path.startsWith('/favicon') ||
-      req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/i)) {
+  if (req.path.startsWith('/api') ||
+    req.path.startsWith('/webhook') ||
+    req.path.startsWith('/logos/') ||
+    req.path.startsWith('/favicon') ||
+    req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/i)) {
     return next()
   }
   res.sendFile(path.join(clientDistPath, 'index.html'))

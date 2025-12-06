@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Send, 
-  Phone, 
-  User, 
-  Calendar, 
-  MapPin, 
-  FileText, 
+import {
+  Send,
+  Phone,
+  User,
+  Calendar,
+  MapPin,
+  FileText,
   Paperclip,
   Clock,
   AlertCircle,
@@ -269,7 +269,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
                 <ArrowLeft className="h-5 w-5" />
               </button>
             )}
-            
+
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                 <Phone className="h-5 w-5 text-white" />
@@ -286,7 +286,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               {conversation.priority === 'URGENT' && <AlertCircle className="h-3 w-3 mr-1" />}
               {conversation.priority}
             </span>
-            
+
             {conversation.assignedTo === currentUserId && (
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
                 <UserCheck className="h-3 w-3 mr-1" />
@@ -310,21 +310,21 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               <span>{conversation.patient.insuranceCompany}</span>
             </div>
           )}
-          
+
           {conversation.preferredLocation && (
             <div className="flex items-center space-x-1 text-sm text-gray-600">
               <MapPin className="h-4 w-4" />
               <span>{conversation.preferredLocation}</span>
             </div>
           )}
-          
+
           {conversation.preferredDate && (
             <div className="flex items-center space-x-1 text-sm text-gray-600">
               <Calendar className="h-4 w-4" />
               <span>{new Date(conversation.preferredDate).toLocaleDateString('pt-BR')}</span>
             </div>
           )}
-          
+
           <button
             onClick={() => setShowPatientInfo(!showPatientInfo)}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium"
@@ -343,28 +343,28 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               <p className="text-sm text-gray-900">{conversation.patient.name}</p>
               <p className="text-xs text-gray-600">{conversation.patient.phone}</p>
             </div>
-            
+
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Email</h4>
               <p className="text-sm text-gray-900">{conversation.patient.email || 'Não informado'}</p>
             </div>
-            
+
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Convênio</h4>
               <p className="text-sm text-gray-900">{conversation.patient.insuranceCompany || 'Não informado'}</p>
             </div>
-            
+
             <div>
               <h4 className="text-sm font-medium text-gray-700 mb-1">Sessão</h4>
               <p className="text-xs text-gray-600">
-                {conversation.sessionExpiry 
+                {conversation.sessionExpiry
                   ? `Expira em ${new Date(conversation.sessionExpiry).toLocaleDateString('pt-BR')}`
                   : 'Sem expiração'
                 }
               </p>
             </div>
           </div>
-          
+
           {conversation.scheduledProcedures && conversation.scheduledProcedures.length > 0 && (
             <div className="mt-3 pt-3 border-t border-gray-200">
               <h4 className="text-sm font-medium text-gray-700 mb-1">Procedimentos Agendados</h4>
@@ -386,26 +386,23 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
           {conversation.messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${
-                message.sender === 'USER' ? 'justify-end' : 'justify-start'
-              }`}
+              className={`flex ${message.sender === 'USER' ? 'justify-end' : 'justify-start'
+                }`}
             >
               <div
-                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                  message.sender === 'USER'
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${message.sender === 'USER'
                     ? 'bg-blue-600 text-white'
                     : message.sender === 'BOT'
-                    ? 'bg-gray-200 text-gray-900'
-                    : 'bg-green-100 text-green-900'
-                }`}
+                      ? 'bg-gray-200 text-gray-900'
+                      : 'bg-green-100 text-green-900'
+                  }`}
               >
                 <p className="text-sm">{message.messageText}</p>
-                <p className={`text-xs mt-1 ${
-                  message.sender === 'USER' ? 'text-blue-100' : 'text-gray-500'
-                }`}>
+                <p className={`text-xs mt-1 ${message.sender === 'USER' ? 'text-blue-100' : 'text-gray-500'
+                  }`}>
                   {formatTime(message.createdAt)}
                 </p>
-                
+
                 {message.attachments && message.attachments.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {message.attachments.map((attachment) => (
@@ -463,7 +460,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
             >
               <Paperclip className="h-5 w-5" />
             </button>
-            
+
             <button
               onClick={() => setShowNotes(!showNotes)}
               className="flex items-center space-x-1 text-sm text-gray-600 hover:text-gray-800"
@@ -471,7 +468,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               <FileText className="h-4 w-4" />
               <span>Notas</span>
             </button>
-            
+
             <button
               onClick={transferConversation}
               className="flex items-center space-x-1 text-sm text-orange-600 hover:text-orange-700"
@@ -479,7 +476,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               <MessageSquare className="h-4 w-4" />
               <span>Transferir</span>
             </button>
-            
+
             <button
               onClick={closeConversation}
               className="flex items-center space-x-1 text-sm text-red-600 hover:text-red-700"
@@ -488,7 +485,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               <span>Fechar</span>
             </button>
           </div>
-          
+
           <div className="flex items-center space-x-3">
             <input
               ref={fileInputRef}
@@ -500,7 +497,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
                 console.log('File selected:', e.target.files?.[0]);
               }}
             />
-            
+
             <input
               type="text"
               value={message}
@@ -509,7 +506,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               placeholder="Digite sua mensagem..."
               className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            
+
             <button
               onClick={sendMessage}
               disabled={!message.trim() || sending}
@@ -529,8 +526,8 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
               {conversation.assignedTo && conversation.assignedTo !== currentUserId
                 ? `Esta conversa está atribuída a outro atendente`
                 : conversation.status === 'CLOSED'
-                ? 'Esta conversa está fechada'
-                : 'Você precisa assumir esta conversa para responder'
+                  ? 'Esta conversa está fechada'
+                  : 'Você precisa assumir esta conversa para responder'
               }
             </p>
           </div>
