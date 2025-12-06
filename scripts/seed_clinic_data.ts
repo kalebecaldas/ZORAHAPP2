@@ -97,14 +97,14 @@ async function seedClinicData() {
             { code: 'FISIO_ORTOPEDICA', name: 'Fisioterapia Ortopédica', description: 'Tratamento de lesões musculoesqueléticas, pós-operatório e reabilitação ortopédica', basePrice: 90.00, duration: 50, requiresEvaluation: false },
             { code: 'FISIO_NEUROLOGICA', name: 'Fisioterapia Neurológica', description: 'Reabilitação de pacientes com doenças neurológicas (AVC, Parkinson, etc)', basePrice: 100.00, duration: 50, requiresEvaluation: false },
             { code: 'FISIO_RESPIRATORIA', name: 'Fisioterapia Respiratória', description: 'Tratamento de doenças respiratórias e reabilitação pulmonar', basePrice: 100.00, duration: 50, requiresEvaluation: false },
-            { code: 'FISIO_PELVICA', name: 'Fisioterapia Pélvica', description: 'Tratamento de disfunções do assoalho pélvico', basePrice: 220.00, duration: 50, requiresEvaluation: true },
-            { code: 'ACUPUNTURA', name: 'Acupuntura', description: 'Tratamento através de técnicas de medicina chinesa', basePrice: 180.00, duration: 50, requiresEvaluation: true },
-            { code: 'RPG', name: 'RPG', description: 'Reeducação Postural Global', basePrice: 120.00, duration: 50, requiresEvaluation: false },
-            { code: 'PILATES', name: 'Pilates', description: 'Exercícios de fortalecimento e alongamento', basePrice: 70.00, duration: 50, requiresEvaluation: false },
+            { code: 'FISIO_PELVICA', name: 'Fisioterapia Pélvica', description: 'Tratamento de disfunções do assoalho pélvico', basePrice: 220.00, duration: 60, requiresEvaluation: true },
+            { code: 'ACUPUNTURA', name: 'Acupuntura', description: 'Tratamento através de técnicas de medicina chinesa', basePrice: 180.00, duration: 45, requiresEvaluation: true },
+            { code: 'RPG', name: 'RPG', description: 'Reeducação Postural Global', basePrice: 120.00, duration: 60, requiresEvaluation: false },
+            { code: 'PILATES', name: 'Pilates', description: 'Exercícios de fortalecimento e alongamento', basePrice: 70.00, duration: 30, requiresEvaluation: false },
             { code: 'QUIROPRAXIA', name: 'Quiropraxia', description: 'Ajustes quiropráticos para alívio de dores', basePrice: 120.00, duration: 40, requiresEvaluation: false },
             { code: 'CONSULTA_ORTOPEDISTA', name: 'Consulta com Ortopedista', description: 'Consulta médica ortopédica', basePrice: 400.00, duration: 30, requiresEvaluation: false },
             { code: 'AVALIACAO_FISIO_PELVICA', name: 'Avaliação Fisioterapia Pélvica', description: 'Avaliação inicial para fisioterapia pélvica', basePrice: 250.00, duration: 60, requiresEvaluation: false },
-            { code: 'AVALIACAO_ACUPUNTURA', name: 'Avaliação Acupuntura', description: 'Avaliação inicial para acupuntura', basePrice: 200.00, duration: 60, requiresEvaluation: false },
+            { code: 'AVALIACAO_ACUPUNTURA', name: 'Avaliação Acupuntura', description: 'Avaliação inicial para acupuntura', basePrice: 200.00, duration: 45, requiresEvaluation: false },
             { code: 'INFILTRACAO', name: 'Infiltração de ponto gatilho e Agulhamento a seco', description: 'Técnica para alívio de dores musculares', basePrice: 150.00, duration: 40, requiresEvaluation: false },
             { code: 'ESTIMULACAO_ELETRICA', name: 'Estimulação Elétrica Transcutânea', description: 'TENS para alívio de dores', basePrice: 80.00, duration: 30, requiresEvaluation: false },
             { code: 'TERAPIA_ONDAS_CHOQUE', name: 'Terapias por Ondas de Choque', description: 'Tratamento com ondas de choque para lesões', basePrice: 200.00, duration: 30, requiresEvaluation: false },
@@ -115,7 +115,15 @@ async function seedClinicData() {
         for (const proc of procedures) {
             await prisma.procedure.upsert({
                 where: { code: proc.code },
-                update: {},
+                update: {
+                    name: proc.name,
+                    description: proc.description,
+                    importantInfo: proc.requiresEvaluation ? 'Requer avaliação prévia' : null,
+                    basePrice: proc.basePrice,
+                    requiresEvaluation: proc.requiresEvaluation,
+                    duration: proc.duration,
+                    categories: ['Fisioterapia']
+                },
                 create: {
                     code: proc.code,
                     name: proc.name,
@@ -292,7 +300,31 @@ async function seedClinicData() {
             { procedureCode: 'FISIO_PELVICA', price: 220.00, hasPackage: true, packageInfo: JSON.stringify([{ name: 'Pacote 10 sessões', sessions: 10, price: 2000.00, description: 'Avaliação GRÁTIS' }]) },
             { procedureCode: 'ACUPUNTURA', price: 180.00, hasPackage: true, packageInfo: JSON.stringify([{ name: 'Pacote 10 sessões', sessions: 10, price: 1600.00, description: 'Avaliação GRÁTIS' }]) },
             { procedureCode: 'RPG', price: 120.00, hasPackage: true, packageInfo: JSON.stringify([{ name: 'Pacote 10 sessões', sessions: 10, price: 1000.00, description: 'Avaliação GRÁTIS' }]) },
-            { procedureCode: 'PILATES', price: 70.00, hasPackage: false },
+            { 
+                procedureCode: 'PILATES', 
+                price: 70.00, 
+                hasPackage: true, 
+                packageInfo: JSON.stringify([
+                    {
+                        name: 'Pilates 2x na semana',
+                        price: 39,
+                        sessions: 8,
+                        description: '2 sessões por semana'
+                    },
+                    {
+                        name: 'Pilates 3x na semana',
+                        price: 56,
+                        sessions: 12,
+                        description: '3 sessões por semana'
+                    },
+                    {
+                        name: 'Pilates sessão avulsa',
+                        price: 70,
+                        sessions: 1,
+                        description: 'Sessão avulsa'
+                    }
+                ])
+            },
             { procedureCode: 'QUIROPRAXIA', price: 120.00, hasPackage: false },
             { procedureCode: 'CONSULTA_ORTOPEDISTA', price: 400.00, hasPackage: false },
             { procedureCode: 'AVALIACAO_FISIO_PELVICA', price: 250.00, hasPackage: false },
