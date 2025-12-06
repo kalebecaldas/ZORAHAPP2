@@ -42,6 +42,7 @@
     "test:gpt-models": "tsx scripts/test_gpt_models.ts",
     "seed:procedure-template": "tsx scripts/seed_procedure_template.ts",
     "seed:ai-config": "tsx scripts/seed_ai_configuration.ts",
+    "seed:clinic-data": "tsx scripts/seed_clinic_data.ts",
     "verify:ai-config": "tsx scripts/verify_ai_config.ts"
   },
   "dependencies": {
