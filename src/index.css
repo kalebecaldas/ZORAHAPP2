@@ -1,9 +1,9 @@
+/* 🎨 ZoraH Design System */
+@import './styles/design-system.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* 🎨 ZoraH Design System */
-@import './styles/design-system.css';
 
 :root {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
