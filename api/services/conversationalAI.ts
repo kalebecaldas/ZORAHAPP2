@@ -114,21 +114,51 @@ export class ConversationalAIService {
             })
             console.log(`📝 MENSAGEM ATUAL DO USUÁRIO: "${message}"`)
 
-            // 5. Gerar resposta com GPT-4o (JSON mode)
-            const completion = await this.openai.chat.completions.create({
-                model: this.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    ...historyMessages,
-                    { role: 'user', content: message }
-                ],
-                temperature: 0.7,
-                max_tokens: 1000,
-                response_format: { type: 'json_object' }
-            })
+            // 5. Gerar resposta com GPT-4o (JSON mode) - COM RETRY para rate limits
+            console.log(`🔑 Usando modelo: ${this.model}`)
+            console.log(`🔑 API Key configurada: ${this.openai.apiKey ? 'SIM (oculta)' : 'NÃO'}`)
+            console.log(`📤 Enviando requisição para OpenAI...`)
+            
+            // ✅ Retry logic para rate limits (429)
+            let completion
+            let retries = 0
+            const maxRetries = 3
+            const baseDelay = 2000 // 2 segundos
+            
+            while (retries <= maxRetries) {
+                try {
+                    completion = await this.openai.chat.completions.create({
+                        model: this.model,
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            ...historyMessages,
+                            { role: 'user', content: message }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 1000,
+                        response_format: { type: 'json_object' }
+                    })
+                    break // Sucesso, sair do loop
+                } catch (error: any) {
+                    // Se for rate limit (429) e ainda temos tentativas, fazer retry
+                    if (error.status === 429 && retries < maxRetries) {
+                        const delay = baseDelay * Math.pow(2, retries) // Backoff exponencial: 2s, 4s, 8s
+                        console.log(`⏳ Rate limit detectado (429). Aguardando ${delay}ms antes de tentar novamente... (tentativa ${retries + 1}/${maxRetries})`)
+                        await new Promise(resolve => setTimeout(resolve, delay))
+                        retries++
+                        continue
+                    }
+                    // Se não for rate limit ou esgotamos tentativas, lançar erro
+                    throw error
+                }
+            }
 
+            console.log(`📥 Resposta recebida da OpenAI`)
             const responseText = completion.choices[0]?.message?.content || '{}'
+            console.log(`📝 Resposta bruta (primeiros 200 caracteres): ${responseText.substring(0, 200)}`)
+            
             const response = JSON.parse(responseText)
+            console.log(`✅ JSON parseado com sucesso`)
 
             console.log(`✅ Resposta gerada:`, {
                 intent: response.intent,
@@ -152,6 +182,46 @@ export class ConversationalAIService {
 
         } catch (error) {
             console.error('❌ Erro ao gerar resposta conversacional:', error)
+            console.error('❌ Erro detalhado:', error instanceof Error ? error.message : String(error))
+            console.error('❌ Stack trace:', error instanceof Error ? error.stack : 'N/A')
+            
+            // Verificar tipo específico de erro
+            if (error && typeof error === 'object' && 'status' in error) {
+                const status = (error as any).status
+                const code = (error as any).code
+                
+                if (status === 429 || code === 'insufficient_quota' || code === 'rate_limit_exceeded') {
+                    console.error('❌ ERRO DE RATE LIMIT/QUOTA:')
+                    console.error('   → Status: 429')
+                    console.error('   → Código:', code)
+                    console.error('   → Possíveis causas:')
+                    console.error('      1. Limite de requisições por minuto/hora atingido')
+                    console.error('      2. Quota do projeto/organização esgotada')
+                    console.error('      3. Chave da API não associada ao projeto com créditos')
+                    console.error('   → Soluções:')
+                    console.error('      • Aguarde alguns minutos e tente novamente')
+                    console.error('      • Verifique billing: https://platform.openai.com/settings/organization/billing')
+                    console.error('      • Use modelo mais barato (gpt-3.5-turbo) temporariamente')
+                } else if (status === 401) {
+                    console.error('❌ ERRO DE AUTENTICAÇÃO: Chave da API OpenAI inválida ou não configurada')
+                    console.error('❌ Verifique a variável de ambiente OPENAI_API_KEY')
+                } else if (status === 404) {
+                    console.error('❌ ERRO DE MODELO: Modelo GPT não encontrado ou indisponível')
+                    console.error(`   → Modelo tentado: ${this.model}`)
+                    console.error('   → Tente usar: gpt-3.5-turbo ou gpt-4-turbo')
+                }
+            } else if (error instanceof Error) {
+                if (error.message?.includes('API key') || error.message?.includes('authentication') || error.message?.includes('401')) {
+                    console.error('❌ ERRO DE AUTENTICAÇÃO: Chave da API OpenAI inválida ou não configurada')
+                    console.error('❌ Verifique a variável de ambiente OPENAI_API_KEY')
+                }
+                if (error.message?.includes('rate limit') || error.message?.includes('429')) {
+                    console.error('❌ ERRO DE RATE LIMIT: Limite de requisições atingido')
+                }
+                if (error.message?.includes('model') || error.message?.includes('404')) {
+                    console.error('❌ ERRO DE MODELO: Modelo GPT não encontrado ou indisponível')
+                }
+            }
 
             // Fallback response
             return {

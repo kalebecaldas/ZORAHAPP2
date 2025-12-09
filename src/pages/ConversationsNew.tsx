@@ -9,7 +9,7 @@ import {
 import { api } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import ConversationHistoryModal from '../components/ConversationHistoryModal';
 import QuickRepliesModal from '../components/QuickRepliesModal';
 import '../styles/minimal-theme.css'; // ✅ Importar CSS do badge
@@ -1565,7 +1565,7 @@ const ConversationsPage: React.FC = () => {
     const conversationsToRender = activeQueue === 'ENCERRADOS' ? closedConversations : filteredConversations;
 
     return (
-        <div className="flex h-screen bg-gray-50 overflow-x-hidden">
+        <div className="flex h-screen bg-gray-50 overflow-x-hidden conversations-page">
             {/* Custom Scrollbar Styles */}
             <style>{`
         .custom-scrollbar::-webkit-scrollbar {
@@ -1584,6 +1584,19 @@ const ConversationsPage: React.FC = () => {
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: .7; }
+        }
+        /* ✅ Estilos customizados para notificações na área do chat */
+        [data-sonner-toaster] {
+            position: fixed !important;
+            top: 80px !important;
+            right: 20px !important;
+            z-index: 9999 !important;
+        }
+        /* Aplicar apenas quando estiver na página de conversas */
+        .conversations-page [data-sonner-toaster] {
+            position: absolute !important;
+            top: 80px !important;
+            right: 20px !important;
         }
       `}</style>
 
@@ -1638,8 +1651,9 @@ const ConversationsPage: React.FC = () => {
                                 return hoursSinceLastActivity >= 24;
                             })();
 
-                            // ✅ Badge de mensagens não lidas: mostrar sempre, exceto se estiver EM_ATENDIMENTO
-                            const shouldShowUnreadBadge = (conversation.unreadCount ?? 0) > 0 && conversation.status !== 'EM_ATENDIMENTO';
+                            // ✅ Badge de mensagens não lidas: mostrar sempre que houver mensagens não lidas
+                            // EXCETO se a conversa estiver selecionada no momento (já está sendo visualizada)
+                            const shouldShowUnreadBadge = (conversation.unreadCount ?? 0) > 0 && selectedConversation?.id !== conversation.id;
 
                             return (
                                 <div
@@ -1774,7 +1788,13 @@ const ConversationsPage: React.FC = () => {
 
             {/* Main Chat Area */}
             {selectedConversation ? (
-                <div className="flex-1 flex flex-col">
+                <div className="flex-1 flex flex-col relative">
+                    {/* ✅ Toaster específico para notificações na área do chat (topo direito) */}
+                    <Toaster 
+                        position="top-right"
+                        richColors
+                        closeButton
+                    />
                     {/* Chat Header - REFATORADO ✅ */}
                     <ConversationHeader
                         conversation={selectedConversation}
