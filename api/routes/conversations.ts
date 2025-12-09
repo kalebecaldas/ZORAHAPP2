@@ -148,13 +148,16 @@ router.get('/', listAuth, async (req: Request, res: Response): Promise<void> => 
     if (status) {
       const s = String(status)
       if (s === 'ACTIVE') {
-        where.status = { in: ['BOT_QUEUE', 'PRINCIPAL', 'EM_ATENDIMENTO'] }
+        where.status = { in: ['BOT_QUEUE', 'PRINCIPAL', 'AGUARDANDO', 'EM_ATENDIMENTO'] }
       } else if (s === 'BOT') {
         where.status = { in: ['BOT_QUEUE'] }
       } else if (s === 'HUMAN') {
-        where.status = { in: ['PRINCIPAL', 'EM_ATENDIMENTO'] }
+        where.status = { in: ['PRINCIPAL', 'AGUARDANDO', 'EM_ATENDIMENTO'] }
       } else if (s === 'CLOSED') {
         where.status = 'FECHADA'
+      } else if (s === 'PRINCIPAL') {
+        // ✅ Tratar 'AGUARDANDO' como equivalente a 'PRINCIPAL'
+        where.status = { in: ['PRINCIPAL', 'AGUARDANDO'] }
       } else {
         where.status = s
       }
@@ -1800,7 +1803,7 @@ export async function processIncomingMessage(
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: {
-              status: decision.queue === 'AGUARDANDO' ? 'AGUARDANDO' : 'PRINCIPAL',
+              status: 'PRINCIPAL', // ✅ Sempre usar 'PRINCIPAL' (padronizar, 'AGUARDANDO' é equivalente)
               assignedToId: null,
               workflowContext: {
                 ...conversation.workflowContext as any,
@@ -1992,7 +1995,7 @@ export async function processIncomingMessage(
             // ✅ NOVO: Evento de conversa atualizada
             realtime.io.emit('conversation:updated', {
               conversationId: conversation.id,
-              status: decision.queue === 'AGUARDANDO' ? 'AGUARDANDO' : 'PRINCIPAL'
+              status: 'PRINCIPAL' // ✅ Sempre usar 'PRINCIPAL' (padronizar, 'AGUARDANDO' é equivalente)
             })
 
             // Evento legado (manter compatibilidade)

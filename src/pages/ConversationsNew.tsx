@@ -315,7 +315,10 @@ const ConversationsPage: React.FC = () => {
         } else if (activeQueue === 'ENCERRADOS') {
             if (c.status !== 'FECHADA') return false;
         } else if (activeQueue === 'PRINCIPAL') {
-            if (c.status !== 'PRINCIPAL' || c.assignedToId !== null) return false;
+            // ✅ Incluir tanto 'PRINCIPAL' quanto 'AGUARDANDO' (são equivalentes)
+            // ✅ Incluir tanto 'PRINCIPAL' quanto 'AGUARDANDO' (são equivalentes)
+            const isPrincipal = c.status === 'PRINCIPAL' || (c.status as string) === 'AGUARDANDO';
+            if (!isPrincipal || c.assignedToId !== null) return false;
         } else if (activeQueue === 'EM_ATENDIMENTO') {
             if (c.status !== 'EM_ATENDIMENTO' || c.assignedToId === null) return false;
         } else if (activeQueue === 'BOT_QUEUE') {
@@ -342,7 +345,10 @@ const ConversationsPage: React.FC = () => {
         return conversations.filter(c => {
             switch (queue) {
                 case 'BOT_QUEUE': return c.status === 'BOT_QUEUE';
-                case 'PRINCIPAL': return c.status === 'PRINCIPAL' && !c.assignedToId;
+                case 'PRINCIPAL': 
+                    // ✅ Incluir tanto 'PRINCIPAL' quanto 'AGUARDANDO' (são equivalentes)
+                    const isPrincipal = c.status === 'PRINCIPAL' || (c.status as string) === 'AGUARDANDO';
+                    return isPrincipal && !c.assignedToId;
                 case 'EM_ATENDIMENTO': return c.status === 'EM_ATENDIMENTO' && c.assignedToId !== null;
                 case 'MINHAS_CONVERSAS': return c.assignedToId === user?.id;
                 case 'ENCERRADOS' as QueueType: return c.status === 'FECHADA';

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 export interface Conversation {
     id: string;
     phone: string;
-    status: 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'FECHADA';
+    status: 'BOT_QUEUE' | 'PRINCIPAL' | 'AGUARDANDO' | 'EM_ATENDIMENTO' | 'FECHADA';
     assignedToId?: string;
     assignedTo?: { id: string; name: string };
     patient?: {
