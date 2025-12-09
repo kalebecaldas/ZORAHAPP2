@@ -184,8 +184,24 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
           }
         }
         
-        // Caso contrário, usar apenas as mensagens do servidor
-        return msgs
+        // ✅ ATUALIZAR mensagens existentes preservando mediaUrl e metadata se não vierem do servidor
+        return prev.map(existingMsg => {
+          const serverMsg = msgs.find((m: any) => m.id === existingMsg.id)
+          if (serverMsg) {
+            // ✅ PRESERVAR mediaUrl e metadata se não vierem do servidor
+            return {
+              ...serverMsg,
+              mediaUrl: serverMsg.mediaUrl || existingMsg.mediaUrl,
+              metadata: serverMsg.metadata || existingMsg.metadata || {}
+            }
+          }
+          return existingMsg
+        }).concat(
+          // Adicionar novas mensagens que não existem no estado atual
+          msgs.filter((serverMsg: any) => !prev.some(existingMsg => existingMsg.id === serverMsg.id))
+        ).sort((a, b) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        )
       })
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -228,8 +244,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
             direction: m.direction,
             timestamp: m.timestamp || new Date().toISOString(),
             status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
-            metadata: m.metadata,
-            mediaUrl: m.mediaUrl
+            metadata: m.metadata || {}, // ✅ Garantir que metadata sempre existe
+            mediaUrl: m.mediaUrl || m.media_url // ✅ Preservar mediaUrl (pode vir como media_url também)
           }
           setMessages(prev => {
             if (prev.some(x => x.id === mapped.id)) {
@@ -285,7 +301,9 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                   messageType: m.messageType || 'TEXT',
                   direction: m.direction || 'SENT',
                   timestamp: m.timestamp,
-                  status: 'SENT'
+                  status: 'SENT',
+                  mediaUrl: m.mediaUrl || m.media_url || msg.mediaUrl, // ✅ Preservar mediaUrl (manter existente se não vier no evento)
+                  metadata: m.metadata || msg.metadata || {} // ✅ Preservar metadata (manter existente se não vier no evento)
                 } : msg)
             } else {
               console.log('✅ Adicionando nova mensagem do evento e removendo otimista:', m.id)
@@ -303,7 +321,9 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                 messageType: m.messageType || 'TEXT',
                 direction: m.direction || 'SENT',
                 timestamp: m.timestamp,
-                status: 'SENT'
+                status: 'SENT',
+                mediaUrl: m.mediaUrl || m.media_url, // ✅ Preservar mediaUrl
+                metadata: m.metadata || {} // ✅ Preservar metadata
               }]
             }
           })
@@ -989,6 +1009,32 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                       ) : (
                         <p className="text-xs italic opacity-75">📷 Imagem não disponível</p>
                       )}
+                    </div>
+                  )}
+
+                  {/* ✅ Renderizar DOCUMENT (PDF) usando mediaUrl */}
+                  {message.messageType === 'DOCUMENT' && message.mediaUrl && (
+                    <div className="mt-2">
+                      <a
+                        href={message.mediaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`flex items-center space-x-2 p-3 rounded-lg hover:bg-opacity-90 transition-colors ${message.direction === 'SENT' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-900'
+                          }`}
+                      >
+                        <File className="h-5 w-5 flex-shrink-0" />
+                        <div className="flex flex-col overflow-hidden min-w-0">
+                          <span className="text-sm font-medium truncate">
+                            {message.messageText && !message.messageText.startsWith('[DOCUMENT]') 
+                              ? message.messageText 
+                              : 'Documento PDF'}
+                          </span>
+                          <span className="text-xs opacity-75">Clique para visualizar</span>
+                        </div>
+                        <svg className="h-4 w-4 flex-shrink-0 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
                     </div>
                   )}
 

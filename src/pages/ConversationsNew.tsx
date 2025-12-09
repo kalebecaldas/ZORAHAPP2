@@ -1263,19 +1263,37 @@ const ConversationsPage: React.FC = () => {
                         sender: messageData.direction === 'RECEIVED' ? 'PATIENT' : (messageData.from === 'BOT' ? 'BOT' : 'AGENT'),
                         messageText: messageData.messageText,
                         messageType: messageData.messageType || 'TEXT',
-                        mediaUrl: messageData.mediaUrl,
+                        mediaUrl: messageData.mediaUrl || messageData.media_url, // ✅ Preservar mediaUrl (pode vir como media_url também)
                         direction: messageData.direction,
                         timestamp: messageData.timestamp || new Date().toISOString(),
                         status: messageData.direction === 'SENT' ? 'SENT' : 'PENDING',
-                        metadata: messageData.metadata
+                        metadata: messageData.metadata || {} // ✅ Garantir que metadata sempre existe
                     };
 
                     // Verificar se a mensagem já existe ou substituir mensagem otimista
                     setMessages(prev => {
                         // Verificar duplicatas PRIMEIRO
-                        if (prev.some(m => m.id === newMessage.id)) {
-                            console.log('⚠️ Mensagem já existe, ignorando duplicata:', newMessage.id);
-                            return prev; // Não fazer nada se já existe
+                        const existingIndex = prev.findIndex(m => m.id === newMessage.id)
+                        if (existingIndex !== -1) {
+                            console.log('⚠️ Mensagem já existe, atualizando preservando mediaUrl/metadata:', newMessage.id);
+                            // ✅ ATUALIZAR mensagem existente preservando mediaUrl e metadata se não vierem no evento
+                            // Isso é crítico para PDFs que podem perder dados na atualização
+                            return prev.map((msg, idx) => {
+                                if (idx === existingIndex) {
+                                    const updated = {
+                                        ...msg,
+                                        ...newMessage,
+                                        // ✅ PRESERVAR mediaUrl e metadata se não vierem no evento (CRÍTICO para PDFs!)
+                                        mediaUrl: newMessage.mediaUrl || msg.mediaUrl,
+                                        metadata: newMessage.metadata || msg.metadata || {}
+                                    }
+                                    if (msg.messageType === 'DOCUMENT' && !newMessage.mediaUrl && msg.mediaUrl) {
+                                        console.log('⚠️ [PDF] Preservando mediaUrl durante atualização:', msg.mediaUrl)
+                                    }
+                                    return updated
+                                }
+                                return msg
+                            })
                         }
 
                         // Remover mensagens temporárias (optimistic updates) com mesmo texto
@@ -1289,7 +1307,7 @@ const ConversationsPage: React.FC = () => {
                         });
 
                         // Adicionar a mensagem real
-                        console.log('✅ Adicionando mensagem ao estado:', newMessage.id);
+                        console.log('✅ Adicionando mensagem ao estado:', newMessage.id, 'mediaUrl:', !!newMessage.mediaUrl, 'metadata:', !!newMessage.metadata);
                         return [...filtered, newMessage];
                     });
 
