@@ -133,16 +133,16 @@ export class ConversationalAIService {
             while (retries <= maxRetries) {
                 try {
                     completion = await this.openai.chat.completions.create({
-                        model: this.model,
-                        messages: [
-                            { role: 'system', content: systemPrompt },
-                            ...historyMessages,
-                            { role: 'user', content: message }
-                        ],
-                        temperature: 0.7,
-                        max_tokens: 1000,
-                        response_format: { type: 'json_object' }
-                    })
+                model: this.model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    ...historyMessages,
+                    { role: 'user', content: message }
+                ],
+                temperature: 0.7,
+                max_tokens: 1000,
+                response_format: { type: 'json_object' }
+            })
                     break // Sucesso, sair do loop
                 } catch (error: any) {
                     // Se for rate limit (429) e ainda temos tentativas, fazer retry
