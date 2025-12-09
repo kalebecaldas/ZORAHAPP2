@@ -60,13 +60,18 @@ export class IntelligentRouter {
 
             // 1. Gerar resposta da IA conversacional
             const ai = conversationalAI.getInstance()
+            console.log(`🔍 [DEBUG] Iniciando geração de resposta para: "${message.substring(0, 50)}..."`)
             const aiResponse = await ai.generateResponse(message, conversationId, phone)
 
-            console.log(`📊 Decisão da IA:`, {
+            console.log(`📊 [DEBUG] Resposta completa da IA:`, {
+                message: aiResponse.message?.substring(0, 100) + '...',
                 intent: aiResponse.intent,
                 action: aiResponse.action,
-                confidence: aiResponse.confidence
+                confidence: aiResponse.confidence,
+                entities: aiResponse.entities
             })
+            console.log(`🎯 [DEBUG] ACTION recebido: "${aiResponse.action}"`)
+            console.log(`🎯 [DEBUG] INTENT recebido: "${aiResponse.intent}"`)
 
             // 2. Decidir rota baseado na ação sugerida pela IA
             // ✅ Passar informação do paciente existente para evitar pedir dados desnecessários
@@ -118,10 +123,45 @@ export class IntelligentRouter {
                 ...aiResponse.entities // Manter outras entidades coletadas (procedimento, data, etc)
             }
             
+            // Buscar procedimentos cobertos pelo convênio
+            let procedimentosCobertos = ''
+            if (existingPatient.insuranceCompany && existingPatient.insuranceCompany !== 'Particular') {
+                try {
+                    const { prismaClinicDataService } = await import('./prismaClinicDataService.js')
+                    const prisma = (await import('../prisma/client.js')).default
+                    
+                    // Normalizar código do convênio (buscar pelo nome ou código)
+                    let insuranceCode = existingPatient.insuranceCompany.toUpperCase()
+                    const insurance = await prisma.insuranceCompany.findFirst({
+                        where: {
+                            OR: [
+                                { code: insuranceCode },
+                                { name: { contains: existingPatient.insuranceCompany, mode: 'insensitive' } },
+                                { displayName: { contains: existingPatient.insuranceCompany, mode: 'insensitive' } }
+                            ]
+                        }
+                    })
+                    
+                    if (insurance) {
+                        insuranceCode = insurance.code
+                        // Buscar procedimentos de qualquer clínica (ou Vieiralves como padrão)
+                        const procedures = await prismaClinicDataService.getProceduresByClinicAndInsurance('vieiralves', insuranceCode)
+                        if (procedures && procedures.length > 0) {
+                            const procedureNames = procedures.map((p: any) => p.name || p.procedure?.name || p.procedureName).filter(Boolean)
+                            if (procedureNames.length > 0) {
+                                procedimentosCobertos = `\n\nCom seu convênio ${insurance.displayName || existingPatient.insuranceCompany}, você tem cobertura para: ${procedureNames.join(', ')}.\n\n`
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Erro ao buscar procedimentos do convênio:', error)
+                }
+            }
+            
             // Transferir direto com dados do paciente já existente
             return {
                 type: 'TRANSFER_TO_HUMAN',
-                response: `Olá ${existingPatient.name}! Encontrei seu cadastro. ${aiResponse.message}`,
+                response: `Olá ${existingPatient.name}! 👋 Encontrei seu cadastro.${procedimentosCobertos}Em breve um atendente vai te atender para finalizar o agendamento. 😊`,
                 queue: this.getQueueForIntent(aiResponse.intent),
                 reason: this.getTransferReason(aiResponse.intent),
                 initialData: patientEntities
@@ -129,20 +169,27 @@ export class IntelligentRouter {
         }
 
         // ✅ PRIORIDADE 1: Verificar ACTION primeiro (mais específico)
+        console.log(`🔍 [DEBUG makeRoutingDecision] ACTION recebido: "${aiResponse.action}"`)
+        console.log(`🔍 [DEBUG makeRoutingDecision] INTENT recebido: "${aiResponse.intent}"`)
+        console.log(`🔍 [DEBUG makeRoutingDecision] Paciente existe? ${existingPatient ? `SIM (${existingPatient.name})` : 'NÃO'}`)
+        console.log(`🔍 [DEBUG makeRoutingDecision] Entities recebidas:`, JSON.stringify(aiResponse.entities, null, 2))
+        
         switch (aiResponse.action) {
             case 'collect_data':
                 // ✅ Bot está coletando dados - NÃO transferir ainda!
-                console.log(`📋 Coletando dados para ${aiResponse.intent}`)
+                console.log(`📋 [DEBUG] ACTION = collect_data → Coletando dados para ${aiResponse.intent}`)
+                console.log(`📋 [DEBUG] Retornando resposta do bot para continuar coleta`)
                 return this.routeToAIWithDataCollection(aiResponse, conversationId)
 
             case 'transfer_human':
                 // ✅ Bot terminou coleta - AGORA SIM transferir
-                console.log(`🎯 Transferindo ${aiResponse.intent} para humano`)
+                console.log(`🎯 [DEBUG] ACTION = transfer_human → Transferindo ${aiResponse.intent} para humano`)
                 return this.routeToHuman(aiResponse)
 
             case 'start_workflow': // ✅ Tratar como IA ao invés de workflow
             case 'continue':
             default:
+                console.log(`💬 [DEBUG] ACTION = ${aiResponse.action} → Continuando conversa com bot`)
                 return this.routeToAI(aiResponse)
         }
     }

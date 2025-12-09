@@ -869,8 +869,10 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     }
 
     // Enquanto isso, fazer operações de banco (podem ser feitas depois)
+    // ✅ IMPORTANTE: Sempre buscar a conversa mais recente para evitar salvar em conversa errada
     let conversation = await prisma.conversation.findFirst({
-      where: { phone }
+      where: { phone },
+      orderBy: { createdAt: 'desc' } // ✅ Sempre pegar a mais recente
     })
 
     if (!conversation) {
@@ -1704,7 +1706,8 @@ export async function processIncomingMessage(
         case 'TRANSFER_TO_HUMAN':
           // Transferir para fila de humanos
           console.log(`👤 Transferindo para fila: ${decision.queue}`)
-
+          console.log(`📋 [DEBUG TRANSFER] decision.initialData recebido:`, JSON.stringify(decision.initialData, null, 2))
+          console.log(`📋 [DEBUG TRANSFER] decision.initialData keys:`, decision.initialData ? Object.keys(decision.initialData) : 'undefined')
 
           // ✅ CADASTRO COMPLETO: Criar/atualizar paciente com dados coletados
           if (decision.initialData && Object.keys(decision.initialData).length > 0) {

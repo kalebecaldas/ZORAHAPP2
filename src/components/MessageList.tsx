@@ -155,7 +155,38 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         hasUrl: !!m.mediaUrl,
         url: m.mediaUrl
       })))
-      setMessages(msgs)
+      
+      // ✅ Verificar se há mensagens otimistas pendentes antes de substituir
+      setMessages(prev => {
+        // Se há mensagens otimistas (temp-*), preservá-las se não foram confirmadas ainda
+        const optimisticMessages = prev.filter(m => m.id?.startsWith('temp-'))
+        const confirmedIds = new Set(msgs.map((m: any) => m.id))
+        
+        // Se há mensagens otimistas que ainda não foram confirmadas, mantê-las
+        if (optimisticMessages.length > 0) {
+          const stillPending = optimisticMessages.filter(m => {
+            // Verificar se não foi confirmada pelo ID ou pelo texto
+            const confirmedById = confirmedIds.has(m.id)
+            const confirmedByText = msgs.some((msg: any) => 
+              msg.messageText === m.messageText && 
+              msg.direction === m.direction &&
+              Math.abs(new Date(msg.timestamp).getTime() - new Date(m.timestamp).getTime()) < 5000
+            )
+            return !confirmedById && !confirmedByText
+          })
+          
+          if (stillPending.length > 0) {
+            console.log('⚠️ Preservando mensagens otimistas pendentes:', stillPending.length)
+            // Combinar: mensagens confirmadas do servidor + mensagens otimistas ainda pendentes
+            return [...msgs, ...stillPending].sort((a, b) => 
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            )
+          }
+        }
+        
+        // Caso contrário, usar apenas as mensagens do servidor
+        return msgs
+      })
     } catch (error) {
       console.error('Error fetching messages:', error);
       toast.error('Erro ao carregar mensagens');
@@ -226,7 +257,57 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
       }
       const onMessageSent = (payload: any) => {
         console.log('📨 MessageList: message_sent event received:', payload);
-        appendFromPayload(payload);
+        // ✅ Verificar se a mensagem já existe antes de adicionar (evitar duplicatas)
+        const m = payload?.message || payload
+        if (!m || !m.id) return
+        
+        const matchesConversation = m.conversationId === conversationId ||
+          m.phoneNumber === conversationId ||
+          payload?.phone === conversationId ||
+          payload?.conversation?.id === conversationId ||
+          payload?.conversation?.phone === conversationId
+        
+        if (matchesConversation) {
+          setMessages(prev => {
+            // Verificar se mensagem já existe (evitar duplicatas)
+            const exists = prev.some(msg => msg.id === m.id)
+            if (exists) {
+              console.log('⚠️ Mensagem já existe, atualizando:', m.id)
+              // Atualizar mensagem existente e remover qualquer mensagem otimista correspondente
+              return prev
+                .filter(msg => !(msg.id?.startsWith('temp-') && msg.messageText === m.messageText && msg.direction === 'SENT'))
+                .map(msg => msg.id === m.id ? {
+                  ...msg,
+                  id: m.id,
+                  conversationId: m.conversationId || conversationId,
+                  sender: m.from === 'BOT' ? 'BOT' : (m.from === 'AGENT' ? 'AGENT' : 'PATIENT'),
+                  messageText: m.messageText || m.text,
+                  messageType: m.messageType || 'TEXT',
+                  direction: m.direction || 'SENT',
+                  timestamp: m.timestamp,
+                  status: 'SENT'
+                } : msg)
+            } else {
+              console.log('✅ Adicionando nova mensagem do evento e removendo otimista:', m.id)
+              // Adicionar nova mensagem e remover qualquer mensagem otimista correspondente
+              const filtered = prev.filter(msg => 
+                !(msg.id?.startsWith('temp-') && 
+                  msg.messageText === (m.messageText || m.text) && 
+                  msg.direction === 'SENT')
+              )
+              return [...filtered, {
+                id: m.id,
+                conversationId: m.conversationId || conversationId,
+                sender: m.from === 'BOT' ? 'BOT' : (m.from === 'AGENT' ? 'AGENT' : 'PATIENT'),
+                messageText: m.messageText || m.text,
+                messageType: m.messageType || 'TEXT',
+                direction: m.direction || 'SENT',
+                timestamp: m.timestamp,
+                status: 'SENT'
+              }]
+            }
+          })
+        }
       }
       const onAIMessageSent = (payload: any) => {
         console.log('📨 MessageList: ai_message_sent event received:', payload);
@@ -389,10 +470,51 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         });
 
         const sent = response.data?.message;
-        if (sent) {
-          setMessages(prev => prev.map(m => m.id === tempId ? { ...m, ...sent, status: 'SENT' } : m));
+        if (sent && sent.id) {
+          // ✅ Atualizar mensagem otimista com dados reais do servidor
+          console.log('✅ Mensagem confirmada pelo servidor:', sent.id)
+          setMessages(prev => prev.map(m => {
+            if (m.id === tempId) {
+              return {
+                ...m,
+                id: sent.id,
+                conversationId: sent.conversationId || conversationId,
+                sender: sent.from === 'BOT' ? 'BOT' : (sent.from === 'AGENT' ? 'AGENT' : 'PATIENT'),
+                messageText: sent.messageText || sent.text,
+                messageType: sent.messageType || 'TEXT',
+                direction: sent.direction || 'SENT',
+                timestamp: sent.timestamp,
+                status: 'SENT'
+              }
+            }
+            return m
+          }))
         } else {
-          await fetchMessages();
+          // ✅ Se não recebeu mensagem na resposta, aguardar mais tempo antes de buscar
+          // Isso evita condição de corrida com o evento Socket.IO e dá tempo para o banco salvar
+          console.log('⚠️ Mensagem não retornada na resposta, aguardando evento Socket.IO ou fetch...')
+          const messageTextToCheck = newMessage // Capturar valor antes do setState
+          setTimeout(async () => {
+            // Verificar se a mensagem já foi adicionada via Socket.IO antes de fazer fetch
+            // Usar função de callback para acessar estado atual
+            setMessages(currentMessages => {
+              const wasAddedViaSocket = currentMessages.some(m => 
+                !m.id?.startsWith('temp-') && 
+                m.messageText === messageTextToCheck &&
+                m.direction === 'SENT'
+              )
+              
+              if (!wasAddedViaSocket) {
+                console.log('📥 Buscando mensagens do servidor...')
+                // Fazer fetch em background sem bloquear
+                fetchMessages().catch(err => console.error('Erro ao buscar mensagens:', err))
+              } else {
+                console.log('✅ Mensagem já foi adicionada via Socket.IO, pulando fetch')
+              }
+              
+              return currentMessages // Não alterar estado aqui
+            })
+          }, 1000) // Aumentar para 1 segundo para dar tempo do Socket.IO
         }
         setNewMessage('');
       }
