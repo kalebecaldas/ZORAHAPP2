@@ -942,7 +942,11 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
           from: message.from,
           timestamp: message.timestamp.toISOString()
         },
-        conversation: updatedConversation,
+        conversation: {
+          ...updatedConversation,
+          lastMessage: message.messageText, // ✅ Garantir que lastMessage está no payload
+          lastTimestamp: message.timestamp // ✅ Garantir que lastTimestamp está no payload
+        },
         phone
       }
       // Emitir apenas para as salas relevantes, não globalmente (evita duplicatas)

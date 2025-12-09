@@ -1293,7 +1293,7 @@ const ConversationsPage: React.FC = () => {
                         return [...filtered, newMessage];
                     });
 
-                    // Atualizar última mensagem da conversa
+                    // ✅ Atualizar última mensagem da conversa selecionada
                     if (payload?.conversation) {
                         setSelectedConversation(prev => prev ? {
                             ...prev,
@@ -1301,6 +1301,25 @@ const ConversationsPage: React.FC = () => {
                             lastTimestamp: messageData.timestamp
                         } : prev);
                     }
+                    
+                    // ✅ ATUALIZAR CARD NA LISTA DE CONVERSAS imediatamente
+                    setConversations(prev => prev.map(c => {
+                        // Verificar se é a conversa correta (por ID ou phone)
+                        const matches = c.id === messageData.conversationId || 
+                                       c.id === payload?.conversation?.id ||
+                                       c.phone === payload?.phone ||
+                                       c.phone === selectedConversation?.phone
+                        
+                        if (matches) {
+                            console.log('✅ Atualizando card da conversa com última mensagem:', messageData.messageText.substring(0, 20))
+                            return {
+                                ...c,
+                                lastMessage: messageData.messageText,
+                                lastTimestamp: messageData.timestamp || new Date().toISOString()
+                            }
+                        }
+                        return c
+                    }))
                 } else {
                     // Fallback: se não tiver dados completos, fazer fetch
                     console.log('⚠️ Payload incompleto, fazendo fetch...');
@@ -1330,7 +1349,31 @@ const ConversationsPage: React.FC = () => {
         const onMessageSent = (payload: any) => {
             // Apenas processar se for mensagem enviada pelo agente
             if (payload?.message?.from === 'AGENT' || payload?.message?.direction === 'SENT') {
+                console.log('📤 [onMessageSent] Mensagem enviada detectada, atualizando card...');
                 onNewMessage(payload);
+                
+                // ✅ ATUALIZAR CARD IMEDIATAMENTE quando mensagem é enviada
+                if (payload?.message && (payload?.conversation || payload?.phone)) {
+                    const messageData = payload.message;
+                    const conversationId = messageData.conversationId || payload?.conversation?.id;
+                    const phone = payload.phone || payload?.conversation?.phone;
+                    
+                    setConversations(prev => prev.map(c => {
+                        const matches = c.id === conversationId || 
+                                       c.phone === phone ||
+                                       (selectedConversation && (c.id === selectedConversation.id || c.phone === selectedConversation.phone))
+                        
+                        if (matches) {
+                            console.log('✅ [onMessageSent] Atualizando card imediatamente:', messageData.messageText?.substring(0, 20));
+                            return {
+                                ...c,
+                                lastMessage: messageData.messageText || messageData.text,
+                                lastTimestamp: messageData.timestamp || new Date().toISOString()
+                            };
+                        }
+                        return c;
+                    }));
+                }
             }
         };
 
@@ -1353,15 +1396,20 @@ const ConversationsPage: React.FC = () => {
             onNewMessage({ message: data.message, conversation: { id: data.conversationId } });
 
             // ✅ Se for mensagem do PACIENTE e não estamos na conversa, incrementar unreadCount
-            if (data.message?.direction === 'RECEIVED' && selectedConversation?.id !== data.conversationId) {
-                console.log('📊 Incrementando unreadCount para conversa:', data.conversationId);
+            // ✅ Se for mensagem ENVIADA (AGENT), atualizar lastMessage mesmo estando na conversa
+            const isReceived = data.message?.direction === 'RECEIVED'
+            const isSent = data.message?.direction === 'SENT'
+            const isNotSelected = selectedConversation?.id !== data.conversationId
+            
+            if ((isReceived && isNotSelected) || isSent) {
+                console.log('📊 Atualizando card da conversa:', { isReceived, isSent, isNotSelected });
                 setConversations(prev => prev.map(c => {
-                    if (c.id === data.conversationId) {
+                    if (c.id === data.conversationId || c.phone === data.message?.phoneNumber) {
                         return {
                             ...c,
-                            unreadCount: (c.unreadCount ?? 0) + 1,
+                            ...(isReceived && isNotSelected && { unreadCount: (c.unreadCount ?? 0) + 1 }),
                             lastMessage: data.message.messageText,
-                            lastTimestamp: data.message.timestamp
+                            lastTimestamp: data.message.timestamp || new Date().toISOString()
                         };
                     }
                     return c;
@@ -1395,11 +1443,30 @@ const ConversationsPage: React.FC = () => {
                         ...prev,
                         status: data.status || prev.status,
                         assignedToId: data.assignedToId !== undefined ? data.assignedToId : prev.assignedToId,
-                        assignedTo: data.assignedTo || prev.assignedTo
+                        assignedTo: data.assignedTo || prev.assignedTo,
+                        ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                        ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
                     };
                     console.log('✅ selectedConversation atualizado:', updated.id, updated.status);
                     return updated;
                 });
+            }
+            
+            // ✅ ATUALIZAR CARD NA LISTA se houver lastMessage ou lastTimestamp no evento
+            if (data.lastMessage || data.lastTimestamp) {
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId || c.phone === data.phone) {
+                        return {
+                            ...c,
+                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
+                            ...(data.status && { status: data.status }),
+                            ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                            ...(data.assignedTo && { assignedTo: data.assignedTo })
+                        }
+                    }
+                    return c
+                }))
             }
 
             // Atualizar conversa localmente se tivermos os dados
