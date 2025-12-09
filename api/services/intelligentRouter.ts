@@ -75,7 +75,7 @@ export class IntelligentRouter {
 
             // 2. Decidir rota baseado na ação sugerida pela IA
             // ✅ Passar informação do paciente existente para evitar pedir dados desnecessários
-            const decision = this.makeRoutingDecision(aiResponse, conversationId, existingPatient)
+            const decision = await this.makeRoutingDecision(aiResponse, conversationId, existingPatient)
 
             // ✅ Adicionar contexto da IA ao decision
             decision.aiContext = {
@@ -105,11 +105,11 @@ export class IntelligentRouter {
     /**
      * Toma decisão de roteamento baseado na resposta da IA
      */
-    private makeRoutingDecision(
+    private async makeRoutingDecision(
         aiResponse: ConversationalResponse,
         conversationId: string,
         existingPatient?: { id: string; name: string; phone: string; cpf?: string | null; email?: string | null; insuranceCompany?: string | null } | null
-    ): RouteDecision {
+    ): Promise<RouteDecision> {
         // ✅ NOVO: Se paciente já existe e IA quer coletar dados, pular coleta e transferir direto
         if (aiResponse.action === 'collect_data' && existingPatient) {
             console.log(`✅ Paciente já cadastrado (${existingPatient.name}) - Pulando coleta de dados e transferindo direto`)
