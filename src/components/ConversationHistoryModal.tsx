@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, MessageSquare, User, Calendar, Shield } from 'lucide-react';
+import { X, Clock, MessageSquare, User, Calendar, Shield, Trash2, Eye, Copy } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
+import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface ConversationHistoryModalProps {
   patientId?: string;
@@ -35,9 +37,15 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   patientName,
   onClose
 }) => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<ConversationSession[]>([]);
   const [patient, setPatient] = useState<any>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Verificar se usuário é master (role pode ser string, então usar comparação flexível)
+  const isMaster = String(user?.role) === 'MASTER';
 
   useEffect(() => {
     fetchHistory();
@@ -171,6 +179,41 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
     return null;
   };
 
+  const handleDeleteSession = async (conversationId: string) => {
+    if (!isMaster) {
+      toast.error('Apenas usuários Master podem deletar sessões');
+      return;
+    }
+
+    if (!window.confirm('Tem certeza que deseja deletar esta sessão? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+
+    try {
+      setDeletingId(conversationId);
+      await api.delete(`/api/conversations/id/${conversationId}`);
+      toast.success('Sessão deletada com sucesso');
+      // Recarregar histórico
+      await fetchHistory();
+    } catch (error: any) {
+      console.error('Error deleting session:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao deletar sessão');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleViewConversation = (conversationId: string, conversationPhone: string) => {
+    // ✅ Navegar usando o ID da conversa para abrir a conversa específica (não apenas a mais recente)
+    navigate(`/conversations/${conversationPhone}?conversationId=${conversationId}`);
+    onClose(); // Fechar modal ao navegar
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado!`);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={onClose}>
       <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -215,14 +258,29 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
                   >
                     {/* Header da conversa */}
                     <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1">
                         {getChannelIcon(conv.channel)}
-                        <div>
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium text-gray-900">
                               {formatDate(conv.createdAt)}
                             </span>
                             {getStatusBadge(conv.status)}
+                            {/* ✅ ID da sessão - COMPLETO e COPIÁVEL */}
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded text-xs">
+                              <span className="text-gray-600 font-medium">ID:</span>
+                              <span className="text-gray-800 font-mono">{conv.id}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(conv.id, 'ID da sessão');
+                                }}
+                                className="p-0.5 hover:bg-gray-200 rounded transition-colors"
+                                title="Copiar ID completo"
+                              >
+                                <Copy className="h-3 w-3 text-gray-500 hover:text-gray-700" />
+                              </button>
+                            </div>
                           </div>
                           <p className="text-sm text-gray-500 mt-1">
                             {conv.messagesCount || conv.messages?.length || 0} mensagens
@@ -230,27 +288,29 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
                         </div>
                       </div>
                       
-                      {/* Session status */}
-                      <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
-                        sessionStatus.color === 'green' ? 'bg-green-50 border border-green-200' :
-                        sessionStatus.color === 'yellow' ? 'bg-yellow-50 border border-yellow-200' :
-                        sessionStatus.color === 'red' ? 'bg-red-50 border border-red-200' :
-                        'bg-gray-50 border border-gray-200'
-                      }`}>
-                        <Shield className={`h-4 w-4 ${
-                          sessionStatus.color === 'green' ? 'text-green-600' :
-                          sessionStatus.color === 'yellow' ? 'text-yellow-600' :
-                          sessionStatus.color === 'red' ? 'text-red-600' :
-                          'text-gray-400'
-                        }`} />
-                        <span className={`text-xs font-medium ${
-                          sessionStatus.color === 'green' ? 'text-green-700' :
-                          sessionStatus.color === 'yellow' ? 'text-yellow-700' :
-                          sessionStatus.color === 'red' ? 'text-red-700' :
-                          'text-gray-500'
+                      <div className="flex items-center gap-2">
+                        {/* Session status */}
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${
+                          sessionStatus.color === 'green' ? 'bg-green-50 border border-green-200' :
+                          sessionStatus.color === 'yellow' ? 'bg-yellow-50 border border-yellow-200' :
+                          sessionStatus.color === 'red' ? 'bg-red-50 border border-red-200' :
+                          'bg-gray-50 border border-gray-200'
                         }`}>
-                          {sessionStatus.label}
-                        </span>
+                          <Shield className={`h-4 w-4 ${
+                            sessionStatus.color === 'green' ? 'text-green-600' :
+                            sessionStatus.color === 'yellow' ? 'text-yellow-600' :
+                            sessionStatus.color === 'red' ? 'text-red-600' :
+                            'text-gray-400'
+                          }`} />
+                          <span className={`text-xs font-medium ${
+                            sessionStatus.color === 'green' ? 'text-green-700' :
+                            sessionStatus.color === 'yellow' ? 'text-yellow-700' :
+                            sessionStatus.color === 'red' ? 'text-red-700' :
+                            'text-gray-500'
+                          }`}>
+                            {sessionStatus.label}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -267,25 +327,62 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
                     )}
 
                     {/* Informações adicionais */}
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      {conv.sessionStartTime && (
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          <span>Início: {formatDate(conv.sessionStartTime)}</span>
-                        </div>
-                      )}
-                      {conv.lastUserActivity && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          <span>Última atividade: {formatDate(conv.lastUserActivity)}</span>
-                        </div>
-                      )}
-                      {conv.assignedTo && (
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          <span>{conv.assignedTo.name}</span>
-                        </div>
-                      )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                        {conv.sessionStartTime && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>Início: {formatDate(conv.sessionStartTime)}</span>
+                          </div>
+                        )}
+                        {conv.lastUserActivity && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            <span>Última atividade: {formatDate(conv.lastUserActivity)}</span>
+                          </div>
+                        )}
+                        {conv.assignedTo && (
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            <span>{conv.assignedTo.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* ✅ Botões de ação */}
+                      <div className="flex items-center gap-2">
+                        {/* Botão Visualizar Conversa */}
+                        <button
+                          onClick={() => handleViewConversation(conv.id, conv.phone)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                          title="Visualizar conversa"
+                        >
+                          <Eye className="h-4 w-4" />
+                          Visualizar
+                        </button>
+                        
+                        {/* Botão DELETE SESSÃO (apenas para Master) */}
+                        {isMaster && (
+                          <button
+                            onClick={() => handleDeleteSession(conv.id)}
+                            disabled={deletingId === conv.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Deletar sessão (apenas Master)"
+                          >
+                            {deletingId === conv.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-700"></div>
+                                Deletando...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-4 w-4" />
+                                Deletar
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

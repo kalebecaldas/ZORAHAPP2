@@ -141,7 +141,7 @@ const listAuth = process.env.NODE_ENV === 'development'
 // Get all conversations
 router.get('/', listAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { status, page = 1, limit = 20, search = '' } = req.query
+    const { status, page = 1, limit = 20, search = '', assignedTo } = req.query
     const skip = (Number(page) - 1) * Number(limit)
 
     const where: any = {}
@@ -158,6 +158,21 @@ router.get('/', listAuth, async (req: Request, res: Response): Promise<void> => 
       } else {
         where.status = s
       }
+    }
+    // ✅ Filtrar por usuário atribuído (para MINHAS_CONVERSAS incluir expiradas)
+    if (assignedTo) {
+      where.assignedToId = String(assignedTo)
+      // Se buscar por assignedTo, incluir todas as conversas atribuídas (exceto FECHADA)
+      // Isso permite que conversas expiradas apareçam em "MINHAS_CONVERSAS"
+      // Não aplicar filtro de status se já foi definido, mas garantir que FECHADA seja excluída
+      if (!where.status) {
+        // Se não tem filtro de status, excluir apenas FECHADA
+        where.status = { not: 'FECHADA' }
+      } else if (where.status === 'FECHADA') {
+        // Se status é FECHADA, não aplicar assignedTo (conflito)
+        delete where.assignedToId
+      }
+      // Se status já é um filtro (in, not, etc), manter e não sobrescrever
     }
     if (search) {
       const s = String(search)
@@ -206,14 +221,16 @@ router.get('/', listAuth, async (req: Request, res: Response): Promise<void> => 
   }
 })
 
-// Get conversation by phone
+// Get conversation by phone (returns the most recent conversation)
 router.get('/:phone', listAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { phone } = req.params
     const { limit = 50 } = req.query
 
+    // ✅ Buscar a conversa mais recente (ordenada por createdAt desc)
     const conversation = await prisma.conversation.findFirst({
       where: { phone },
+      orderBy: { createdAt: 'desc' }, // ✅ Sempre pegar a mais recente
       include: {
         patient: {
           select: {
@@ -273,8 +290,10 @@ router.post('/:phone/mark-read', listAuth, async (req: Request, res: Response): 
   try {
     const { phone } = req.params
 
+    // ✅ Buscar a conversa mais recente (ordenada por createdAt desc)
     const conversation = await prisma.conversation.findFirst({
-      where: { phone }
+      where: { phone },
+      orderBy: { createdAt: 'desc' } // ✅ Sempre pegar a mais recente
     })
 
     if (!conversation) {
@@ -440,6 +459,60 @@ router.get('/id/:id/messages', listAuth, async (req: Request, res: Response): Pr
   }
 })
 
+// ✅ DELETE conversation by ID (apenas para Master)
+router.delete('/id/:id', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params
+    
+    // Verificar se usuário é Master
+    if (req.user?.role !== 'MASTER') {
+      res.status(403).json({ error: 'Apenas usuários Master podem deletar conversas' })
+      return
+    }
+
+    // Verificar se conversa existe
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      include: {
+        messages: true
+      }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // Deletar mensagens primeiro (devido à foreign key)
+    await prisma.message.deleteMany({
+      where: { conversationId: id }
+    })
+
+    // Deletar conversa
+    await prisma.conversation.delete({
+      where: { id }
+    })
+
+    console.log(`🗑️ Conversa ${id} deletada por usuário Master: ${req.user?.email}`)
+
+    // Emitir evento de conversa deletada
+    try {
+      const realtime = getRealtime()
+      realtime.io.emit('conversation:deleted', {
+        conversationId: id,
+        phone: conversation.phone
+      })
+    } catch (e) {
+      console.warn('⚠️ Erro ao emitir evento de conversa deletada:', e)
+    }
+
+    res.json({ success: true, message: 'Conversa deletada com sucesso' })
+  } catch (error) {
+    console.error('Erro ao deletar conversa:', error)
+    res.status(500).json({ error: 'Erro ao deletar conversa' })
+  }
+})
+
 // Conversation actions (take, transfer, close, return)
 const actionsAuth = process.env.NODE_ENV === 'development'
   ? ((req: Request, _res: Response, next: any) => {
@@ -459,8 +532,10 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
   try {
     const { action, phone, assignTo } = req.body
 
+    // ✅ Sempre buscar a conversa mais recente (ordenada por createdAt desc)
     const conversation = await prisma.conversation.findFirst({
       where: { phone },
+      orderBy: { createdAt: 'desc' }, // ✅ Sempre pegar a mais recente
       include: { patient: true, assignedTo: true }
     })
 
@@ -543,6 +618,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         updateData = {
           status: 'FECHADA',
           assignedToId: null
+          // ✅ NÃO alterar sessionExpiryTime - preservar para verificar se expirou depois
         }
         actionDescription = 'Conversa fechada'
         break
@@ -660,8 +736,18 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
     // Emit real-time update (safe in case realtime not initialized)
     try {
       const realtime = getRealtime()
+      // ✅ Emitir eventos para atualizar frontend
       realtime.io.to(`conv:${phone}`).emit('conversation_updated', updatedConversation)
       realtime.io.emit('queue_updated', { action, conversation: updatedConversation })
+      // ✅ Emitir conversation:updated para garantir atualização em tempo real
+      realtime.io.emit('conversation:updated', {
+        conversationId: updatedConversation.id,
+        phone: updatedConversation.phone,
+        status: updatedConversation.status,
+        assignedToId: updatedConversation.assignedToId,
+        assignedTo: updatedConversation.assignedTo
+      })
+      console.log(`📡 Eventos emitidos para conversa assumida: ${updatedConversation.id}`)
     } catch (emitError) {
       console.warn('Realtime not initialized, skipping emit:', emitError instanceof Error ? emitError.message : emitError)
     }
@@ -907,8 +993,10 @@ export async function processIncomingMessage(
     }
 
     // Find or create conversation
+    // ✅ Sempre buscar a conversa mais recente (ordenada por createdAt desc)
     let conversation = await prisma.conversation.findFirst({
-      where: { phone }
+      where: { phone },
+      orderBy: { createdAt: 'desc' } // ✅ Sempre pegar a mais recente
     })
 
     // Initialize session times
@@ -959,6 +1047,22 @@ export async function processIncomingMessage(
       })
       console.log(`💬 Nova conversa criada: ${conversation.id} com sessão de 24h, workflowId: ${defaultWorkflowId || 'nenhum'}`)
 
+      // ✅ Emitir evento de nova conversa criada
+      try {
+        const realtime = getRealtime()
+        realtime.io.emit('conversation:updated', {
+          conversationId: conversation.id,
+          phone: conversation.phone,
+          status: 'BOT_QUEUE',
+          sessionExpiryTime: sessionExpiryTime,
+          sessionStatus: 'active',
+          reason: 'new_conversation'
+        })
+        console.log(`📡 Evento conversation:updated emitido para nova conversa: ${conversation.id}`)
+      } catch (e) {
+        console.warn('⚠️ Erro ao emitir evento de nova conversa:', e)
+      }
+
       // Start session in memory manager (only if patient exists)
       if (patient?.id) {
         try {
@@ -969,35 +1073,60 @@ export async function processIncomingMessage(
         }
       }
     } else {
-      // ✅ NOVO: Se conversa existe mas sessão expirou, criar nova conversa
-      const sessionExpired = conversation.sessionExpiryTime && new Date(conversation.sessionExpiryTime) < now
+      // ✅ Verificar se conversa está FECHADA
+      const isClosed = conversation.status === 'FECHADA'
+      
+      // ✅ Verificar se sessão expirou (24 horas desde a última mensagem do usuário)
+      // A janela de 24h começa a partir do momento em que o usuário envia a última mensagem (lastUserActivity)
+      // Se lastUserActivity for null, considerar como expirada (conversa antiga)
+      const lastUserActivityTime = conversation.lastUserActivity ? new Date(conversation.lastUserActivity) : null
+      const hoursSinceLastActivity = lastUserActivityTime 
+        ? (now.getTime() - lastUserActivityTime.getTime()) / (1000 * 60 * 60)
+        : Infinity
+      const sessionExpired = !lastUserActivityTime || hoursSinceLastActivity >= 24
 
-      if (sessionExpired) {
-        console.log(`🔄 Sessão expirada detectada para ${phone} - Criando nova conversa`)
+      // 🔍 DEBUG: Log para entender qual caso está sendo executado
+      console.log(`🔍 [DEBUG] Verificação de sessão para ${phone}:`, {
+        conversationId: conversation.id,
+        status: conversation.status,
+        isClosed,
+        lastUserActivity: conversation.lastUserActivity,
+        hoursSinceLastActivity: hoursSinceLastActivity !== Infinity ? `${hoursSinceLastActivity.toFixed(2)} horas` : 'N/A (sem atividade)',
+        sessionExpired,
+        now: now.toISOString()
+      })
 
-        // Fechar conversa antiga se ainda não estiver fechada
-        if (conversation.status !== 'FECHADA') {
+      // ✅ CASO 1: Conversa FECHADA e sessão expirada (>24h desde última mensagem) -> Criar NOVA conversa
+      if (isClosed && sessionExpired) {
+        console.log(`🔄 Conversa FECHADA com sessão expirada (>24h desde última mensagem) para ${phone} - Criando nova conversa`)
+        
+        // ✅ Verificar se já existe uma conversa ativa (não fechada) para este phone
+        // Se existir, não criar nova (evitar duplicatas)
+        const existingActiveConversation = await prisma.conversation.findFirst({
+          where: {
+            phone,
+            status: { not: 'FECHADA' }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+        
+        if (existingActiveConversation) {
+          console.log(`⚠️ Já existe conversa ativa para ${phone} (ID: ${existingActiveConversation.id}). Usando existente em vez de criar nova.`)
+          conversation = existingActiveConversation
+          // Atualizar lastUserActivity e sessionExpiryTime
+          const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000)
           await prisma.conversation.update({
             where: { id: conversation.id },
             data: {
-              sessionStatus: 'expired',
-              status: 'FECHADA',
-              lastUserActivity: now
+              lastUserActivity: now,
+              sessionExpiryTime: newExpiryTime,
+              sessionStatus: 'active',
+              lastMessage: text,
+              lastTimestamp: now
             }
           })
-
-          // Emitir evento de conversa fechada
-          try {
-            const realtime = getRealtime()
-            realtime.io.emit('conversation:updated', {
-              conversationId: conversation.id,
-              status: 'FECHADA',
-              reason: 'session_expired'
-            })
-          } catch (e) {
-            console.warn('⚠️ Erro ao emitir evento de conversa fechada:', e)
-          }
-        }
+          // Pular criação de nova conversa e continuar processamento
+        } else {
 
         // Get workflow BEFORE creating conversation to ensure workflowId is set
         let defaultWorkflowId: string | null = null
@@ -1036,14 +1165,30 @@ export async function processIncomingMessage(
             sessionStatus: 'active',
             lastUserActivity: now,
             channel: channel,
-            workflowId: defaultWorkflowId, // ✅ Set workflowId na criação
+            workflowId: defaultWorkflowId,
             currentWorkflowNode: defaultStartNode,
             workflowContext: {},
             awaitingInput: false
           }
         })
 
-        console.log(`✨ Nova conversa criada após expiração: ${conversation.id}`)
+        console.log(`✨ Nova conversa criada após conversa FECHADA expirada: ${conversation.id}`)
+
+        // ✅ Emitir evento de nova conversa criada
+        try {
+          const realtime = getRealtime()
+          realtime.io.emit('conversation:updated', {
+            conversationId: conversation.id,
+            phone: conversation.phone,
+            status: 'BOT_QUEUE',
+            sessionExpiryTime: newSessionExpiryTime,
+            sessionStatus: 'active',
+            reason: 'new_conversation_after_expired'
+          })
+          console.log(`📡 Evento conversation:updated emitido para nova conversa: ${conversation.id}`)
+        } catch (e) {
+          console.warn('⚠️ Erro ao emitir evento de nova conversa:', e)
+        }
 
         // Start session in memory manager
         if (patient?.id) {
@@ -1053,15 +1198,275 @@ export async function processIncomingMessage(
             console.warn(`⚠️ Erro ao iniciar sessão:`, err)
           }
         }
-      } else {
+        } // Fim do else (criação de nova conversa quando não existe ativa)
+      }
+      // ✅ CASO 2: Conversa FECHADA mas sessão ainda ativa (<24h desde última mensagem) -> Reabrir conversa
+      // IMPORTANTE: sessionExpired deve ser false (sessão ainda válida) E lastUserActivity deve existir
+      else if (isClosed && !sessionExpired && lastUserActivityTime) {
+        console.log(`🔄 Conversa FECHADA mas sessão ainda ativa (<24h) para ${phone} - Reabrindo conversa existente: ${conversation.id}`)
+
+        // Determine channel from metadata or keep existing
+        const channel = metadata?.platform === 'instagram' ? 'instagram' :
+          (metadata?.platform === 'messenger' ? 'messenger' :
+            (conversation.channel || 'whatsapp'))
+
+        // ✅ Reabrir conversa: voltar para fila PRINCIPAL e resetar sessão
+        // A janela de 24h começa AGORA (quando o usuário envia nova mensagem)
+        const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // +24h a partir de agora
+
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            status: 'PRINCIPAL', // ✅ Voltar para fila PRINCIPAL (Fila 0)
+            assignedToId: null, // ✅ Remover atribuição
+            lastMessage: text,
+            lastTimestamp: now,
+            lastUserActivity: now, // ✅ Resetar: última atividade do usuário é AGORA
+            sessionStartTime: now, // ✅ Resetar início da sessão
+            sessionExpiryTime: newExpiryTime, // ✅ Resetar expiração (24h a partir de agora)
+            sessionStatus: 'active', // ✅ Ativar sessão
+            workflowContext: {}, // ✅ Resetar contexto do workflow
+            awaitingInput: false,
+            // Update channel if it's different and we have metadata indicating the platform
+            ...(metadata?.platform && conversation.channel !== channel ? { channel } : {})
+          }
+        })
+
+        console.log(`✅ Conversa reaberta: ${conversation.id} - Status: PRINCIPAL - Nova expiração: ${newExpiryTime.toISOString()}`)
+
+        // ✅ Emitir evento de conversa reaberta (com dados completos)
+        try {
+          const realtime = getRealtime()
+          // Buscar dados completos da conversa para incluir no evento
+          const fullConversation = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            include: {
+              patient: {
+                select: { id: true, name: true, cpf: true, insuranceCompany: true }
+              },
+              assignedTo: {
+                select: { id: true, name: true, email: true }
+              }
+            }
+          })
+          
+          realtime.io.emit('conversation:updated', {
+            conversationId: conversation.id,
+            phone: conversation.phone,
+            status: 'PRINCIPAL',
+            lastMessage: conversation.lastMessage,
+            lastTimestamp: conversation.lastTimestamp,
+            sessionExpiryTime: newExpiryTime,
+            sessionStatus: 'active',
+            lastUserActivity: conversation.lastUserActivity,
+            assignedToId: null, // ✅ Removido ao reabrir
+            patient: fullConversation?.patient || null,
+            assignedTo: null, // ✅ Removido ao reabrir
+            reason: 'conversation_reopened'
+          })
+          console.log(`📡 Evento conversation:updated emitido para conversa reaberta: ${conversation.id}`)
+        } catch (e) {
+          console.warn('⚠️ Erro ao emitir evento de conversa reaberta:', e)
+        }
+
+        // Start/update session in memory manager
+        if (patient?.id) {
+          try {
+            await sessionManager.startSession(conversation.id, patient.id)
+            console.log(`📊 Sessão reiniciada no manager para: ${conversation.id}`)
+          } catch (err) {
+            console.warn(`⚠️ Erro ao reiniciar sessão no manager:`, err)
+          }
+        }
+      }
+      // ✅ CASO 3: Conversa NÃO FECHADA mas sessão expirada (>24h desde última mensagem)
+      else if (!isClosed && sessionExpired) {
+        // ✅ REGRA: Se conversa está EM_ATENDIMENTO (assignedToId não é null), NÃO fechar
+        // Mas criar nova conversa para a nova mensagem do paciente
+        const isInAgentQueue = conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId !== null
+        
+        if (isInAgentQueue) {
+          console.log(`⏸️ Conversa expirada mas está na fila do atendente (${conversation.assignedToId}) - NÃO fechando, mas criando nova conversa para nova mensagem`)
+          
+          // ✅ NÃO fechar a conversa antiga (deixar na fila do atendente)
+          // Apenas marcar como expirada (sessionStatus)
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              sessionStatus: 'expired'
+              // ✅ NÃO alterar status nem assignedToId - manter na fila do atendente
+            }
+          })
+        } else {
+          // ✅ Conversa expirada mas NÃO está na fila do atendente -> Fechar
+          console.log(`🔄 Conversa ativa com sessão expirada (>24h desde última mensagem) para ${phone} - Fechando e criando nova conversa`)
+          
+          // Fechar conversa antiga
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              sessionStatus: 'expired',
+              status: 'FECHADA',
+              lastUserActivity: now
+            }
+          })
+
+          // Emitir eventos de conversa fechada
+          try {
+            const realtime = getRealtime()
+            // Emitir conversation:closed
+            realtime.io.emit('conversation:closed', {
+              conversationId: conversation.id,
+              phone: conversation.phone,
+              reason: 'session_expired'
+            })
+            // Também emitir conversation:updated
+            realtime.io.emit('conversation:updated', {
+              conversationId: conversation.id,
+              status: 'FECHADA',
+              phone: conversation.phone,
+              reason: 'session_expired'
+            })
+            console.log(`📡 Eventos emitidos: conversation:closed e conversation:updated para ${conversation.id} (sessão expirada)`)
+          } catch (e) {
+            console.warn('⚠️ Erro ao emitir evento de conversa fechada:', e)
+          }
+        }
+        
+        // ✅ Verificar se já existe uma conversa ativa (não fechada) para este phone
+        // Se existir outra conversa ativa além desta, não criar nova (evitar duplicatas)
+        const otherActiveConversation = await prisma.conversation.findFirst({
+          where: {
+            phone,
+            status: { not: 'FECHADA' },
+            id: { not: conversation.id } // Excluir a conversa atual
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+        
+        if (otherActiveConversation) {
+          console.log(`⚠️ Já existe outra conversa ativa para ${phone} (ID: ${otherActiveConversation.id}). Usando ela.`)
+          // Usar a outra conversa ativa
+          conversation = otherActiveConversation
+          // Atualizar lastUserActivity e sessionExpiryTime
+          const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              lastUserActivity: now,
+              sessionExpiryTime: newExpiryTime,
+              sessionStatus: 'active',
+              lastMessage: text,
+              lastTimestamp: now
+            }
+          })
+          // Pular criação de nova conversa e continuar processamento
+        } else {
+
+        // Get workflow BEFORE creating conversation to ensure workflowId is set
+        let defaultWorkflowId: string | null = null
+        let defaultStartNode: string = 'start'
+        try {
+          const wf = await getDefaultWorkflow()
+          if (wf) {
+            defaultWorkflowId = wf.id
+            const cfg = (typeof (wf as any).config === 'string') ? (() => { try { return JSON.parse((wf as any).config) } catch { return {} } })() : ((wf as any).config || {})
+            const nodes = Array.isArray(cfg?.nodes) ? cfg.nodes : []
+            const startNode = nodes.find((n: any) => n.type === 'START')
+            defaultStartNode = startNode?.id || 'start'
+            console.log(`✅ Workflow encontrado: ${wf.id}, startNode: ${defaultStartNode}`)
+          } else {
+            console.warn(`⚠️ Nenhum workflow ativo encontrado no banco`)
+          }
+        } catch (err) {
+          console.error(`❌ Erro ao buscar workflow padrão:`, err)
+        }
+
+        // Criar NOVA conversa
+        const channel = metadata?.platform === 'instagram' ? 'instagram' :
+          (metadata?.platform === 'messenger' ? 'messenger' : 'whatsapp')
+
+        const newSessionExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+
+        conversation = await prisma.conversation.create({
+          data: {
+            phone,
+            status: 'BOT_QUEUE',
+            patientId: patient?.id || null,
+            lastMessage: text,
+            lastTimestamp: now,
+            sessionStartTime: now,
+            sessionExpiryTime: newSessionExpiryTime,
+            sessionStatus: 'active',
+            lastUserActivity: now,
+            channel: channel,
+            workflowId: defaultWorkflowId,
+            currentWorkflowNode: defaultStartNode,
+            workflowContext: {},
+            awaitingInput: false
+          }
+        })
+
+        console.log(`✨ Nova conversa criada após expiração: ${conversation.id}`)
+
+        // ✅ Emitir evento de nova conversa criada (com dados completos)
+        try {
+          const realtime = getRealtime()
+          // Buscar dados completos da conversa para incluir no evento
+          const fullConversation = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            include: {
+              patient: {
+                select: { id: true, name: true, cpf: true, insuranceCompany: true }
+              },
+              assignedTo: {
+                select: { id: true, name: true, email: true }
+              }
+            }
+          })
+          
+          realtime.io.emit('conversation:updated', {
+            conversationId: conversation.id,
+            phone: conversation.phone,
+            status: 'BOT_QUEUE',
+            lastMessage: conversation.lastMessage,
+            lastTimestamp: conversation.lastTimestamp,
+            sessionExpiryTime: newSessionExpiryTime,
+            sessionStatus: 'active',
+            lastUserActivity: conversation.lastUserActivity,
+            unreadCount: 1, // Nova mensagem = não lida
+            channel: conversation.channel,
+            patient: fullConversation?.patient || null,
+            assignedTo: fullConversation?.assignedTo || null,
+            assignedToId: fullConversation?.assignedToId || null,
+            reason: 'new_conversation_after_expired'
+          })
+          console.log(`📡 Evento conversation:updated emitido para nova conversa: ${conversation.id}`)
+        } catch (e) {
+          console.warn('⚠️ Erro ao emitir evento de nova conversa:', e)
+        }
+
+        // Start session in memory manager
+        if (patient?.id) {
+          try {
+            await sessionManager.startSession(conversation.id, patient.id)
+          } catch (err) {
+            console.warn(`⚠️ Erro ao iniciar sessão:`, err)
+          }
+        }
+        } // Fim do else (criação de nova conversa)
+      }
+      // ✅ CASO 4: Conversa NÃO FECHADA e sessão ativa (<24h desde última mensagem) -> Atualizar atividade
+      else {
         // Session still active - update activity
         // Determine channel from metadata or keep existing
         const channel = metadata?.platform === 'instagram' ? 'instagram' :
           (metadata?.platform === 'messenger' ? 'messenger' :
             (conversation.channel || 'whatsapp'))
 
-        // ✅ NOVO: Reset session expiry quando paciente envia mensagem
-        const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // +24h
+        // ✅ Reset session expiry quando paciente envia mensagem
+        // A janela de 24h começa AGORA (quando o usuário envia nova mensagem)
+        const newExpiryTime = new Date(now.getTime() + 24 * 60 * 60 * 1000) // +24h a partir de agora
 
         // Update last activity, session expiry and channel if needed
         await prisma.conversation.update({
@@ -2649,15 +3054,28 @@ router.post('/:phone/close', authMiddleware, async (req: Request, res: Response)
     }
     */
 
-    // Emitir evento Socket.IO
+    // Emitir eventos Socket.IO
     try {
       const { getRealtime } = await import('../realtime.js')
       const { io } = getRealtime()
+      
+      // Emitir evento específico de conversa fechada
       io.emit('conversation:closed', {
         conversationId: conversation.id,
         phone,
         closedBy: req.user?.name
       })
+      
+      // Também emitir conversation:updated para garantir que frontend atualize
+      io.emit('conversation:updated', {
+        conversationId: updatedConversation.id,
+        status: 'FECHADA',
+        phone: updatedConversation.phone,
+        lastMessage: updatedConversation.lastMessage,
+        lastTimestamp: updatedConversation.lastTimestamp
+      })
+      
+      console.log(`📡 Eventos emitidos: conversation:closed e conversation:updated para ${conversation.id}`)
     } catch (error) {
       console.error('Erro ao emitir evento Socket.IO:', error)
     }

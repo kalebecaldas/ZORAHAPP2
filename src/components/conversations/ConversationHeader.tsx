@@ -8,6 +8,7 @@ interface ConversationHeaderProps {
     sessionInfo?: any;
     canWrite?: boolean;
     userId?: string;
+    isSessionExpired?: boolean; // ✅ Adicionar flag de sessão expirada
     onShowHistory?: () => void;
     onShowTransfer?: () => void;
     onShowClose?: () => void;
@@ -18,6 +19,7 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
     sessionInfo,
     canWrite = false,
     userId,
+    isSessionExpired = false, // ✅ Adicionar flag
     onShowHistory,
     onShowTransfer,
     onShowClose
@@ -228,12 +230,12 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
                         </button>
                     )}
 
-                    {/* Close button - only if user has write access */}
-                    {canWrite && onShowClose && (
+                    {/* Close button - if user has write access OR if session is expired (allow closing expired conversations) */}
+                    {((canWrite || isSessionExpired) && conversation.status !== 'FECHADA' && onShowClose) && (
                         <button
                             onClick={onShowClose}
                             className="p-2 hover:bg-red-50 rounded-lg transition-colors group"
-                            title="Encerrar conversa"
+                            title={isSessionExpired ? "Encerrar conversa (sessão expirada)" : "Encerrar conversa"}
                         >
                             <Archive className="h-5 w-5 text-red-600 group-hover:text-red-700" />
                         </button>

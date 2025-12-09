@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
     Phone, User, Bot, Clock, Users, UserCheck, Archive,
     Send, Paperclip, Mic, StopCircle, X, Image as ImageIcon,
@@ -33,6 +33,7 @@ type QueueType = 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSA
 const ConversationsPage: React.FC = () => {
     const { phone } = useParams<{ phone: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const { socket } = useSocket();
 
@@ -40,6 +41,16 @@ const ConversationsPage: React.FC = () => {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
+    
+    // ✅ Debug: Log quando selectedConversation muda
+    useEffect(() => {
+        console.log('🔄 [selectedConversation] Mudou:', {
+            id: selectedConversation?.id,
+            phone: selectedConversation?.phone,
+            status: selectedConversation?.status,
+            assignedToId: selectedConversation?.assignedToId
+        });
+    }, [selectedConversation]);
     // Começar sempre com "Minhas Conversas" por padrão
     const [activeQueue, setActiveQueue] = useState<QueueType>('MINHAS_CONVERSAS');
     const [newMessage, setNewMessage] = useState('');
@@ -124,15 +135,38 @@ const ConversationsPage: React.FC = () => {
     // ✅ Fetch active conversations (for counts and active queues)
     const fetchConversations = async () => {
         try {
-            // Fetch only active conversations to reduce load
-            const response = await api.get('/api/conversations?status=ACTIVE&limit=100');
-            const convs = response.data.conversations || [];
+            // ✅ Buscar conversas ativas E conversas atribuídas ao usuário (mesmo se expiradas)
+            // Isso garante que conversas expiradas apareçam em "MINHAS_CONVERSAS"
+            const [activeResponse, myConversationsResponse] = await Promise.all([
+                api.get('/api/conversations?status=ACTIVE&limit=100'),
+                user?.id ? api.get(`/api/conversations?assignedTo=${user.id}&limit=100`).catch(() => ({ data: { conversations: [] } })) : Promise.resolve({ data: { conversations: [] } })
+            ]);
+            
+            const activeConvs = activeResponse.data.conversations || [];
+            const myConvs = myConversationsResponse.data.conversations || [];
+            
+            // ✅ Combinar e remover duplicatas (usar Map para garantir IDs únicos)
+            const conversationsMap = new Map<string, any>();
+            
+            // Adicionar conversas ativas primeiro
+            activeConvs.forEach((c: any) => {
+                conversationsMap.set(c.id, c);
+            });
+            
+            // Adicionar conversas do usuário (mesmo expiradas) - sobrescreve se já existir
+            myConvs.forEach((c: any) => {
+                conversationsMap.set(c.id, c);
+            });
+            
+            const convs = Array.from(conversationsMap.values());
 
             // 🔍 DEBUG: Verificar unreadCount
             console.log('🔍 Conversas recebidas:', convs.map((c: any) => ({
                 phone: c.phone,
                 unreadCount: c.unreadCount,
-                lastMessage: c.lastMessage?.substring(0, 20)
+                lastMessage: c.lastMessage?.substring(0, 20),
+                status: c.status,
+                assignedToId: c.assignedToId
             })));
 
             setConversations(convs);
@@ -148,7 +182,8 @@ const ConversationsPage: React.FC = () => {
     const fetchClosedConversations = async (page = 1, append = false, search = '') => {
         try {
             setLoadingClosed(true);
-            const response = await api.get(`/api/conversations?status=CLOSED&page=${page}&limit=20&search=${search}`);
+            // Adicionar timestamp para evitar cache quando necessário
+            const response = await api.get(`/api/conversations?status=CLOSED&page=${page}&limit=20&search=${search}&_t=${Date.now()}`);
 
             const newConversations = response.data.conversations || [];
             const total = response.data.pagination.total;
@@ -170,9 +205,21 @@ const ConversationsPage: React.FC = () => {
     };
 
     // Fetch messages for selected conversation
-    const fetchMessages = async (conversationPhone: string) => {
+    const fetchMessages = async (conversationPhone: string, conversationId?: string) => {
         try {
-            const response = await api.get(`/api/conversations/${conversationPhone}`);
+            console.log('📨 [fetchMessages] Buscando mensagens:', { conversationPhone, conversationId });
+            // ✅ Se conversationId for fornecido, buscar por ID (conversa específica)
+            // Caso contrário, buscar por phone (conversa mais recente)
+            const response = conversationId 
+                ? await api.get(`/api/conversations/id/${conversationId}`)
+                : await api.get(`/api/conversations/${conversationPhone}`);
+            
+            console.log('📨 [fetchMessages] Resposta recebida:', { 
+                conversationId: response.data?.id, 
+                phone: response.data?.phone,
+                messagesCount: response.data?.messages?.length 
+            });
+            
             const msgs = (response.data?.messages || []).map((m: any) => ({
                 id: m.id,
                 conversationId: response.data.id || conversationPhone,
@@ -191,6 +238,7 @@ const ConversationsPage: React.FC = () => {
             // Update selected conversation data with complete response
             const conv = response.data;
             if (conv) {
+                console.log('✅ [fetchMessages] Atualizando selectedConversation:', conv.id, 'status:', conv.status);
                 setSelectedConversation({
                     id: conv.id,
                     phone: conv.phone,
@@ -207,7 +255,8 @@ const ConversationsPage: React.FC = () => {
                     sessionExpiryTime: conv.sessionExpiryTime,
                     sessionStatus: conv.sessionStatus,
                     lastUserActivity: conv.lastUserActivity,
-                    channel: conv.channel || 'whatsapp'
+                    channel: conv.channel || 'whatsapp',
+                    unreadCount: conv.unreadCount || 0
                 });
             } else {
                 // If no conversation data, clear selection
@@ -215,10 +264,17 @@ const ConversationsPage: React.FC = () => {
                 setMessages([]);
             }
 
-            // ✅ Marcar conversa como lida
+            // ✅ Marcar conversa como lida APENAS se estiver EM_ATENDIMENTO
+            // Se não estiver EM_ATENDIMENTO, manter o contador de não lidas
             try {
-                await api.post(`/api/conversations/${conversationPhone}/mark-read`);
-                console.log('📖 Conversa marcada como lida:', conversationPhone);
+                const conv = response.data;
+                if (conv && conv.status === 'EM_ATENDIMENTO') {
+                    // Só marcar como lida se estiver na fila do atendente
+                    await api.post(`/api/conversations/${conversationPhone}/mark-read`);
+                    console.log('📖 Conversa marcada como lida (EM_ATENDIMENTO):', conversationPhone, conversationId ? `(ID: ${conversationId})` : '');
+                } else {
+                    console.log('⏭️ Conversa não marcada como lida (não está EM_ATENDIMENTO):', conversationPhone, 'status:', conv?.status);
+                }
             } catch (error) {
                 console.warn('⚠️ Erro ao marcar como lida:', error);
             }
@@ -298,19 +354,30 @@ const ConversationsPage: React.FC = () => {
     // Assume conversation
     const handleAssume = async (conversation: Conversation) => {
         try {
-            await api.post('/api/conversations/actions', {
+            const response = await api.post('/api/conversations/actions', {
                 action: 'take',
                 phone: conversation.phone,
                 assignTo: user?.id
             });
-            toast.success('Conversa assumida com sucesso!');
-            fetchConversations();
-            if (selectedConversation?.id === conversation.id) {
+            
+            // ✅ Atualizar selectedConversation com os dados atualizados
+            if (selectedConversation?.phone === conversation.phone) {
+                const updatedConv = response.data;
+                setSelectedConversation({
+                    ...selectedConversation,
+                    status: updatedConv.status,
+                    assignedToId: updatedConv.assignedToId,
+                    assignedTo: updatedConv.assignedTo
+                });
+                // Recarregar mensagens para garantir dados atualizados
                 fetchMessages(conversation.phone);
             }
-        } catch (error) {
+            
+            toast.success('Conversa assumida com sucesso!');
+            fetchConversations();
+        } catch (error: any) {
             console.error('Error assuming conversation:', error);
-            toast.error('Erro ao assumir conversa');
+            toast.error(error?.response?.data?.error || 'Erro ao assumir conversa');
         }
     };
 
@@ -417,10 +484,11 @@ const ConversationsPage: React.FC = () => {
 
 
     // Send message with optimistic update
-    const sendMessage = async () => {
-        if ((!newMessage.trim() && pendingFiles.length === 0 && !audioBlob) || sending) return;
+    const sendMessage = async (overrideText?: string) => {
+        const messageToSend = overrideText || newMessage.trim();
+        if ((!messageToSend && pendingFiles.length === 0 && !audioBlob) || sending) return;
 
-        const messageText = newMessage.trim();
+        const messageText = messageToSend;
         const tempId = `temp-${Date.now()}-${Math.random()}`;
         const now = new Date().toISOString();
 
@@ -567,8 +635,42 @@ const ConversationsPage: React.FC = () => {
     useEffect(() => {
         fetchConversations();
         fetchAgents();
+        
+        // ✅ Buscar total inicial de conversas encerradas para inicializar contador
+        const initClosedTotal = async () => {
+            try {
+                const response = await api.get(`/api/conversations?status=CLOSED&page=1&limit=1&_t=${Date.now()}`);
+                const total = response.data.pagination?.total;
+                if (total !== undefined) {
+                    setClosedTotal(total);
+                    console.log(`📊 Contador de encerrados inicializado: ${total}`);
+                }
+            } catch (err) {
+                console.error('Erro ao buscar total inicial de encerradas:', err);
+            }
+        };
+        initClosedTotal();
+        
+        // ✅ Atualizar contador de encerrados periodicamente (a cada 30s)
+        const updateClosedTotal = async () => {
+            try {
+                const response = await api.get(`/api/conversations?status=CLOSED&page=1&limit=1&_t=${Date.now()}`);
+                const total = response.data.pagination?.total;
+                if (total !== undefined) {
+                    setClosedTotal(total);
+                }
+            } catch (err) {
+                console.error('Erro ao atualizar contador de encerradas:', err);
+            }
+        };
+        
         const interval = setInterval(fetchConversations, 30000);
-        return () => clearInterval(interval);
+        const closedTotalInterval = setInterval(updateClosedTotal, 30000);
+        
+        return () => {
+            clearInterval(interval);
+            clearInterval(closedTotalInterval);
+        };
     }, []);
 
     // ✅ Carregar atalhos ao montar componente
@@ -587,7 +689,7 @@ const ConversationsPage: React.FC = () => {
     // ✅ Detectar autocomplete ao digitar /
     useEffect(() => {
         if (newMessage.startsWith('/')) {
-            const query = newMessage.slice(1).toLowerCase();
+            const query = newMessage.slice(1).toLowerCase().trim();
             const matches = quickReplies.filter(qr =>
                 qr.shortcut.toLowerCase().includes(query)
             );
@@ -610,27 +712,479 @@ const ConversationsPage: React.FC = () => {
         }
     }, [activeQueue, searchQuery]);
 
+    // ✅ Listener global para conversas encerradas (funciona mesmo sem conversa selecionada)
+    useEffect(() => {
+        if (!socket) return;
+
+        const onConversationClosed = (data: any) => {
+            console.log('🔒 [GLOBAL] conversation:closed evento recebido:', data);
+
+            if (data.conversationId) {
+                // ✅ Verificar se é fechamento por expiração de sessão (pode ter nova conversa sendo criada)
+                const isSessionExpired = data.reason === 'session_expired';
+                
+                // ✅ Atualização otimista: incrementar contador imediatamente
+                setClosedTotal(prev => prev + 1);
+
+                // Remover da lista de conversas ativas
+                setConversations(prev => {
+                    const exists = prev.find(c => c.id === data.conversationId);
+                    if (exists) {
+                        // Adicionar à lista de encerradas
+                        setClosedConversations(prevClosed => {
+                            const alreadyInClosed = prevClosed.some(c => c.id === data.conversationId);
+                            if (!alreadyInClosed) {
+                                const closedConv = {
+                                    ...exists,
+                                    status: 'FECHADA' as const
+                                };
+                                return [closedConv, ...prevClosed];
+                            }
+                            return prevClosed;
+                        });
+                    }
+                    // ✅ Se for expiração de sessão, não remover imediatamente (aguardar nova conversa)
+                    // A nova conversa será adicionada pelo evento conversation:updated
+                    if (isSessionExpired) {
+                        console.log('⏳ Conversa expirada - aguardando nova conversa antes de remover da lista');
+                        // Remover apenas após pequeno delay para dar tempo da nova conversa aparecer
+                        setTimeout(() => {
+                            setConversations(prevList => prevList.filter(c => c.id !== data.conversationId));
+                        }, 1000);
+                        return prev; // Não remover ainda
+                    }
+                    return prev.filter(c => c.id !== data.conversationId);
+                });
+
+                // ✅ Buscar total atualizado do backend para garantir consistência
+                if (activeQueue === 'ENCERRADOS') {
+                    // Se estiver na aba, recarregar tudo (forçar atualização com timestamp)
+                    api.get(`/api/conversations?status=CLOSED&page=1&limit=20&search=${searchQuery}&_t=${Date.now()}`)
+                        .then(response => {
+                            const newConversations = response.data.conversations || [];
+                            setClosedConversations(newConversations);
+                            setClosedTotal(response.data.pagination.total); // ✅ Confirmar com backend
+                        })
+                        .catch(err => console.error('Erro ao recarregar encerradas:', err));
+                } else {
+                    // ✅ Se não estiver na aba, buscar apenas o total (requisição leve)
+                    // Forçar atualização mesmo com cache (adicionar timestamp)
+                    api.get(`/api/conversations?status=CLOSED&page=1&limit=1&_t=${Date.now()}`)
+                        .then(response => {
+                            const total = response.data.pagination?.total;
+                            if (total !== undefined) {
+                                setClosedTotal(total); // ✅ Confirmar com backend
+                                console.log(`📊 Contador de encerrados confirmado: ${total}`);
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Erro ao buscar total de encerradas:', err);
+                            // Se falhar, manter o incremento otimista
+                        });
+                }
+            }
+        };
+
+        const onConversationUpdatedGlobal = (data: any) => {
+            // ✅ Processar conversas encerradas
+            if (data.status === 'FECHADA' && data.conversationId) {
+                console.log('🔄 [GLOBAL] conversation:updated com status FECHADA:', data);
+                
+                // ✅ Atualização otimista: incrementar contador imediatamente
+                setClosedTotal(prev => prev + 1);
+                
+                setConversations(prev => {
+                    const exists = prev.find(c => c.id === data.conversationId);
+                    if (exists) {
+                        // Adicionar à lista de encerradas se não estiver lá
+                        setClosedConversations(prevClosed => {
+                            const alreadyInClosed = prevClosed.some(c => c.id === data.conversationId);
+                            if (!alreadyInClosed) {
+                                const closedConv = {
+                                    ...exists,
+                                    status: 'FECHADA' as const,
+                                    ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                                    ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
+                                };
+                                return [closedConv, ...prevClosed];
+                            }
+                            return prevClosed.map(c => 
+                                c.id === data.conversationId 
+                                    ? { ...c, ...(data.lastMessage && { lastMessage: data.lastMessage }), ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }) }
+                                    : c
+                            );
+                        });
+                    }
+                    return prev.filter(c => c.id !== data.conversationId);
+                });
+
+                // ✅ Buscar total atualizado do backend para garantir consistência
+                if (activeQueue === 'ENCERRADOS') {
+                    // Se estiver na aba, recarregar tudo
+                    setClosedConversations(prev => {
+                        const exists = prev.find(c => c.id === data.conversationId);
+                        if (!exists) {
+                            // Se não existe, recarregar (forçar atualização com timestamp)
+                            api.get(`/api/conversations?status=CLOSED&page=1&limit=20&search=${searchQuery}&_t=${Date.now()}`)
+                                .then(response => {
+                                    const newConversations = response.data.conversations || [];
+                                    setClosedConversations(newConversations);
+                                    setClosedTotal(response.data.pagination.total); // ✅ Confirmar com backend
+                                })
+                                .catch(err => console.error('Erro ao recarregar encerradas:', err));
+                        } else {
+                            // Se existe, apenas buscar total
+                            api.get(`/api/conversations?status=CLOSED&page=1&limit=1&_t=${Date.now()}`)
+                                .then(response => {
+                                    const total = response.data.pagination?.total;
+                                    if (total !== undefined) {
+                                        setClosedTotal(total); // ✅ Confirmar com backend
+                                    }
+                                })
+                                .catch(err => console.error('Erro ao buscar total:', err));
+                        }
+                        return prev;
+                    });
+                } else {
+                    // ✅ Se não estiver na aba, buscar apenas o total (requisição leve)
+                    // Forçar atualização mesmo com cache (adicionar timestamp)
+                    api.get(`/api/conversations?status=CLOSED&page=1&limit=1&_t=${Date.now()}`)
+                        .then(response => {
+                            const total = response.data.pagination?.total;
+                            if (total !== undefined) {
+                                setClosedTotal(total); // ✅ Confirmar com backend
+                                console.log(`📊 Contador de encerrados confirmado: ${total}`);
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Erro ao buscar total de encerradas:', err);
+                            // Se falhar, manter o incremento otimista
+                        });
+                }
+            }
+            // ✅ Processar conversas reabertas (FECHADA -> PRINCIPAL)
+            else if (data.conversationId && data.status === 'PRINCIPAL' && data.reason === 'conversation_reopened') {
+                console.log('🔄 [GLOBAL] conversation:updated - Conversa reaberta:', data);
+                
+                // ✅ Remover da lista de encerradas (se estiver lá)
+                setClosedConversations(prev => prev.filter(c => c.id !== data.conversationId));
+                setClosedTotal(prev => Math.max(0, prev - 1));
+                
+                // ✅ Buscar dados completos da conversa reaberta
+                api.get(`/api/conversations/id/${data.conversationId}`)
+                    .then(response => {
+                        const reopenedConv = response.data;
+                        if (reopenedConv) {
+                            console.log('✅ Dados completos da conversa reaberta recebidos:', reopenedConv.id);
+                            
+                            // ✅ Adicionar/atualizar conversa na lista ativa
+                            setConversations(prev => {
+                                const exists = prev.find(c => c.id === reopenedConv.id);
+                                if (!exists) {
+                                    const fullConv: Conversation = {
+                                        id: reopenedConv.id,
+                                        phone: reopenedConv.phone,
+                                        status: reopenedConv.status,
+                                        priority: reopenedConv.priority || 'MEDIUM',
+                                        lastMessage: reopenedConv.lastMessage || '',
+                                        lastTimestamp: reopenedConv.lastTimestamp || new Date(),
+                                        sessionExpiryTime: reopenedConv.sessionExpiryTime,
+                                        sessionStatus: reopenedConv.sessionStatus || 'active',
+                                        lastUserActivity: reopenedConv.lastUserActivity || new Date(),
+                                        unreadCount: reopenedConv.unreadCount || 1,
+                                        patient: reopenedConv.patient || null,
+                                        assignedTo: reopenedConv.assignedTo || null,
+                                        assignedToId: reopenedConv.assignedToId || null,
+                                        channel: reopenedConv.channel || 'whatsapp',
+                                        createdAt: reopenedConv.createdAt,
+                                        updatedAt: reopenedConv.updatedAt
+                                    };
+                                    console.log('✅ Conversa reaberta adicionada à lista:', fullConv.id, 'status:', fullConv.status);
+                                    return [fullConv, ...prev];
+                                }
+                                // Se já existe, atualizar com dados mais recentes
+                                return prev.map(c => {
+                                    if (c.id === reopenedConv.id) {
+                                        return {
+                                            ...c,
+                                            id: reopenedConv.id,
+                                            phone: reopenedConv.phone,
+                                            status: reopenedConv.status,
+                                            priority: reopenedConv.priority || c.priority || 'MEDIUM',
+                                            lastMessage: reopenedConv.lastMessage || '',
+                                            lastTimestamp: reopenedConv.lastTimestamp || new Date(),
+                                            sessionExpiryTime: reopenedConv.sessionExpiryTime,
+                                            sessionStatus: reopenedConv.sessionStatus || 'active',
+                                            lastUserActivity: reopenedConv.lastUserActivity || new Date(),
+                                            unreadCount: reopenedConv.unreadCount || 1,
+                                            patient: reopenedConv.patient || null,
+                                            assignedTo: reopenedConv.assignedTo || null,
+                                            assignedToId: reopenedConv.assignedToId || null,
+                                            channel: reopenedConv.channel || 'whatsapp',
+                                            createdAt: reopenedConv.createdAt || c.createdAt,
+                                            updatedAt: reopenedConv.updatedAt || c.updatedAt
+                                        };
+                                    }
+                                    return c;
+                                });
+                            });
+                            
+                            // Se a conversa selecionada for do mesmo phone, atualizar
+                            if (selectedConversation?.phone === data.phone) {
+                                console.log('🔄 Atualizando conversa selecionada para a reaberta:', reopenedConv.id);
+                                fetchMessages(data.phone, reopenedConv.id);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('⚠️ Erro ao buscar dados completos da conversa reaberta:', err);
+                        // Fallback: atualizar otimisticamente com dados do evento
+                        setConversations(prev => prev.map(c => {
+                            if (c.id === data.conversationId || c.phone === data.phone) {
+                                return {
+                                    ...c,
+                                    status: 'PRINCIPAL',
+                                    assignedToId: null,
+                                    assignedTo: null,
+                                    ...(data.sessionExpiryTime && { sessionExpiryTime: data.sessionExpiryTime }),
+                                    ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                                    ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
+                                };
+                            }
+                            return c;
+                        }));
+                    });
+                
+                // ✅ Recarregar lista completa após delay para garantir consistência
+                setTimeout(() => {
+                    fetchConversations();
+                }, 500);
+            }
+            // ✅ Processar novas conversas criadas (BOT_QUEUE, PRINCIPAL, etc)
+            else if (data.conversationId && data.status && data.status !== 'FECHADA' && (data.reason === 'new_conversation' || data.reason === 'new_conversation_after_expired')) {
+                console.log('🔄 [GLOBAL] conversation:updated - Nova conversa criada:', data);
+                
+                // ✅ Buscar dados completos da nova conversa do backend
+                api.get(`/api/conversations/id/${data.conversationId}`)
+                    .then(response => {
+                        const newConv = response.data;
+                        if (newConv) {
+                            console.log('✅ Dados completos da nova conversa recebidos:', newConv.id);
+                            
+                            // ✅ Adicionar nova conversa à lista com dados completos
+                            setConversations(prev => {
+                                const exists = prev.find(c => c.id === newConv.id);
+                                if (!exists) {
+                                    const fullConv: Conversation = {
+                                        id: newConv.id,
+                                        phone: newConv.phone,
+                                        status: newConv.status,
+                                        priority: newConv.priority || 'MEDIUM',
+                                        lastMessage: newConv.lastMessage || '',
+                                        lastTimestamp: newConv.lastTimestamp || new Date(),
+                                        sessionExpiryTime: newConv.sessionExpiryTime,
+                                        sessionStatus: newConv.sessionStatus || 'active',
+                                        lastUserActivity: newConv.lastUserActivity || new Date(),
+                                        unreadCount: newConv.unreadCount || 1, // Nova mensagem = não lida
+                                        patient: newConv.patient || null,
+                                        assignedTo: newConv.assignedTo || null,
+                                        assignedToId: newConv.assignedToId || null,
+                                        channel: newConv.channel || 'whatsapp',
+                                        createdAt: newConv.createdAt,
+                                        updatedAt: newConv.updatedAt
+                                    };
+                                    console.log('✅ Nova conversa adicionada à lista:', fullConv.id, 'status:', fullConv.status);
+                                    return [fullConv, ...prev];
+                                }
+                                // Se já existe, atualizar com dados mais recentes
+                                return prev.map(c => {
+                                    if (c.id === newConv.id) {
+                                        return {
+                                            ...c,
+                                            id: newConv.id,
+                                            phone: newConv.phone,
+                                            status: newConv.status,
+                                            priority: newConv.priority || c.priority || 'MEDIUM',
+                                            lastMessage: newConv.lastMessage || '',
+                                            lastTimestamp: newConv.lastTimestamp || new Date(),
+                                            sessionExpiryTime: newConv.sessionExpiryTime,
+                                            sessionStatus: newConv.sessionStatus || 'active',
+                                            lastUserActivity: newConv.lastUserActivity || new Date(),
+                                            unreadCount: newConv.unreadCount || 1,
+                                            patient: newConv.patient || null,
+                                            assignedTo: newConv.assignedTo || null,
+                                            assignedToId: newConv.assignedToId || null,
+                                            channel: newConv.channel || 'whatsapp',
+                                            createdAt: newConv.createdAt || c.createdAt,
+                                            updatedAt: newConv.updatedAt || c.updatedAt
+                                        };
+                                    }
+                                    return c;
+                                });
+                            });
+                            
+                            // Se a conversa selecionada for do mesmo phone, atualizar para a nova
+                            if (selectedConversation?.phone === data.phone) {
+                                console.log('🔄 Atualizando conversa selecionada para a nova:', newConv.id);
+                                fetchMessages(data.phone, newConv.id);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('⚠️ Erro ao buscar dados completos da nova conversa:', err);
+                        // Fallback: adicionar otimisticamente com dados do evento
+                        setConversations(prev => {
+                            const exists = prev.find(c => c.id === data.conversationId);
+                            if (!exists) {
+                                const newConv: Conversation = {
+                                    id: data.conversationId,
+                                    phone: data.phone,
+                                    status: data.status,
+                                    priority: 'MEDIUM',
+                                    lastMessage: data.lastMessage || '',
+                                    lastTimestamp: data.lastTimestamp || new Date(),
+                                    sessionExpiryTime: data.sessionExpiryTime,
+                                    sessionStatus: data.sessionStatus || 'active',
+                                    lastUserActivity: data.lastUserActivity || new Date(),
+                                    unreadCount: 1,
+                                    patient: null,
+                                    assignedTo: null,
+                                    assignedToId: null,
+                                    channel: data.channel || 'whatsapp',
+                                    createdAt: new Date().toISOString(),
+                                    updatedAt: new Date().toISOString()
+                                };
+                                return [newConv, ...prev];
+                            }
+                            return prev;
+                        });
+                    });
+                
+                // ✅ Recarregar lista completa após delay para garantir consistência
+                setTimeout(() => {
+                    fetchConversations();
+                }, 1000);
+            }
+            // ✅ Processar atualizações gerais de conversas (sem reason específico)
+            else if (data.conversationId && data.status && data.status !== 'FECHADA' && !data.reason) {
+                console.log('🔄 [GLOBAL] conversation:updated - Atualização geral:', data);
+                // Atualizar conversa existente na lista
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId || c.phone === data.phone) {
+                        return {
+                            ...c,
+                            ...(data.status && { status: data.status }),
+                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
+                            ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                            ...(data.assignedTo && { assignedTo: data.assignedTo }),
+                            ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
+                            ...(data.sessionExpiryTime && { sessionExpiryTime: data.sessionExpiryTime }),
+                            ...(data.sessionStatus && { sessionStatus: data.sessionStatus }),
+                            ...(data.lastUserActivity && { lastUserActivity: data.lastUserActivity })
+                        };
+                    }
+                    return c;
+                }));
+                
+                // Se for a conversa selecionada, atualizar também
+                if (selectedConversation?.id === data.conversationId || selectedConversation?.phone === data.phone) {
+                    setSelectedConversation(prev => prev ? {
+                        ...prev,
+                        ...(data.status && { status: data.status }),
+                        ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                        ...(data.assignedTo && { assignedTo: data.assignedTo }),
+                        ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount })
+                    } : null);
+                }
+            }
+        };
+
+        socket.on('conversation:closed', onConversationClosed);
+        socket.on('conversation:updated', onConversationUpdatedGlobal);
+
+        return () => {
+            socket.off('conversation:closed', onConversationClosed);
+            socket.off('conversation:updated', onConversationUpdatedGlobal);
+        };
+    }, [socket, activeQueue, searchQuery, fetchConversations, selectedConversation]);
+
 
     useEffect(() => {
         if (phone) {
-            const conv = conversations.find(c => c.phone === phone);
-            if (conv) {
-                setSelectedConversation(conv);
-                fetchMessages(phone);
+            // ✅ Ler conversationId da URL usando useLocation (reativo)
+            const urlParams = new URLSearchParams(location.search);
+            const conversationId = urlParams.get('conversationId');
+            
+            console.log('🔍 [useEffect] phone:', phone, 'conversationId:', conversationId, 'conversations.length:', conversations.length, 'location.search:', location.search);
+            
+            if (conversationId) {
+                console.log('🔍 Buscando conversa específica por ID:', conversationId);
+                // Buscar conversa específica por ID
+                const conv = conversations.find(c => c.id === conversationId);
+                if (conv) {
+                    console.log('✅ Conversa encontrada na lista local:', conv.id, 'status:', conv.status);
+                    setSelectedConversation(conv);
+                    // ✅ Passar conversationId para buscar mensagens da conversa específica
+                    fetchMessages(phone, conversationId);
+                } else {
+                    console.log('⚠️ Conversa não encontrada na lista, buscando da API...');
+                    // Se não estiver na lista, buscar diretamente por ID
+                    api.get(`/api/conversations/id/${conversationId}`)
+                        .then(response => {
+                            const conv = response.data;
+                            console.log('✅ Conversa encontrada na API:', conv.id, 'status:', conv.status);
+                            const updatedConv = {
+                                id: conv.id,
+                                phone: conv.phone,
+                                status: conv.status,
+                                lastMessage: conv.lastMessage,
+                                lastTimestamp: conv.lastTimestamp,
+                                patient: conv.patient,
+                                assignedTo: conv.assignedTo,
+                                assignedToId: conv.assignedToId,
+                                priority: conv.priority || 'MEDIUM',
+                                createdAt: conv.createdAt,
+                                updatedAt: conv.updatedAt,
+                                sessionStartTime: conv.sessionStartTime,
+                                sessionExpiryTime: conv.sessionExpiryTime,
+                                sessionStatus: conv.sessionStatus,
+                                lastUserActivity: conv.lastUserActivity,
+                                channel: conv.channel || 'whatsapp',
+                                unreadCount: conv.unreadCount || 0
+                            };
+                            setSelectedConversation(updatedConv);
+                            // ✅ Passar conversationId para buscar mensagens da conversa específica
+                            fetchMessages(conv.phone, conversationId);
+                        })
+                        .catch((error) => {
+                            console.error('Error fetching conversation by ID:', error);
+                            toast.error('Conversa não encontrada');
+                        });
+                }
             } else {
-                // If conversation not in list, try to fetch it directly
-                // This handles cases where conversation was just moved to a queue
-                fetchMessages(phone).catch((error) => {
-                    console.error('Error fetching conversation:', error);
-                    // Don't redirect, just show error
-                    toast.error('Conversa não encontrada');
-                });
+                // Comportamento normal: buscar conversa mais recente por phone
+                const conv = conversations.find(c => c.phone === phone);
+                if (conv) {
+                    console.log('✅ Conversa encontrada na lista (sem conversationId):', conv.id);
+                    setSelectedConversation(conv);
+                    fetchMessages(phone);
+                } else {
+                    console.log('⚠️ Conversa não encontrada na lista, buscando por phone...');
+                    // If conversation not in list, try to fetch it directly
+                    // This handles cases where conversation was just moved to a queue
+                    fetchMessages(phone).catch((error) => {
+                        console.error('Error fetching conversation:', error);
+                        // Don't redirect, just show error
+                        toast.error('Conversa não encontrada');
+                    });
+                }
             }
         } else {
             setSelectedConversation(null);
             setMessages([]);
         }
-    }, [phone, conversations]);
+    }, [phone, conversations, location.search]);
 
     // Fetch session info when conversation is selected
     useEffect(() => {
@@ -800,29 +1354,94 @@ const ConversationsPage: React.FC = () => {
         socket.on('conversation:updated', (data) => {
             console.log('🔄 [conversation:updated] Evento recebido:', data);
 
+            // ✅ Atualizar selectedConversation se for a conversa selecionada
+            if (selectedConversation && (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
+                console.log('🔄 Atualizando selectedConversation com dados do evento:', {
+                    currentId: selectedConversation.id,
+                    eventId: data.conversationId,
+                    currentPhone: selectedConversation.phone,
+                    eventPhone: data.phone
+                });
+                setSelectedConversation(prev => {
+                    if (!prev) return null;
+                    const updated = {
+                        ...prev,
+                        status: data.status || prev.status,
+                        assignedToId: data.assignedToId !== undefined ? data.assignedToId : prev.assignedToId,
+                        assignedTo: data.assignedTo || prev.assignedTo
+                    };
+                    console.log('✅ selectedConversation atualizado:', updated.id, updated.status);
+                    return updated;
+                });
+            }
+
             // Atualizar conversa localmente se tivermos os dados
             if (data.conversationId) {
-                setConversations(prev => prev.map(c => {
-                    if (c.id === data.conversationId) {
-                        console.log('📊 Atualizando conversa local:', c.id, 'unreadCount:', data.unreadCount);
-                        return {
-                            ...c,
-                            // Atualizar campos que vêm no evento
-                            ...(data.status && { status: data.status }),
-                            ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
-                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
-                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
-                        };
-                    }
-                    return c;
-                }));
+                const isClosed = data.status === 'FECHADA';
 
-                // Também atualizar closedConversations se for conversa encerrada
-                if (data.status === 'FECHADA') {
-                    setClosedConversations(prev => prev.map(c => {
-                        if (c.id === data.conversationId) {
+                // Se conversa foi encerrada, remover da lista ativa e adicionar à lista de encerradas
+                if (isClosed) {
+                    // Remover da lista de conversas ativas
+                    setConversations(prev => {
+                        const exists = prev.find(c => c.id === data.conversationId);
+                        if (exists) {
+                            // Adicionar à lista de encerradas se não estiver lá
+                            setClosedConversations(prevClosed => {
+                                const alreadyInClosed = prevClosed.some(c => c.id === data.conversationId);
+                                if (!alreadyInClosed) {
+                                    // Buscar dados completos da conversa para adicionar
+                                    const closedConv = {
+                                        ...exists,
+                                        status: 'FECHADA' as const,
+                                        ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                                        ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
+                                    };
+                                    // Adicionar no início da lista
+                                    return [closedConv, ...prevClosed];
+                                }
+                                // Se já está na lista, apenas atualizar
+                                return prevClosed.map(c => 
+                                    c.id === data.conversationId 
+                                        ? { ...c, ...(data.lastMessage && { lastMessage: data.lastMessage }), ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }) }
+                                        : c
+                                );
+                            });
+                            // Atualizar contador
+                            setClosedTotal(prev => prev + 1);
+                        }
+                        // Remover da lista ativa
+                        return prev.filter(c => c.id !== data.conversationId);
+                    });
+
+                    // Se estiver na aba de encerrados, atualizar a conversa na lista
+                    if (activeQueue === 'ENCERRADOS') {
+                        setClosedConversations(prev => {
+                            const exists = prev.find(c => c.id === data.conversationId);
+                            if (!exists) {
+                                // Se não existe, buscar dados completos
+                                fetchClosedConversations(1, false, searchQuery);
+                            } else {
+                                // Se existe, apenas atualizar
+                                return prev.map(c => 
+                                    c.id === data.conversationId 
+                                        ? { ...c, ...(data.lastMessage && { lastMessage: data.lastMessage }), ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }) }
+                                        : c
+                                );
+                            }
+                            return prev;
+                        });
+                    }
+                } else {
+                    // Se não foi encerrada, apenas atualizar na lista ativa
+                    setConversations(prev => prev.map(c => {
+                        if (c.id === data.conversationId || c.phone === data.phone) {
+                            console.log('📊 Atualizando conversa local:', c.id, 'status:', data.status, 'assignedToId:', data.assignedToId);
                             return {
                                 ...c,
+                                // Atualizar campos que vêm no evento
+                                ...(data.status && { status: data.status }),
+                                ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                                ...(data.assignedTo && { assignedTo: data.assignedTo }),
                                 ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
                                 ...(data.lastMessage && { lastMessage: data.lastMessage }),
                                 ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
@@ -836,6 +1455,40 @@ const ConversationsPage: React.FC = () => {
             // Fallback: refetch se não tivermos conversationId
             if (!data.conversationId) {
                 fetchConversations();
+            }
+        });
+
+        // ✅ Listener específico para conversas encerradas
+        socket.on('conversation:closed', (data) => {
+            console.log('🔒 [conversation:closed] Evento recebido:', data);
+
+            if (data.conversationId) {
+                // Remover da lista de conversas ativas
+                setConversations(prev => {
+                    const exists = prev.find(c => c.id === data.conversationId);
+                    if (exists) {
+                        // Adicionar à lista de encerradas
+                        setClosedConversations(prevClosed => {
+                            const alreadyInClosed = prevClosed.some(c => c.id === data.conversationId);
+                            if (!alreadyInClosed) {
+                                const closedConv = {
+                                    ...exists,
+                                    status: 'FECHADA' as const
+                                };
+                                return [closedConv, ...prevClosed];
+                            }
+                            return prevClosed;
+                        });
+                        // Atualizar contador
+                        setClosedTotal(prev => prev + 1);
+                    }
+                    return prev.filter(c => c.id !== data.conversationId);
+                });
+
+                // Se estiver na aba de encerrados, recarregar para garantir dados atualizados
+                if (activeQueue === 'ENCERRADOS') {
+                    fetchClosedConversations(1, false, searchQuery);
+                }
             }
         });
 
@@ -864,6 +1517,7 @@ const ConversationsPage: React.FC = () => {
             socket.off('queue_updated', onConversationUpdated);
             socket.off('message:new');
             socket.off('conversation:updated');
+            socket.off('conversation:closed');
         };
     }, [socket, selectedConversation]);
 
@@ -948,21 +1602,23 @@ const ConversationsPage: React.FC = () => {
                             const ref = (isLast && activeQueue === 'ENCERRADOS') ? lastConversationElementRef : null;
                             const canAssume = (conversation.status === 'BOT_QUEUE' || conversation.status === 'PRINCIPAL') && !conversation.assignedToId;
 
-                            // 🔍 DEBUG: Log do badge
-                            const shouldShowBadge = (conversation.unreadCount ?? 0) > 0;
-                            if (shouldShowBadge) {
-                                console.log('🔴 Badge deve aparecer:', {
-                                    phone: conversation.phone,
-                                    unreadCount: conversation.unreadCount,
-                                    isSelected
-                                });
-                            }
+                            // ✅ Verificar se sessão expirou (24h desde última mensagem do usuário)
+                            const isSessionExpired = (() => {
+                                if (!conversation.lastUserActivity) return false;
+                                const lastActivityTime = new Date(conversation.lastUserActivity);
+                                const now = new Date();
+                                const hoursSinceLastActivity = (now.getTime() - lastActivityTime.getTime()) / (1000 * 60 * 60);
+                                return hoursSinceLastActivity >= 24;
+                            })();
+
+                            // ✅ Badge de mensagens não lidas: mostrar sempre, exceto se estiver EM_ATENDIMENTO
+                            const shouldShowUnreadBadge = (conversation.unreadCount ?? 0) > 0 && conversation.status !== 'EM_ATENDIMENTO';
 
                             return (
                                 <div
                                     key={conversation.id}
                                     ref={ref}
-                                    onClick={() => navigate(`/conversations/${conversation.phone}`)}
+                                    onClick={() => navigate(`/conversations/${conversation.phone}?conversationId=${conversation.id}`)}
                                     className={`mx-2 my-2 p-3 border rounded-lg cursor-pointer transition-all ${isSelected
                                         ? 'bg-blue-100 border-blue-300 border-l-4 border-l-blue-600 shadow-md'
                                         : 'bg-white border-gray-200 hover:bg-gray-50 hover:shadow-sm border-l-4 border-l-transparent'
@@ -1002,8 +1658,8 @@ const ConversationsPage: React.FC = () => {
                                             <span className="text-xs text-gray-400">
                                                 {conversation.lastTimestamp ? formatTimestamp(conversation.lastTimestamp) : ''}
                                             </span>
-                                            {/* ✅ Badge de mensagens não lidas */}
-                                            {(conversation.unreadCount ?? 0) > 0 && (
+                                            {/* ✅ Badge de mensagens não lidas (não mostrar se EM_ATENDIMENTO) */}
+                                            {shouldShowUnreadBadge && (
                                                 <span className="inline-flex items-center justify-center w-5 h-5 bg-gradient-to-br from-red-500 to-red-600 text-white text-[10px] font-semibold rounded-full shadow-sm">
                                                     {conversation.unreadCount! > 9 ? '9+' : conversation.unreadCount}
                                                 </span>
@@ -1018,14 +1674,23 @@ const ConversationsPage: React.FC = () => {
                                     )}
 
                                     <div className="flex items-center justify-between ml-12">
-                                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${conversation.status === 'PRINCIPAL'
-                                            ? 'bg-orange-100 text-orange-700'
-                                            : conversation.status === 'EM_ATENDIMENTO'
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {/* Channel icon */}
-                                            {conversation.channel === 'whatsapp' && (
+                                        <div className="flex items-center gap-2">
+                                            {/* ✅ Tag "Expirada" se sessão expirada */}
+                                            {isSessionExpired && (
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-xs">
+                                                    <Clock className="h-3 w-3 text-red-600" />
+                                                    <span className="text-red-700 font-medium">Expirada</span>
+                                                </span>
+                                            )}
+                                            
+                                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${conversation.status === 'PRINCIPAL'
+                                                ? 'bg-orange-100 text-orange-700'
+                                                : conversation.status === 'EM_ATENDIMENTO'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-gray-100 text-gray-700'
+                                                }`}>
+                                                {/* Channel icon */}
+                                                {conversation.channel === 'whatsapp' && (
                                                 <svg className="w-3 h-3 text-green-600 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
                                                     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
                                                 </svg>
@@ -1040,10 +1705,11 @@ const ConversationsPage: React.FC = () => {
                                                     <path d="M12 2C6.486 2 2 6.262 2 11.5c0 2.847 1.277 5.44 3.355 7.156l-.319 2.73a.5.5 0 00.72.544l3.045-1.373A10.963 10.963 0 0012 21c5.514 0 10-4.262 10-9.5S17.514 2 12 2zm1.222 12.278l-2.508-2.672-4.896 2.672 5.381-5.713 2.57 2.672 4.834-2.672-5.381 5.713z" />
                                                 </svg>
                                             )}
-                                            {conversation.status === 'PRINCIPAL' ? 'Fila Principal' :
-                                                conversation.status === 'EM_ATENDIMENTO' ? (conversation.assignedToId === user?.id ? 'Com você' : conversation.assignedTo?.name || 'Em atendimento') :
-                                                    conversation.status === 'BOT_QUEUE' ? 'Bot' : 'Encerrado'}
-                                        </span>
+                                                {conversation.status === 'PRINCIPAL' ? 'Fila Principal' :
+                                                    conversation.status === 'EM_ATENDIMENTO' ? (conversation.assignedToId === user?.id ? 'Com você' : conversation.assignedTo?.name || 'Em atendimento') :
+                                                        conversation.status === 'BOT_QUEUE' ? 'Bot' : 'Encerrado'}
+                                            </span>
+                                        </div>
 
                                         {/* Show "Assumir" button for BOT_QUEUE and PRINCIPAL */}
                                         {canAssume && (
@@ -1088,6 +1754,7 @@ const ConversationsPage: React.FC = () => {
                         sessionInfo={sessionInfo}
                         canWrite={canWrite}
                         userId={user?.id}
+                        isSessionExpired={isSessionExpired} // ✅ Passar flag de sessão expirada
                         onShowHistory={() => setShowHistoryModal(true)}
                         onShowTransfer={() => setShowTransferModal(true)}
                         onShowClose={() => setShowCloseModal(true)}
@@ -1303,6 +1970,35 @@ const ConversationsPage: React.FC = () => {
                                             setNewMessage(e.target.value);
                                         }}
                                         onKeyDown={(e) => {
+                                            // ✅ Verificar se o texto atual corresponde exatamente a um atalho
+                                            if (newMessage.startsWith('/')) {
+                                                const query = newMessage.slice(1).toLowerCase().trim();
+                                                const exactMatch = quickReplies.find(qr => 
+                                                    qr.shortcut.toLowerCase() === query
+                                                );
+                                                
+                                                // ✅ Se corresponder exatamente e pressionar Enter ou Tab, substituir automaticamente
+                                                if (exactMatch) {
+                                                    if (e.key === 'Tab') {
+                                                        e.preventDefault();
+                                                        setNewMessage(exactMatch.text);
+                                                        setShowAutocomplete(false);
+                                                        return;
+                                                    }
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        // Substituir o texto pelo conteúdo do atalho
+                                                        setNewMessage(exactMatch.text);
+                                                        setShowAutocomplete(false);
+                                                        // Enviar diretamente com o texto do atalho
+                                                        if (canSend && !sending) {
+                                                            sendMessage(exactMatch.text);
+                                                        }
+                                                        return;
+                                                    }
+                                                }
+                                            }
+                                            
                                             // ✅ Autocomplete com Tab ou Enter
                                             if (showAutocomplete && filteredReplies.length > 0) {
                                                 if (e.key === 'Tab' || e.key === 'Enter') {
