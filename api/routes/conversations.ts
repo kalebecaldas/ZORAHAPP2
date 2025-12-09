@@ -530,19 +530,36 @@ const actionsAuth = process.env.NODE_ENV === 'development'
 
 router.post('/actions', actionsAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { action, phone, assignTo } = req.body
+    const { action, phone, assignTo, conversationId } = req.body
 
-    // ✅ Sempre buscar a conversa mais recente (ordenada por createdAt desc)
-    const conversation = await prisma.conversation.findFirst({
+    // ✅ Se conversationId foi fornecido, usar ele diretamente (mais preciso)
+    // Caso contrário, buscar por phone (comportamento legado)
+    let conversation
+    if (conversationId) {
+      console.log(`🎯 Buscando conversa por ID específico: ${conversationId}`)
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        include: { patient: true, assignedTo: true }
+      })
+    } else if (phone) {
+      console.log(`📞 Buscando conversa por telefone: ${phone} (comportamento legado)`)
+      // ✅ Sempre buscar a conversa mais recente (ordenada por createdAt desc)
+      conversation = await prisma.conversation.findFirst({
       where: { phone },
-      orderBy: { createdAt: 'desc' }, // ✅ Sempre pegar a mais recente
+        orderBy: { createdAt: 'desc' }, // ✅ Sempre pegar a mais recente
       include: { patient: true, assignedTo: true }
     })
+    } else {
+      res.status(400).json({ error: 'conversationId ou phone é obrigatório' })
+      return
+    }
 
     if (!conversation) {
       res.status(404).json({ error: 'Conversa não encontrada' })
       return
     }
+    
+    console.log(`✅ Conversa encontrada: ${conversation.id} (phone: ${conversation.phone}, status: ${conversation.status})`)
 
     let updateData: any = {}
     let actionDescription = ''
@@ -1499,11 +1516,12 @@ export async function processIncomingMessage(
       }
     }
 
-    // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem (OTIMIZADO: busca apenas por ID específico)
+    // ✅ VERIFICAR DUPLICAÇÃO antes de criar mensagem (OTIMIZADO: busca por ID, phone e texto)
     let message = null
+    
+    // Verificar duplicação por messageId (se disponível)
     if (messageId) {
-      // Buscar apenas mensagem com o mesmo ID (mais rápido que buscar todas)
-      const existingMessage = await prisma.message.findFirst({
+      const existingMessageById = await prisma.message.findFirst({
         where: {
           metadata: {
             path: ['whatsappMessageId'],
@@ -1515,14 +1533,42 @@ export async function processIncomingMessage(
         },
         select: {
           id: true,
+          conversationId: true,
         },
       })
 
-      if (existingMessage) {
-        console.log(`⚠️ Mensagem duplicada detectada em processIncomingMessage: ${messageId} de ${phone}`)
+      if (existingMessageById) {
+        console.log(`⚠️ Mensagem duplicada detectada por messageId: ${messageId} de ${phone}`)
         // Retornar logs vazios mas não processar novamente
         return workflowLogs
       }
+    }
+    
+    // ✅ Verificar duplicação por texto e phone (últimos 2 minutos) - proteção adicional
+    const existingMessageByContent = await prisma.message.findFirst({
+      where: {
+        phoneNumber: phone,
+        messageText: text,
+        direction: 'RECEIVED',
+        createdAt: {
+          gte: new Date(Date.now() - 2 * 60 * 1000), // Últimos 2 minutos
+        },
+      },
+      select: {
+        id: true,
+        conversationId: true,
+      },
+    })
+
+    if (existingMessageByContent) {
+      console.log(`⚠️ Mensagem duplicada detectada por conteúdo: "${text.substring(0, 50)}..." de ${phone} (últimos 2 minutos)`)
+      // Se a mensagem duplicada está na mesma conversa, não processar
+      if (existingMessageByContent.conversationId === conversation.id) {
+        console.log(`⚠️ Mensagem duplicada na mesma conversa - ignorando`)
+        return workflowLogs
+      }
+      // Se está em outra conversa, pode ser legítimo (paciente enviou mesma mensagem para outra conversa)
+      console.log(`ℹ️ Mensagem similar encontrada em outra conversa (${existingMessageByContent.conversationId}) - processando normalmente`)
     }
 
     // Garantir que metadata contém whatsappMessageId

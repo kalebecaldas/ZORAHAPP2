@@ -10,14 +10,17 @@ async function seedComplete() {
 
     try {
         // 1. Seed da configuração da IA
-        console.log('1️⃣ Seedando configuração da IA...')
+        console.log('1️⃣ Verificando configuração da IA...')
         try {
-            // Verificar se já existe
+            // ✅ PROTEÇÃO: Verificar se já existe configuração
+            // Se existir, NÃO fazer seed (preservar configuração em produção)
             let existing = await prisma.aIConfiguration.findFirst()
             if (existing) {
-                console.log('   ⏭️  Configuração da IA já existe\n')
+                console.log('   ⏭️  Configuração da IA já existe - PRESERVANDO (não será alterada)\n')
+                console.log('   ℹ️  Se precisar atualizar, faça manualmente via interface ou API\n')
             } else {
-                // Importar e executar função de seed diretamente
+                // Só criar se NÃO existir (primeira instalação)
+                console.log('   📝 Nenhuma configuração encontrada - criando configuração inicial...')
                 const seedAI = (await import('./seed_ai_configuration.js')).default
                 await seedAI()
                 console.log('   ✅ Configuração da IA seedada\n')

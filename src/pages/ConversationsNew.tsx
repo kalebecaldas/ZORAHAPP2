@@ -356,7 +356,8 @@ const ConversationsPage: React.FC = () => {
         try {
             const response = await api.post('/api/conversations/actions', {
                 action: 'take',
-                phone: conversation.phone,
+                conversationId: conversation.id, // ✅ Usar ID específico
+                phone: conversation.phone, // Manter para compatibilidade
                 assignTo: user?.id
             });
             
@@ -400,7 +401,8 @@ const ConversationsPage: React.FC = () => {
             const action = transferTarget === 'QUEUE' ? 'return' : 'transfer';
             await api.post('/api/conversations/actions', {
                 action,
-                phone: selectedConversation.phone,
+                conversationId: selectedConversation.id, // ✅ Usar ID específico
+                phone: selectedConversation.phone, // Manter para compatibilidade
                 assignTo: transferTarget === 'QUEUE' ? null : transferTarget
             });
 
@@ -424,9 +426,17 @@ const ConversationsPage: React.FC = () => {
         if (!selectedConversation) return;
 
         try {
+            console.log('🔒 Encerrando conversa:', {
+                id: selectedConversation.id,
+                phone: selectedConversation.phone,
+                status: selectedConversation.status
+            });
+            
+            // ✅ Enviar conversationId específico para garantir que a conversa correta seja encerrada
             await api.post('/api/conversations/actions', {
                 action: 'close',
-                phone: selectedConversation.phone
+                conversationId: selectedConversation.id, // ✅ Usar ID específico
+                phone: selectedConversation.phone // Manter para compatibilidade
             });
 
             toast.success('Conversa encerrada com sucesso');
@@ -444,7 +454,8 @@ const ConversationsPage: React.FC = () => {
         try {
             await api.post('/api/conversations/actions', {
                 action: 'reopen',
-                phone: conversation.phone
+                conversationId: conversation.id, // ✅ Usar ID específico
+                phone: conversation.phone // Manter para compatibilidade
             });
             toast.success('Conversa reaberta com sucesso');
             fetchConversations();
@@ -720,6 +731,13 @@ const ConversationsPage: React.FC = () => {
             console.log('🔒 [GLOBAL] conversation:closed evento recebido:', data);
 
             if (data.conversationId) {
+                // ✅ Se a conversa encerrada é a selecionada, limpar seleção
+                if (selectedConversation && (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
+                    console.log('🔒 Conversa selecionada foi encerrada - limpando seleção');
+                    setSelectedConversation(null);
+                    setMessages([]);
+                }
+
                 // ✅ Verificar se é fechamento por expiração de sessão (pode ter nova conversa sendo criada)
                 const isSessionExpired = data.reason === 'session_expired';
                 
@@ -1354,7 +1372,16 @@ const ConversationsPage: React.FC = () => {
         socket.on('conversation:updated', (data) => {
             console.log('🔄 [conversation:updated] Evento recebido:', data);
 
-            // ✅ Atualizar selectedConversation se for a conversa selecionada
+            // ✅ Se a conversa foi encerrada e é a selecionada, limpar seleção
+            if (data.status === 'FECHADA' && selectedConversation && 
+                (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
+                console.log('🔒 Conversa selecionada foi encerrada - limpando seleção');
+                setSelectedConversation(null);
+                setMessages([]);
+                return; // Não continuar processamento
+            }
+
+            // ✅ Atualizar selectedConversation se for a conversa selecionada (e não foi encerrada)
             if (selectedConversation && (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
                 console.log('🔄 Atualizando selectedConversation com dados do evento:', {
                     currentId: selectedConversation.id,
@@ -1962,12 +1989,17 @@ const ConversationsPage: React.FC = () => {
                                         </div>
                                     </div>
                                 ) : (
-                                    <input
-                                        type="text"
+                                    <textarea
                                         value={newMessage}
+                                        rows={1}
                                         onChange={(e) => {
                                             // Atualização direta sem debounce para resposta instantânea
-                                            setNewMessage(e.target.value);
+                                            const textarea = e.target as HTMLTextAreaElement;
+                                            setNewMessage(textarea.value);
+                                            // Ajustar altura automaticamente conforme o conteúdo
+                                            textarea.style.height = 'auto';
+                                            const newHeight = Math.min(textarea.scrollHeight, 120);
+                                            textarea.style.height = `${newHeight}px`;
                                         }}
                                         onKeyDown={(e) => {
                                             // ✅ Verificar se o texto atual corresponde exatamente a um atalho
@@ -1999,9 +2031,9 @@ const ConversationsPage: React.FC = () => {
                                                 }
                                             }
                                             
-                                            // ✅ Autocomplete com Tab ou Enter
+                                            // ✅ Autocomplete com Tab ou Enter (sem Shift para permitir Shift+Enter)
                                             if (showAutocomplete && filteredReplies.length > 0) {
-                                                if (e.key === 'Tab' || e.key === 'Enter') {
+                                                if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
                                                     e.preventDefault();
                                                     const selected = filteredReplies[selectedAutocompleteIndex];
                                                     setNewMessage(selected.text);
@@ -2030,8 +2062,10 @@ const ConversationsPage: React.FC = () => {
                                                 }
                                             }
 
-                                            // Enter para enviar (se não estiver no autocomplete)
+                                            // ✅ Shift+Enter: pular linha (comportamento padrão do textarea - não prevenir)
+                                            // Enter sem Shift: enviar mensagem (prevenir quebra de linha)
                                             if (e.key === 'Enter' && !e.shiftKey && !showAutocomplete && (canSend || isRecording)) {
+                                                e.preventDefault(); // Prevenir quebra de linha ao enviar
                                                 if (isRecording) {
                                                     setAutoSendAfterStop(true);
                                                     stopRecording();
@@ -2039,9 +2073,18 @@ const ConversationsPage: React.FC = () => {
                                                 }
                                                 sendMessage();
                                             }
+                                            // Se for Shift+Enter, deixar o comportamento padrão do textarea (quebrar linha)
                                         }}
-                                        placeholder="Digite sua mensagem..."
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Digite sua mensagem... (Shift+Enter para pular linha)"
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                        style={{ 
+                                            minHeight: '40px', 
+                                            maxHeight: '120px',
+                                            lineHeight: '1.5',
+                                            overflowY: 'auto',
+                                            whiteSpace: 'pre-wrap',
+                                            wordWrap: 'break-word'
+                                        }}
                                         disabled={!canWrite}
                                     />
                                 )}

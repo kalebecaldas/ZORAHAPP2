@@ -48,16 +48,17 @@ const Sidebar: React.FC = () => {
     sessionStorage.setItem('sidebarCollapsed', String(isCollapsed));
   }, [isCollapsed]);
 
-  // Buscar número de conversas aguardando
+  // ✅ Buscar número de conversas da fila PRINCIPAL (TODAS, não apenas não atribuídas)
   useEffect(() => {
     const fetchPendingCount = async () => {
       try {
-        const response = await api.get('/api/conversations');
+        const response = await api.get('/api/conversations?status=ACTIVE&limit=100');
         const conversations = response.data.conversations || [];
-        const pending = conversations.filter((c: any) => c.status === 'PRINCIPAL' && !c.assignedToId);
-        setPendingCount(pending.length);
+        // ✅ Contar TODAS as conversas com status PRINCIPAL (com ou sem assignedToId)
+        const principalQueue = conversations.filter((c: any) => c.status === 'PRINCIPAL');
+        setPendingCount(principalQueue.length);
       } catch (error) {
-        console.error('Erro ao buscar conversas aguardando:', error);
+        console.error('Erro ao buscar conversas da fila principal:', error);
       }
     };
 

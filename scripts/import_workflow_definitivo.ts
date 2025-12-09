@@ -44,7 +44,23 @@ async function importWorkflow() {
       console.warn(`   Se este não for o workflow correto, verifique o arquivo workflow_to_sync.json\n`)
     }
 
-    // DELETAR TODOS os workflows antigos (não apenas desativar)
+    // ✅ PROTEÇÃO: Verificar se já existe workflow ativo
+    // Se existir, NÃO sobrescrever (preservar workflow em produção)
+    const existingActiveWorkflow = await prisma.workflow.findFirst({
+      where: { isActive: true }
+    })
+    
+    if (existingActiveWorkflow) {
+      console.log('⚠️  ATENÇÃO: Já existe um workflow ativo no banco!')
+      console.log(`   ID: ${existingActiveWorkflow.id}`)
+      console.log(`   Nome: ${existingActiveWorkflow.name || 'Sem nome'}`)
+      console.log('   ⏭️  PRESERVANDO workflow existente (não será alterado)')
+      console.log('   ℹ️  Se precisar atualizar, faça manualmente via interface ou delete o workflow ativo primeiro\n')
+      await prisma.$disconnect()
+      return
+    }
+    
+    // DELETAR TODOS os workflows antigos (apenas se não houver ativo)
     const allWorkflows = await prisma.workflow.findMany()
     
     if (allWorkflows.length > 0) {
