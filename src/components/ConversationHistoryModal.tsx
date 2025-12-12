@@ -53,6 +53,13 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   
   // Verificar se usuário é master (role pode ser string, então usar comparação flexível)
   const isMaster = String(user?.role) === 'MASTER';
+  
+  // Debug: verificar role do usuário
+  useEffect(() => {
+    if (user) {
+      console.log('🔍 [ConversationHistoryModal] User role:', user.role, 'isMaster:', isMaster);
+    }
+  }, [user, isMaster]);
 
   useEffect(() => {
     fetchHistory();
@@ -246,11 +253,13 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   };
 
   const handleAssume = async (conversation: ConversationSession) => {
-    // Verificar se a conversa pode ser assumida
-    const canTakeOver = !conversation.assignedToId && !conversation.assignedTo && 
-      (conversation.status === 'PRINCIPAL' || 
-       conversation.status === 'AGUARDANDO' || 
-       conversation.status === 'BOT_QUEUE');
+    // Master/Admin pode assumir qualquer conversa que não esteja fechada
+    const canTakeOver = isMaster || String(user?.role) === 'ADMIN' 
+      ? conversation.status !== 'FECHADA'
+      : !(conversation.assignedToId || conversation.assignedTo) && 
+        (conversation.status === 'PRINCIPAL' || 
+         conversation.status === 'AGUARDANDO' || 
+         conversation.status === 'BOT_QUEUE');
 
     if (!canTakeOver) {
       toast.error('Esta conversa não pode ser assumida');
@@ -311,16 +320,32 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   };
 
   const canTakeOverConversation = (conv: ConversationSession) => {
-    return !conv.assignedToId && !conv.assignedTo && 
+    // Master/Admin pode assumir qualquer conversa que não esteja fechada
+    if (isMaster || String(user?.role) === 'ADMIN') {
+      console.log('✅ [canTakeOver] Master/Admin - pode assumir:', conv.id, 'status:', conv.status);
+      return conv.status !== 'FECHADA';
+    }
+    // Outros usuários só podem assumir se não estiver atribuída
+    const isAssigned = conv.assignedToId || conv.assignedTo;
+    const canTake = !isAssigned && 
       (conv.status === 'PRINCIPAL' || 
        conv.status === 'AGUARDANDO' || 
        conv.status === 'BOT_QUEUE');
+    console.log('🔍 [canTakeOver] Usuário normal - pode assumir:', canTake, 'conv:', conv.id, 'assigned:', isAssigned, 'status:', conv.status);
+    return canTake;
   };
 
   const canTransferConversation = (conv: ConversationSession) => {
-    // Pode transferir se estiver atribuída ao usuário atual ou se for master/admin
-    return conv.status === 'EM_ATENDIMENTO' && conv.assignedToId && 
-      (conv.assignedToId === user?.id || conv.assignedTo?.id === user?.id || isMaster || String(user?.role) === 'ADMIN');
+    // Master/Admin pode transferir qualquer conversa que não esteja fechada
+    if (isMaster || String(user?.role) === 'ADMIN') {
+      console.log('✅ [canTransfer] Master/Admin - pode transferir:', conv.id, 'status:', conv.status);
+      return conv.status !== 'FECHADA';
+    }
+    // Outros usuários só podem transferir se estiver atribuída a eles
+    const isAssignedToUser = conv.assignedToId === user?.id || conv.assignedTo?.id === user?.id;
+    const canTransfer = conv.status === 'EM_ATENDIMENTO' && isAssignedToUser;
+    console.log('🔍 [canTransfer] Usuário normal - pode transferir:', canTransfer, 'conv:', conv.id, 'assignedToUser:', isAssignedToUser);
+    return canTransfer;
   };
 
   return (
