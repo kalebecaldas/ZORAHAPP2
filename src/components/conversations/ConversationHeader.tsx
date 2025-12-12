@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Copy, Clock, History, Users, Archive, MoreVertical } from 'lucide-react';
+import { User, Copy, Clock, History, Users, Archive, MoreVertical, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Conversation } from '../../hooks/conversations/useConversations';
 
@@ -12,6 +12,7 @@ interface ConversationHeaderProps {
     onShowHistory?: () => void;
     onShowTransfer?: () => void;
     onShowClose?: () => void;
+    onTakeOver?: () => void;
 }
 
 export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
@@ -22,7 +23,8 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
     isSessionExpired = false, // ✅ Adicionar flag
     onShowHistory,
     onShowTransfer,
-    onShowClose
+    onShowClose,
+    onTakeOver
 }) => {
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
@@ -51,6 +53,12 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
 
     const patient = conversation.patient;
     const patientName = patient?.name || conversation.phone;
+
+    // Check if conversation can be taken over
+    const canTakeOver = !conversation.assignedToId && 
+        (conversation.status === 'PRINCIPAL' || 
+         conversation.status === 'AGUARDANDO' || 
+         conversation.status === 'BOT_QUEUE');
 
     return (
         <div className="bg-white border-b border-gray-200 px-6 py-4">
@@ -205,6 +213,17 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
                         </div>
                     );
                 })()}
+
+                {/* Take Over Button - next to session status */}
+                {canTakeOver && onTakeOver && (
+                    <button
+                        onClick={onTakeOver}
+                        className="p-2 hover:bg-blue-50 rounded-lg transition-colors group"
+                        title="Assumir conversa"
+                    >
+                        <ArrowDown className="h-5 w-5 text-blue-600 group-hover:text-blue-700" />
+                    </button>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2">

@@ -1901,6 +1901,7 @@ const ConversationsPage: React.FC = () => {
                         onShowHistory={() => setShowHistoryModal(true)}
                         onShowTransfer={() => setShowTransferModal(true)}
                         onShowClose={() => setShowCloseModal(true)}
+                        onTakeOver={() => selectedConversation && handleAssume(selectedConversation)}
                     />
 
                     {/* Messages */}
