@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, MessageSquare, User, Calendar, Shield, Trash2, Eye, Copy, ArrowDown, Users } from 'lucide-react';
+import { X, Clock, MessageSquare, User, Calendar, Shield, Trash2, Eye, Copy, ArrowDown, Users, Archive } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -50,16 +50,10 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   const [transferTarget, setTransferTarget] = useState<string>('');
   const [availableAgents, setAvailableAgents] = useState<any[]>([]);
   const [assumingId, setAssumingId] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
   
   // Verificar se usuário é master (role pode ser string, então usar comparação flexível)
   const isMaster = String(user?.role) === 'MASTER';
-  
-  // Debug: verificar role do usuário
-  useEffect(() => {
-    if (user) {
-      console.log('🔍 [ConversationHistoryModal] User role:', user.role, 'isMaster:', isMaster);
-    }
-  }, [user, isMaster]);
 
   useEffect(() => {
     fetchHistory();
@@ -254,9 +248,10 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
 
   const handleAssume = async (conversation: ConversationSession) => {
     // Master/Admin pode assumir qualquer conversa que não esteja fechada
+    // Isso resolve o problema de conversas em AGUARDANDO atribuídas a outros usuários
     const canTakeOver = isMaster || String(user?.role) === 'ADMIN' 
       ? conversation.status !== 'FECHADA'
-      : !(conversation.assignedToId || conversation.assignedTo) && 
+      : !(conversation.assignedToId || (conversation.assignedTo && conversation.assignedTo.name)) && 
         (conversation.status === 'PRINCIPAL' || 
          conversation.status === 'AGUARDANDO' || 
          conversation.status === 'BOT_QUEUE');
@@ -319,33 +314,56 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
     }
   };
 
+  const handleCloseConversation = async (conversation: ConversationSession) => {
+    if (!window.confirm('Tem certeza que deseja encerrar esta conversa?')) {
+      return;
+    }
+
+    try {
+      setClosingId(conversation.id);
+      await api.post('/api/conversations/actions', {
+        action: 'close',
+        conversationId: conversation.id,
+        phone: conversation.phone
+      });
+      
+      toast.success('Conversa encerrada com sucesso!');
+      await fetchHistory();
+    } catch (error: any) {
+      console.error('Error closing conversation:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao encerrar conversa');
+    } finally {
+      setClosingId(null);
+    }
+  };
+
   const canTakeOverConversation = (conv: ConversationSession) => {
     // Master/Admin pode assumir qualquer conversa que não esteja fechada
+    // Isso inclui conversas em AGUARDANDO/PRINCIPAL mesmo que estejam atribuídas a outros
     if (isMaster || String(user?.role) === 'ADMIN') {
-      console.log('✅ [canTakeOver] Master/Admin - pode assumir:', conv.id, 'status:', conv.status);
       return conv.status !== 'FECHADA';
     }
     // Outros usuários só podem assumir se não estiver atribuída
-    const isAssigned = conv.assignedToId || conv.assignedTo;
-    const canTake = !isAssigned && 
+    const isAssigned = conv.assignedToId || (conv.assignedTo && conv.assignedTo.name);
+    return !isAssigned && 
       (conv.status === 'PRINCIPAL' || 
        conv.status === 'AGUARDANDO' || 
        conv.status === 'BOT_QUEUE');
-    console.log('🔍 [canTakeOver] Usuário normal - pode assumir:', canTake, 'conv:', conv.id, 'assigned:', isAssigned, 'status:', conv.status);
-    return canTake;
   };
 
   const canTransferConversation = (conv: ConversationSession) => {
     // Master/Admin pode transferir qualquer conversa que não esteja fechada
     if (isMaster || String(user?.role) === 'ADMIN') {
-      console.log('✅ [canTransfer] Master/Admin - pode transferir:', conv.id, 'status:', conv.status);
       return conv.status !== 'FECHADA';
     }
     // Outros usuários só podem transferir se estiver atribuída a eles
     const isAssignedToUser = conv.assignedToId === user?.id || conv.assignedTo?.id === user?.id;
-    const canTransfer = conv.status === 'EM_ATENDIMENTO' && isAssignedToUser;
-    console.log('🔍 [canTransfer] Usuário normal - pode transferir:', canTransfer, 'conv:', conv.id, 'assignedToUser:', isAssignedToUser);
-    return canTransfer;
+    return conv.status === 'EM_ATENDIMENTO' && isAssignedToUser;
+  };
+
+  const canCloseConversation = (conv: ConversationSession) => {
+    // Master/Admin pode encerrar qualquer conversa que não esteja fechada
+    return (isMaster || String(user?.role) === 'ADMIN') && conv.status !== 'FECHADA';
   };
 
   return (
@@ -526,6 +544,28 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
                           >
                             <Users className="h-4 w-4" />
                             Transferir
+                          </button>
+                        )}
+
+                        {/* Botão Encerrar Conversa (Master/Admin) */}
+                        {canCloseConversation(conv) && (
+                          <button
+                            onClick={() => handleCloseConversation(conv)}
+                            disabled={closingId === conv.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Encerrar conversa"
+                          >
+                            {closingId === conv.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-700"></div>
+                                Encerrando...
+                              </>
+                            ) : (
+                              <>
+                                <Archive className="h-4 w-4" />
+                                Encerrar
+                              </>
+                            )}
                           </button>
                         )}
                         
