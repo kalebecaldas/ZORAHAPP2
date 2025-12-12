@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, MessageSquare, User, Calendar, Shield, Trash2, Eye, Copy } from 'lucide-react';
+import { X, Clock, MessageSquare, User, Calendar, Shield, Trash2, Eye, Copy, ArrowDown, Users } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
@@ -26,7 +26,9 @@ interface ConversationSession {
   messagesCount?: number;
   messages?: any[];
   createdAt: string;
+  assignedToId?: string | null;
   assignedTo?: {
+    id?: string;
     name: string;
   };
 }
@@ -43,13 +45,42 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
   const [conversations, setConversations] = useState<ConversationSession[]>([]);
   const [patient, setPatient] = useState<any>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferConversationId, setTransferConversationId] = useState<string | null>(null);
+  const [transferTarget, setTransferTarget] = useState<string>('');
+  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+  const [assumingId, setAssumingId] = useState<string | null>(null);
   
   // Verificar se usuário é master (role pode ser string, então usar comparação flexível)
   const isMaster = String(user?.role) === 'MASTER';
 
   useEffect(() => {
     fetchHistory();
+    fetchAgents();
   }, [patientId, patientPhone]);
+
+  const fetchAgents = async () => {
+    try {
+      const response = await api.get('/api/users');
+      const users = response.data?.users || response.data || [];
+      // Filtrar apenas agentes e admins (que podem receber transferências)
+      const agents = users.filter((u: any) => 
+        String(u.role) === 'AGENT' || 
+        String(u.role) === 'ADMIN' || 
+        String(u.role) === 'SUPERVISOR'
+      );
+      setAvailableAgents(agents);
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+      // Se falhar, tentar sem filtro de role
+      try {
+        const response = await api.get('/api/users');
+        setAvailableAgents(response.data?.users || response.data || []);
+      } catch (err) {
+        console.error('Error fetching users:', err);
+      }
+    }
+  };
 
   const fetchHistory = async () => {
     try {
@@ -214,6 +245,84 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
     toast.success(`${label} copiado!`);
   };
 
+  const handleAssume = async (conversation: ConversationSession) => {
+    // Verificar se a conversa pode ser assumida
+    const canTakeOver = !conversation.assignedToId && !conversation.assignedTo && 
+      (conversation.status === 'PRINCIPAL' || 
+       conversation.status === 'AGUARDANDO' || 
+       conversation.status === 'BOT_QUEUE');
+
+    if (!canTakeOver) {
+      toast.error('Esta conversa não pode ser assumida');
+      return;
+    }
+
+    try {
+      setAssumingId(conversation.id);
+      const response = await api.post('/api/conversations/actions', {
+        action: 'take',
+        conversationId: conversation.id,
+        phone: conversation.phone,
+        assignTo: user?.id
+      });
+      
+      toast.success('Conversa assumida com sucesso!');
+      await fetchHistory();
+    } catch (error: any) {
+      console.error('Error assuming conversation:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao assumir conversa');
+    } finally {
+      setAssumingId(null);
+    }
+  };
+
+  const handleTransferClick = (conversation: ConversationSession) => {
+    setTransferConversationId(conversation.id);
+    setTransferTarget('');
+    setShowTransferModal(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!transferConversationId || !transferTarget) return;
+
+    try {
+      const action = transferTarget === 'QUEUE' ? 'return' : 'transfer';
+      await api.post('/api/conversations/actions', {
+        action,
+        conversationId: transferConversationId,
+        phone: conversations.find(c => c.id === transferConversationId)?.phone || '',
+        assignTo: transferTarget === 'QUEUE' ? null : transferTarget
+      });
+
+      toast.success(
+        transferTarget === 'QUEUE'
+          ? 'Conversa retornada para fila principal'
+          : 'Conversa transferida com sucesso'
+      );
+      
+      setShowTransferModal(false);
+      setTransferConversationId(null);
+      setTransferTarget('');
+      await fetchHistory();
+    } catch (error: any) {
+      console.error('Error transferring conversation:', error);
+      toast.error(error?.response?.data?.error || 'Erro ao transferir conversa');
+    }
+  };
+
+  const canTakeOverConversation = (conv: ConversationSession) => {
+    return !conv.assignedToId && !conv.assignedTo && 
+      (conv.status === 'PRINCIPAL' || 
+       conv.status === 'AGUARDANDO' || 
+       conv.status === 'BOT_QUEUE');
+  };
+
+  const canTransferConversation = (conv: ConversationSession) => {
+    // Pode transferir se estiver atribuída ao usuário atual ou se for master/admin
+    return conv.status === 'EM_ATENDIMENTO' && conv.assignedToId && 
+      (conv.assignedToId === user?.id || conv.assignedTo?.id === user?.id || isMaster || String(user?.role) === 'ADMIN');
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4" onClick={onClose}>
       <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -360,6 +469,40 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
                           <Eye className="h-4 w-4" />
                           Visualizar
                         </button>
+
+                        {/* Botão Assumir Conversa */}
+                        {canTakeOverConversation(conv) && (
+                          <button
+                            onClick={() => handleAssume(conv)}
+                            disabled={assumingId === conv.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Assumir conversa"
+                          >
+                            {assumingId === conv.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-700"></div>
+                                Assumindo...
+                              </>
+                            ) : (
+                              <>
+                                <ArrowDown className="h-4 w-4" />
+                                Assumir
+                              </>
+                            )}
+                          </button>
+                        )}
+
+                        {/* Botão Transferir Conversa */}
+                        {canTransferConversation(conv) && (
+                          <button
+                            onClick={() => handleTransferClick(conv)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors text-sm font-medium"
+                            title="Transferir conversa"
+                          >
+                            <Users className="h-4 w-4" />
+                            Transferir
+                          </button>
+                        )}
                         
                         {/* Botão DELETE SESSÃO (apenas para Master) */}
                         {isMaster && (
@@ -406,6 +549,92 @@ const ConversationHistoryModal: React.FC<ConversationHistoryModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]" onClick={() => {
+          setShowTransferModal(false);
+          setTransferTarget('');
+          setTransferConversationId(null);
+        }}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Transferir Conversa</h3>
+              <button
+                onClick={() => {
+                  setShowTransferModal(false);
+                  setTransferTarget('');
+                  setTransferConversationId(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-3 mb-6 max-h-96 overflow-y-auto custom-scrollbar">
+              {/* Return to queue option */}
+              <label className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="transfer"
+                  value="QUEUE"
+                  checked={transferTarget === 'QUEUE'}
+                  onChange={(e) => setTransferTarget(e.target.value)}
+                  className="mr-3"
+                />
+                <div>
+                  <div className="font-medium text-gray-900">Fila Principal</div>
+                  <div className="text-sm text-gray-500">Retornar para fila de aguardo</div>
+                </div>
+              </label>
+
+              {/* Available agents */}
+              {availableAgents
+                .filter(agent => agent.id !== user?.id)
+                .map(agent => (
+                  <label
+                    key={agent.id}
+                    className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                  >
+                    <input
+                      type="radio"
+                      name="transfer"
+                      value={agent.id}
+                      checked={transferTarget === agent.id}
+                      onChange={(e) => setTransferTarget(e.target.value)}
+                      className="mr-3"
+                    />
+                    <div>
+                      <div className="font-medium text-gray-900">{agent.name}</div>
+                      <div className="text-sm text-gray-500">{agent.email}</div>
+                    </div>
+                  </label>
+                ))}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowTransferModal(false);
+                  setTransferTarget('');
+                  setTransferConversationId(null);
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleTransfer}
+                disabled={!transferTarget}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Transferir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
