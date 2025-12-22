@@ -94,7 +94,10 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
   const [showNotes, setShowNotes] = useState(false);
   const [notes, setNotes] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isUserScrollingRef = useRef(false);
+  const shouldAutoScrollRef = useRef(true);
 
   const fetchConversation = async () => {
     try {
@@ -151,9 +154,72 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
     return () => clearInterval(interval);
   }, [conversationId]);
 
-  useEffect(() => {
+  // Scroll inteligente: só faz auto-scroll se o usuário estiver próximo do final
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const checkIfNearBottom = (): boolean => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+    
+    const threshold = 100; // 100px de margem
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceFromBottom <= threshold;
+  };
+
+  // Scroll inicial quando a conversa é carregada pela primeira vez
+  useEffect(() => {
+    if (conversation?.messages && conversation.messages.length > 0 && shouldAutoScrollRef.current) {
+      // Pequeno delay para garantir que o DOM foi renderizado
+      setTimeout(() => {
+        scrollToBottom();
+        shouldAutoScrollRef.current = true;
+      }, 100);
+    }
+  }, [conversationId]); // Apenas quando muda a conversa
+
+  // Auto-scroll inteligente: só se o usuário estiver próximo do final
+  useEffect(() => {
+    if (!conversation?.messages || conversation.messages.length === 0) return;
+    
+    // Se o usuário está rolando manualmente, não fazer auto-scroll
+    if (isUserScrollingRef.current) {
+      isUserScrollingRef.current = false;
+      return;
+    }
+
+    // Só fazer auto-scroll se estiver próximo do final
+    if (checkIfNearBottom()) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
+    }
   }, [conversation?.messages]);
+
+  // Detectar quando o usuário está rolando manualmente
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      isUserScrollingRef.current = true;
+      shouldAutoScrollRef.current = checkIfNearBottom();
+      
+      // Resetar flag após um tempo sem scroll
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isUserScrollingRef.current = false;
+      }, 150);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(scrollTimeout);
+    };
+  }, []);
 
   const sendMessage = async () => {
     if (!message.trim() || !conversation) return;
@@ -381,7 +447,7 @@ const ConversationViewer: React.FC<ConversationViewerProps> = ({
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-6 py-4">
         <div className="space-y-4">
           {conversation.messages.map((message) => (
             <div

@@ -100,10 +100,13 @@ const ConversationsPage: React.FC = () => {
 
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const [autoSendAfterStop, setAutoSendAfterStop] = useState(false);
     const processedMessageIdsRef = useRef<Set<string>>(new Set());
+    const isUserScrollingRef = useRef(false);
+    const shouldAutoScrollRef = useRef(true);
 
     // ✅ Verificar se sessão expirou
     const isSessionExpired = useMemo(() => {
@@ -1219,10 +1222,72 @@ const ConversationsPage: React.FC = () => {
         }
     }, [selectedConversation?.id]);
 
-
-    useEffect(() => {
+    // Scroll inteligente: só faz auto-scroll se o usuário estiver próximo do final
+    const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const checkIfNearBottom = (): boolean => {
+        const container = messagesContainerRef.current;
+        if (!container) return true;
+        
+        const threshold = 100; // 100px de margem
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        return distanceFromBottom <= threshold;
+    };
+
+    // Scroll inicial quando a conversa é carregada pela primeira vez
+    useEffect(() => {
+        if (messages.length > 0 && selectedConversation?.id && shouldAutoScrollRef.current) {
+            // Pequeno delay para garantir que o DOM foi renderizado
+            setTimeout(() => {
+                scrollToBottom();
+                shouldAutoScrollRef.current = true;
+            }, 100);
+        }
+    }, [selectedConversation?.id]); // Apenas quando muda a conversa
+
+    // Auto-scroll inteligente: só se o usuário estiver próximo do final
+    useEffect(() => {
+        if (messages.length === 0) return;
+        
+        // Se o usuário está rolando manualmente, não fazer auto-scroll
+        if (isUserScrollingRef.current) {
+            isUserScrollingRef.current = false;
+            return;
+        }
+
+        // Só fazer auto-scroll se estiver próximo do final
+        if (checkIfNearBottom()) {
+            setTimeout(() => {
+                scrollToBottom();
+            }, 100);
+        }
     }, [messages]);
+
+    // Detectar quando o usuário está rolando manualmente
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+
+        let scrollTimeout: NodeJS.Timeout;
+        const handleScroll = () => {
+            isUserScrollingRef.current = true;
+            shouldAutoScrollRef.current = checkIfNearBottom();
+            
+            // Resetar flag após um tempo sem scroll
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                isUserScrollingRef.current = false;
+            }, 150);
+        };
+
+        container.addEventListener('scroll', handleScroll);
+        return () => {
+            container.removeEventListener('scroll', handleScroll);
+            clearTimeout(scrollTimeout);
+        };
+    }, []);
 
     useEffect(() => {
         if (!socket || !selectedConversation) return;
@@ -1905,7 +1970,7 @@ const ConversationsPage: React.FC = () => {
                     />
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-3 bg-gray-50 custom-scrollbar">
+                    <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-3 bg-gray-50 custom-scrollbar">
                         {messages.map((message) => {
                             // Use direction as the source of truth for alignment
                             const isFromBot = message.direction === 'SENT';
