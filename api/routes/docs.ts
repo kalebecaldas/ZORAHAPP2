@@ -116,9 +116,13 @@ router.get('/webhooks', async (req: Request, res: Response) => {
     
     .markdown-body h2 {
       color: #764ba2 !important;
-      border-bottom: 2px solid #e2e8f0;
-      padding-bottom: 8px;
+      border-bottom: none;
+      padding: 16px 24px;
       margin-top: 48px;
+      background: linear-gradient(to right, #f8f9ff 0%, transparent 100%);
+      border-left: 4px solid #667eea;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     }
     
     .markdown-body h3 {
@@ -142,35 +146,45 @@ router.get('/webhooks', async (req: Request, res: Response) => {
       color: #1a202c !important;
     }
     
+    /* Code inline - roxo suave */
     .markdown-body code {
-      background: #f7fafc;
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: #e53e3e;
+      background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: #6b21a8;
       font-size: 0.9em;
+      font-weight: 600;
+      border: 1px solid #ddd6fe;
     }
     
+    /* Code blocks - tema escuro moderno */
     .markdown-body pre {
-      background: #1a202c !important;
-      border-radius: 8px;
-      padding: 20px;
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%) !important;
+      border-radius: 12px;
+      padding: 24px;
       overflow-x: auto;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.2);
+      border: 1px solid rgba(167, 139, 250, 0.2);
     }
     
     .markdown-body pre code {
       background: transparent;
-      color: #e2e8f0;
+      color: #e0e7ff;
       padding: 0;
+      border: none;
+      font-weight: normal;
     }
     
+    /* Tabelas modernas e limpas */
     .markdown-body table {
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       width: 100%;
-      margin: 24px 0;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      border-radius: 8px;
+      margin: 32px 0;
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.1);
+      border-radius: 12px;
       overflow: hidden;
+      background: white;
     }
     
     .markdown-body table thead {
@@ -179,37 +193,86 @@ router.get('/webhooks', async (req: Request, res: Response) => {
     }
     
     .markdown-body table th {
-      padding: 14px;
-      font-weight: 600;
+      padding: 16px 20px;
+      font-weight: 700;
       text-align: left;
       border: none !important;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
     
     .markdown-body table td {
-      padding: 12px 14px;
-      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 20px;
+      border: none;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 14px;
+      vertical-align: middle;
     }
     
-    .markdown-body table tr:nth-child(even) {
-      background: #f7fafc;
+    /* Code na primeira coluna - estilizado como badge */
+    .markdown-body table td:first-child code {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      border: none;
+      display: inline-block;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     }
     
-    .markdown-body table tr:hover {
-      background: #edf2f7;
+    .markdown-body table tr {
+      transition: all 0.2s ease;
     }
     
+    .markdown-body table tbody tr:hover {
+      background: linear-gradient(to right, #f8fafc 0%, #f1f5f9 100%);
+      transform: scale(1.01);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .markdown-body table tr:last-child td {
+      border-bottom: none;
+    }
+    
+    /* Blockquotes modernos com gradiente */
     .markdown-body blockquote {
       border-left: 4px solid #667eea;
-      background: #f7fafc;
-      padding: 16px 20px;
-      margin: 20px 0;
-      border-radius: 4px;
+      background: linear-gradient(to right, #f8f9ff 0%, #f3f4f6 100%);
+      padding: 20px 24px;
+      margin: 24px 0;
+      border-radius: 12px;
       color: #4a5568 !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      position: relative;
+    }
+    
+    .markdown-body blockquote::before {
+      content: '💡';
+      position: absolute;
+      left: -12px;
+      top: 18px;
+      background: white;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
     .markdown-body blockquote p {
       color: #4a5568 !important;
       margin: 0;
+      font-style: italic;
+    }
+    
+    .markdown-body blockquote strong {
+      color: #667eea !important;
     }
     
     .markdown-body a {
@@ -385,6 +448,19 @@ router.get('/webhooks', async (req: Request, res: Response) => {
       if (text.includes('Monitoramento')) h2.innerHTML = '📊 ' + text;
       if (text.includes('Exemplos')) h2.innerHTML = '💻 ' + text;
       if (text.includes('Troubleshooting')) h2.innerHTML = '🐛 ' + text;
+    });
+    
+    // Estilizar badges de status nas tabelas
+    document.querySelectorAll('table td').forEach((td) => {
+      const text = td.textContent.trim();
+      
+      // Status badges
+      if (text === '✅ Ativo') {
+        td.innerHTML = '<span style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);"><span style="font-size: 14px;">✅</span> Ativo</span>';
+      }
+      if (text === '🔜 Em breve') {
+        td.innerHTML = '<span style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);"><span style="font-size: 14px;">🔜</span> Em breve</span>';
+      }
     });
   </script>
 </body>
