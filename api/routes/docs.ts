@@ -108,22 +108,38 @@ router.get('/webhooks', async (req: Request, res: Response) => {
     }
     
     .markdown-body h1 {
-      color: #667eea;
+      color: #667eea !important;
       border-bottom: 3px solid #667eea;
       padding-bottom: 12px;
       margin-top: 0;
     }
     
     .markdown-body h2 {
-      color: #764ba2;
+      color: #764ba2 !important;
       border-bottom: 2px solid #e2e8f0;
       padding-bottom: 8px;
       margin-top: 48px;
     }
     
     .markdown-body h3 {
-      color: #4a5568;
+      color: #4a5568 !important;
       margin-top: 32px;
+    }
+    
+    .markdown-body h4,
+    .markdown-body h5,
+    .markdown-body h6 {
+      color: #2d3748 !important;
+    }
+    
+    .markdown-body p,
+    .markdown-body li,
+    .markdown-body td {
+      color: #2d3748 !important;
+    }
+    
+    .markdown-body strong {
+      color: #1a202c !important;
     }
     
     .markdown-body code {
@@ -188,18 +204,33 @@ router.get('/webhooks', async (req: Request, res: Response) => {
       padding: 16px 20px;
       margin: 20px 0;
       border-radius: 4px;
+      color: #4a5568 !important;
+    }
+    
+    .markdown-body blockquote p {
+      color: #4a5568 !important;
+      margin: 0;
     }
     
     .markdown-body a {
-      color: #667eea;
+      color: #667eea !important;
       text-decoration: none;
       font-weight: 500;
       transition: color 0.2s;
     }
     
     .markdown-body a:hover {
-      color: #764ba2;
+      color: #764ba2 !important;
       text-decoration: underline;
+    }
+    
+    /* Garantir que todo texto seja legível */
+    .markdown-body * {
+      color: inherit;
+    }
+    
+    .markdown-body {
+      color: #2d3748;
     }
     
     .back-button {
@@ -233,7 +264,7 @@ router.get('/webhooks', async (req: Request, res: Response) => {
     
     .toc h2 {
       margin-top: 0;
-      color: #667eea;
+      color: #667eea !important;
       border: none;
       padding-bottom: 8px;
       border-bottom: 2px solid #667eea;
@@ -246,6 +277,18 @@ router.get('/webhooks', async (req: Request, res: Response) => {
     
     .toc li {
       margin: 8px 0;
+      color: #2d3748 !important;
+    }
+    
+    .toc a {
+      color: #667eea !important;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    
+    .toc a:hover {
+      color: #764ba2 !important;
+      text-decoration: underline;
     }
     
     @media (max-width: 767px) {
