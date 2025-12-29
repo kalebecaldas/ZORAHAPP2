@@ -197,7 +197,7 @@ export default function WebhooksManagement() {
               <li>Webhooks notificam sistemas externos quando eventos ocorrem</li>
               <li>Cada webhook possui um token único para autenticação</li>
               <li>Retry automático (3x) em caso de falha</li>
-              <li><a href="/WEBHOOKS_API.md" target="_blank" className="underline hover:text-blue-700">Ver documentação completa →</a></li>
+              <li><a href="/webhooks-docs" target="_blank" className="underline hover:text-blue-700 flex items-center gap-1">Ver documentação completa <ExternalLink className="w-3 h-3" /></a></li>
             </ul>
           </div>
         </div>
@@ -522,23 +522,36 @@ function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Eventos</label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.events.includes('first_message')}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setFormData({ ...formData, events: [...formData.events, 'first_message'] })
-                    } else {
-                      setFormData({ ...formData, events: formData.events.filter(e => e !== 'first_message') })
-                    }
-                  }}
-                  className="rounded"
-                />
-                <span className="text-sm">first_message - Primeira mensagem do paciente</span>
-              </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: 'first_message', label: '📨 Primeira mensagem' },
+                { value: 'message_received', label: '💬 Mensagem recebida' },
+                { value: 'conversation_started', label: '🆕 Conversa iniciada' },
+                { value: 'agent_joined', label: '👤 Atendente assumiu' },
+                { value: 'conversation_closed', label: '❌ Conversa encerrada' },
+                { value: 'patient_registered', label: '📋 Paciente cadastrado' },
+                { value: 'appointment_created', label: '📅 Agendamento criado' },
+                { value: 'bot_transferred', label: '🤖 Bot transferiu' },
+                { value: 'message_sent', label: '📤 Mensagem enviada' }
+              ].map(event => (
+                <label key={event.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={formData.events.includes(event.value)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({ ...formData, events: [...formData.events, event.value] })
+                      } else {
+                        setFormData({ ...formData, events: formData.events.filter(ev => ev !== event.value) })
+                      }
+                    }}
+                    className="rounded"
+                  />
+                  <span>{event.label}</span>
+                </label>
+              ))}
             </div>
+            <p className="text-xs text-gray-500 mt-2">Selecione quais eventos você deseja receber</p>
           </div>
 
           <div className="flex gap-3 pt-4">

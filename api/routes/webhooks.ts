@@ -91,7 +91,17 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     // Validar eventos
-    const validEvents = ['first_message', 'appointment_created', 'conversation_closed', 'patient_registered']
+    const validEvents = [
+      'first_message',
+      'message_received',
+      'conversation_started',
+      'agent_joined',
+      'conversation_closed',
+      'patient_registered',
+      'appointment_created',
+      'bot_transferred',
+      'message_sent'
+    ]
     if (events && Array.isArray(events)) {
       const invalidEvents = events.filter((e: string) => !validEvents.includes(e))
       if (invalidEvents.length > 0) {

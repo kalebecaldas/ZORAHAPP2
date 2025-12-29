@@ -720,6 +720,21 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         } catch (sysError) {
           console.error('⚠️ Erro ao criar mensagem do sistema:', sysError)
         }
+        
+        // ✅ WEBHOOK: Conversa encerrada
+        try {
+          const { WebhookService } = await import('../services/webhookService.js')
+          await WebhookService.trigger('conversation_closed', {
+            conversationId: conversation.id,
+            phone: conversation.phone,
+            closedBy: req.user?.name || 'Sistema',
+            timestamp: new Date().toISOString(),
+            patientId: conversation.patientId,
+            sessionExpired: isSessionExpired
+          })
+        } catch (webhookError) {
+          console.error('⚠️ Erro ao disparar webhook conversation_closed:', webhookError)
+        }
         break
 
       case 'reopen':
@@ -771,6 +786,20 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           await createSystemMessage(conversation.id, 'AGENT_ASSIGNED', {
             agentName: currentAgentName
           })
+          
+          // ✅ WEBHOOK: Atendente assumiu conversa
+          try {
+            const { WebhookService } = await import('../services/webhookService.js')
+            await WebhookService.trigger('agent_joined', {
+              conversationId: conversation.id,
+              phone: conversation.phone,
+              agentId: req.user?.id,
+              agentName: currentAgentName,
+              timestamp: new Date().toISOString()
+            })
+          } catch (webhookError) {
+            console.error('⚠️ Erro ao disparar webhook agent_joined:', webhookError)
+          }
           break
 
         case 'transfer':
@@ -985,6 +1014,25 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
         timestamp: new Date()
       }
     })
+    
+    // ✅ WEBHOOK: Mensagem enviada pelo atendente
+    if (messageSent) {
+      try {
+        const { WebhookService } = await import('../services/webhookService.js')
+        await WebhookService.trigger('message_sent', {
+          conversationId: conversation.id,
+          messageId: message.id,
+          phone: phone,
+          message: text,
+          agentId: req.user?.id,
+          agentName: req.user?.name,
+          platform: platform,
+          timestamp: new Date().toISOString()
+        })
+      } catch (webhookError) {
+        console.error('⚠️ Erro ao disparar webhook message_sent:', webhookError)
+      }
+    }
 
     // ⚡ Invalidar cache de mensagens
     messageCacheService.invalidate(conversation.id)
@@ -1284,10 +1332,21 @@ export async function processIncomingMessage(
 
         console.log(`✨ Nova conversa criada após conversa FECHADA expirada: ${conversation.id}`)
         
-        // ✅ NOVO: Disparar webhook de primeira mensagem
+        // ✅ WEBHOOKS: Disparar eventos de nova conversa
         try {
           const { WebhookService } = await import('../services/webhookService.js')
           
+          // Evento: Conversa iniciada
+          await WebhookService.trigger('conversation_started', {
+            conversationId: conversation.id,
+            phone: phone,
+            source: channel,
+            patientId: patient?.id || null,
+            patientName: patient?.name || null,
+            timestamp: now.toISOString()
+          })
+          
+          // Evento: Primeira mensagem
           await WebhookService.trigger('first_message', {
             conversationId: conversation.id,
             phone: phone,
@@ -1295,16 +1354,16 @@ export async function processIncomingMessage(
             timestamp: now.toISOString(),
             patientId: patient?.id || null,
             patientName: patient?.name || null,
-            source: channel, // 'whatsapp' | 'instagram' | 'messenger'
+            source: channel,
             metadata: {
               isNewConversation: true,
               hasPatient: !!patient
             }
           })
           
-          console.log(`📤 Webhook "first_message" disparado para ${phone}`)
+          console.log(`📤 Webhooks disparados: conversation_started + first_message para ${phone}`)
         } catch (webhookError) {
-          console.error('⚠️ Erro ao disparar webhook (não bloqueia fluxo):', webhookError)
+          console.error('⚠️ Erro ao disparar webhooks (não bloqueia fluxo):', webhookError)
           // Não bloqueia o fluxo se webhook falhar
         }
 
@@ -1734,6 +1793,23 @@ export async function processIncomingMessage(
       console.warn('⚠️ Erro ao emitir badge update:', e)
     }
 
+    // ✅ WEBHOOK: Disparar evento message_received
+    try {
+      const { WebhookService } = await import('../services/webhookService.js')
+      await WebhookService.trigger('message_received', {
+        conversationId: conversation.id,
+        messageId: message.id,
+        phone: phone,
+        message: text,
+        messageType: messageType,
+        timestamp: message.timestamp.toISOString(),
+        direction: 'RECEIVED',
+        conversationStatus: conversation.status
+      })
+    } catch (webhookError) {
+      console.error('⚠️ Erro ao disparar webhook message_received:', webhookError)
+    }
+
     // IMPORTANTE: Emitir evento Socket.IO IMEDIATAMENTE após criar a mensagem
     // Isso reduz a latência percebida pelo usuário
     const shouldProcessWithBot = conversation.status === 'BOT_QUEUE';
@@ -1870,6 +1946,23 @@ export async function processIncomingMessage(
                   }
                 })
                 console.log(`✅ Paciente criado: ${patient.id} - ${patient.name}`)
+                
+                // ✅ WEBHOOK: Novo paciente cadastrado
+                try {
+                  const { WebhookService } = await import('../services/webhookService.js')
+                  await WebhookService.trigger('patient_registered', {
+                    patientId: patient.id,
+                    phone: patient.phone,
+                    name: patient.name,
+                    cpf: patient.cpf,
+                    email: patient.email,
+                    insuranceCompany: patient.insuranceCompany,
+                    conversationId: conversation.id,
+                    timestamp: new Date().toISOString()
+                  })
+                } catch (webhookError) {
+                  console.error('⚠️ Erro ao disparar webhook patient_registered:', webhookError)
+                }
               } else {
                 // Atualizar paciente existente (não sobrescrever dados já preenchidos)
                 const updateData: any = {}
@@ -1920,6 +2013,21 @@ export async function processIncomingMessage(
               }
             }
           })
+          
+          // ✅ WEBHOOK: Bot transferiu para humano
+          try {
+            const { WebhookService } = await import('../services/webhookService.js')
+            await WebhookService.trigger('bot_transferred', {
+              conversationId: conversation.id,
+              phone: phone,
+              reason: decision.reason,
+              intent: decision.aiContext?.intent,
+              collectedData: decision.initialData,
+              timestamp: new Date().toISOString()
+            })
+          } catch (webhookError) {
+            console.error('⚠️ Erro ao disparar webhook bot_transferred:', webhookError)
+          }
 
           // Enviar mensagem de resposta (com tratamento de erro para desenvolvimento)
           try {
