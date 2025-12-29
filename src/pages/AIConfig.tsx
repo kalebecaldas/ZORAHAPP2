@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { api } from '../lib/utils'
-import { RefreshCw, DollarSign, TrendingDown, MessageSquare, Zap, ChevronUp, Activity, Settings2 } from 'lucide-react'
+import { RefreshCw, DollarSign, TrendingDown, MessageSquare, Zap, ChevronUp, Activity, Settings2, Webhook } from 'lucide-react'
 import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
 import RulesManagement from '../components/RulesManagement'
+import WebhooksManagement from '../components/WebhooksManagement'
 
 export default function AIConfigPage() {
-    const [activeTab, setActiveTab] = useState<'costs' | 'rules'>('costs')
+    const [activeTab, setActiveTab] = useState<'costs' | 'rules' | 'webhooks'>('costs')
     const [optimizationStats, setOptimizationStats] = useState<any>(null)
     const [refreshing, setRefreshing] = useState(false)
 
@@ -94,6 +95,18 @@ export default function AIConfigPage() {
                                 <Settings2 className="w-4 h-4" />
                                 Regras & Templates
                             </button>
+                            
+                            <button
+                                onClick={() => setActiveTab('webhooks')}
+                                className={`pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                                    activeTab === 'webhooks'
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                <Webhook className="w-4 h-4" />
+                                Webhooks
+                            </button>
                         </nav>
                     </div>
                 </div>
@@ -116,8 +129,10 @@ export default function AIConfigPage() {
                                     <p className="text-gray-600">Carregando estatísticas...</p>
                                 </div>
                             </div>
-                        ) : (
+                        ) : activeTab === 'rules' ? (
                             <RulesManagement />
+                        ) : (
+                            <WebhooksManagement />
                         )}
                     </div>
                 </div>
