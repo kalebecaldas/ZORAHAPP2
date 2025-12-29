@@ -29,18 +29,21 @@ import { api } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { toast } from 'sonner';
 import { WorkflowExecution } from './WorkflowExecution';
+import SystemMessage from './chat/SystemMessage';
 
 interface Message {
   id: string;
   conversationId: string;
-  sender: 'BOT' | 'PATIENT' | 'AGENT';
+  sender: 'BOT' | 'PATIENT' | 'AGENT' | 'SYSTEM';
   messageText: string;
-  messageType: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO';
-  direction: 'SENT' | 'RECEIVED';
+  messageType: 'TEXT' | 'IMAGE' | 'DOCUMENT' | 'AUDIO' | 'SYSTEM';
+  direction: 'SENT' | 'RECEIVED' | 'system';
   timestamp: string;
   status: 'PENDING' | 'SENT' | 'DELIVERED' | 'READ';
   metadata?: any;
   mediaUrl?: string;
+  systemMessageType?: string;
+  systemMetadata?: any;
 }
 
 interface Patient {
@@ -142,8 +145,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
       const msgs = (response.data?.messages || []).map((m: any) => ({
         id: m.id,
         conversationId: response.data.id || conversationId,
-        // Use direction as primary source: RECEIVED = PATIENT, SENT = BOT/AGENT
-        sender: m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT'),
+        // ✅ Detectar SYSTEM messages primeiro
+        sender: m.messageType === 'SYSTEM' ? 'SYSTEM' as any : (m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT')),
         messageText: m.messageText,
         messageType: m.messageType || 'TEXT',
         mediaUrl: m.mediaUrl,
@@ -151,6 +154,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         direction: m.direction,
         timestamp: m.timestamp,
         status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
+        systemMessageType: m.systemMessageType,
+        systemMetadata: m.systemMetadata,
       }))
       console.log('🔍 Mensagens carregadas:', msgs.slice(-3).map(m => ({
         type: m.messageType,
@@ -1006,6 +1011,19 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
         )}
 
         {messages.map((message) => {
+          // ✅ Renderizar mensagens do sistema (SYSTEM)
+          if (message.messageType === 'SYSTEM') {
+            return (
+              <SystemMessage
+                key={message.id}
+                type={message.systemMessageType || 'INFO'}
+                content={message.messageText}
+                metadata={message.systemMetadata}
+                timestamp={message.timestamp}
+              />
+            );
+          }
+
           // Debug: log message mapping
           if (message.id.startsWith('cmin')) {
             console.log('🔍 Message mapping:', {

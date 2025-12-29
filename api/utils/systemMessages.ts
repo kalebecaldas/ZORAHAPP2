@@ -100,50 +100,87 @@ function getSystemMessageText(type: SystemMessageType, metadata: SystemMessageMe
             const ctx = metadata.intentContext
             if (!ctx) return '📋 Contexto da conversa com o bot'
             
-            let contextText = '📋 **Contexto da Conversa com o Bot**\n\n'
+            // ✅ CRIAR RESUMO COMPLETO E DESTAQUE PARA O ATENDENTE
+            let contextText = '🤖 **RESUMO DO ATENDIMENTO DO BOT**\n'
+            contextText += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n'
             
+            // Intenção principal (DESTACADA)
             if (ctx.intent) {
                 const intentMap: Record<string, string> = {
-                    'AGENDAR': 'Agendamento',
-                    'INFORMACAO': 'Informação',
-                    'CANCELAR': 'Cancelamento',
-                    'REAGENDAR': 'Reagendamento',
-                    'ATRASO': 'Atraso',
-                    'RECLAMACAO': 'Reclamação',
-                    'CONVERSA_LIVRE': 'Conversa Livre'
+                    'INFORMACAO': '💬 Pedindo informações',
+                    'AGENDAR': '📅 **QUER AGENDAR**',
+                    'CANCELAR': '❌ Quer cancelar',
+                    'REAGENDAR': '🔄 Quer reagendar',
+                    'ATRASO': '⏰ Avisa atraso',
+                    'RECLAMACAO': '😠 Reclamação',
+                    'CONVERSA_LIVRE': '💭 Conversa livre'
                 }
-                contextText += `🎯 **Intenção:** ${intentMap[ctx.intent] || ctx.intent}\n`
+                contextText += `🎯 ${intentMap[ctx.intent] || ctx.intent}\n\n`
             }
             
-            if (ctx.sentiment) {
-                const sentimentMap: Record<string, string> = {
-                    'positive': '😊 Positivo',
-                    'neutral': '😐 Neutro',
-                    'negative': '😔 Negativo'
+            // ✅ DADOS DO AGENDAMENTO (se for AGENDAR) - SEÇÃO PRINCIPAL
+            if (ctx.intent === 'AGENDAR' && ctx.entities && Object.keys(ctx.entities).length > 0) {
+                contextText += '📋 **O QUE O PACIENTE QUER AGENDAR:**\n\n'
+                
+                // Procedimento (DESTAQUE)
+                if (ctx.entities.procedimento) {
+                    contextText += `🔹 **Procedimento:** ${ctx.entities.procedimento}\n`
+                } else {
+                    contextText += `🔹 **Procedimento:** Não especificado\n`
                 }
-                contextText += `💭 **Sentimento:** ${sentimentMap[ctx.sentiment] || ctx.sentiment}\n`
-            }
-            
-            if (ctx.confidence !== undefined) {
-                contextText += `📊 **Confiança da IA:** ${Math.round(ctx.confidence * 100)}%\n`
-            }
-            
-            if (ctx.conversationSummary) {
-                contextText += `\n📝 **Resumo da Conversa:**\n${ctx.conversationSummary}\n`
-            }
-            
-            if (ctx.entities && Object.keys(ctx.entities).length > 0) {
-                contextText += `\n📋 **Dados Coletados:**\n`
-                if (ctx.entities.nome) contextText += `• Nome: ${ctx.entities.nome}\n`
-                if (ctx.entities.cpf) contextText += `• CPF: ${ctx.entities.cpf}\n`
-                if (ctx.entities.email) contextText += `• Email: ${ctx.entities.email}\n`
-                if (ctx.entities.nascimento) contextText += `• Data de Nascimento: ${ctx.entities.nascimento}\n`
-                if (ctx.entities.convenio) contextText += `• Convênio: ${ctx.entities.convenio}\n`
-                if (ctx.entities.numero_convenio) contextText += `• Número do Convênio: ${ctx.entities.numero_convenio}\n`
+                
+                // Unidade/Clínica (DESTAQUE)
+                if (ctx.entities.clinica) {
+                    contextText += `🔹 **Unidade Preferida:** ${ctx.entities.clinica}\n`
+                } else {
+                    contextText += `🔹 **Unidade:** Não especificou\n`
+                }
+                
+                // Data e Horário
+                if (ctx.entities.data) {
+                    contextText += `📅 **Data Preferida:** ${ctx.entities.data}\n`
+                }
+                if (ctx.entities.horario) {
+                    contextText += `⏰ **Horário Preferido:** ${ctx.entities.horario}\n`
+                }
+                
+                // Convênio
+                if (ctx.entities.convenio && !ctx.entities.convenio.toLowerCase().includes('não') && !ctx.entities.convenio.toLowerCase().includes('nao') && !ctx.entities.convenio.toLowerCase().includes('particular')) {
+                    contextText += `\n💳 **Convênio:** ${ctx.entities.convenio}\n`
+                    if (ctx.entities.numero_convenio) {
+                        contextText += `📇 **Nº Carteirinha:** ${ctx.entities.numero_convenio}\n`
+                    }
+                } else {
+                    contextText += `\n💰 **Atendimento:** Particular\n`
+                }
+                
+                contextText += '\n'
+            } else if (ctx.entities && Object.keys(ctx.entities).length > 0) {
+                // ✅ OUTROS DADOS MENCIONADOS (não agendamento)
+                contextText += '💬 **INFORMAÇÕES MENCIONADAS:**\n\n'
                 if (ctx.entities.procedimento) contextText += `• Procedimento: ${ctx.entities.procedimento}\n`
-                if (ctx.entities.clinica) contextText += `• Clínica: ${ctx.entities.clinica}\n`
+                if (ctx.entities.convenio) contextText += `• Convênio: ${ctx.entities.convenio}\n`
+                if (ctx.entities.clinica) contextText += `• Unidade: ${ctx.entities.clinica}\n`
                 if (ctx.entities.data) contextText += `• Data: ${ctx.entities.data}\n`
                 if (ctx.entities.horario) contextText += `• Horário: ${ctx.entities.horario}\n`
+                contextText += '\n'
+            }
+            
+            // Sentimento do paciente
+            if (ctx.sentiment) {
+                const sentimentMap = {
+                    'positive': '😊 Positivo',
+                    'neutral': '😐 Neutro',
+                    'negative': '😞 Negativo'
+                }
+                contextText += `**Humor do Paciente:** ${sentimentMap[ctx.sentiment] || ctx.sentiment}\n\n`
+            }
+            
+            // ✅ RESUMO DA CONVERSA (últimas mensagens) - Para contexto rápido
+            if (ctx.conversationSummary && ctx.conversationSummary !== 'Sem histórico disponível') {
+                contextText += '💭 **ÚLTIMAS MENSAGENS:**\n'
+                contextText += ctx.conversationSummary.split('\n').map(line => `  ${line}`).join('\n')
+                contextText += '\n'
             }
             
             return contextText

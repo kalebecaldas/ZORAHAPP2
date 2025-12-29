@@ -1968,45 +1968,58 @@ export async function processIncomingMessage(
             }
           }
 
-          // ✅ CRIAR MENSAGEM INTERNA COM CONTEXTO DA INTENÇÃO
+          // ✅ CRIAR MENSAGEM INTERNA COM CONTEXTO DA INTENÇÃO (RESUMO COMPLETO)
           try {
             const { createSystemMessage } = await import('../utils/systemMessages.js')
             
-            // Buscar resumo da conversa (últimas 5 mensagens)
+            // Buscar resumo da conversa (últimas 10 mensagens para contexto completo)
             const recentMessages = await prisma.message.findMany({
-              where: { conversationId: conversation.id },
+              where: { 
+                conversationId: conversation.id,
+                messageType: { not: 'SYSTEM' } // ✅ Excluir mensagens do sistema do resumo
+              },
               orderBy: { createdAt: 'desc' },
-              take: 5
+              take: 10
             })
             
             // Criar resumo da conversa
             const conversationSummary = recentMessages
               .reverse() // Ordem cronológica
               .map(msg => {
-                const role = msg.direction === 'RECEIVED' ? 'Paciente' : 'Bot'
-                const content = msg.messageText.substring(0, 100) + (msg.messageText.length > 100 ? '...' : '')
+                const role = msg.direction === 'RECEIVED' ? '👤 Paciente' : '🤖 Bot'
+                const content = msg.messageText && msg.messageText.length > 0 
+                    ? (msg.messageText.substring(0, 80) + (msg.messageText.length > 80 ? '...' : ''))
+                    : '[Mensagem vazia]'
                 return `${role}: ${content}`
               })
               .join('\n')
+            
+            // ✅ Combinar entities do decision.initialData com decision.aiContext.entities
+            const allEntities = {
+              ...(decision.aiContext?.entities || {}),
+              ...(decision.initialData || {})
+            }
             
             // Criar contexto da intenção usando dados do decision (que já contém aiContext)
             const intentContext = {
               intent: decision.aiContext?.intent || 'CONVERSA_LIVRE',
               sentiment: decision.aiContext?.sentiment || 'neutral',
               confidence: decision.aiContext?.confidence || 0.5,
-              entities: decision.initialData || decision.aiContext?.entities || {},
+              entities: allEntities,
               conversationSummary: conversationSummary || 'Sem histórico disponível',
-              collectedData: decision.initialData || {}
+              collectedData: decision.initialData || {},
+              transferReason: decision.reason || 'Cadastro completo'
             }
             
             console.log(`📋 Criando mensagem interna com contexto da intenção...`)
-            console.log(`📋 Contexto:`, JSON.stringify(intentContext, null, 2))
+            console.log(`📋 Intenção: ${intentContext.intent}`)
+            console.log(`📋 Entities combinadas:`, JSON.stringify(allEntities, null, 2))
             
             await createSystemMessage(conversation.id, 'BOT_INTENT_CONTEXT', {
               intentContext
             })
             
-            console.log(`✅ Mensagem interna de contexto criada`)
+            console.log(`✅ Mensagem interna de contexto criada com ${Object.keys(allEntities).length} campos`)
           } catch (contextError) {
             console.error('⚠️ Erro ao criar mensagem de contexto:', contextError)
             // Não bloquear o fluxo se falhar

@@ -35,96 +35,142 @@ const SystemMessage: React.FC<SystemMessageProps> = ({
     // Renderizar card especial para contexto da intenção
     if (type === 'BOT_INTENT_CONTEXT' && metadata?.intentContext) {
         const ctx = metadata.intentContext;
+        const isScheduling = ctx.intent === 'AGENDAR';
+        
         return (
-            <div className="flex justify-center my-3">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl w-full shadow-sm">
+            <div className="flex justify-center my-4">
+                <div className={`border rounded-lg p-4 max-w-2xl w-full shadow-md ${
+                    isScheduling 
+                        ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-300' 
+                        : 'bg-blue-50 border-blue-200'
+                }`}>
+                    {/* Header */}
                     <div className="flex items-center gap-2 mb-3">
-                        <MessageSquare className="h-4 w-4 text-blue-600" />
-                        <span className="font-semibold text-blue-900 text-sm">Contexto da Conversa com o Bot</span>
+                        <MessageSquare className={`h-5 w-5 ${isScheduling ? 'text-green-600' : 'text-blue-600'}`} />
+                        <span className={`font-bold text-sm ${isScheduling ? 'text-green-900' : 'text-blue-900'}`}>
+                            {isScheduling ? '📅 RESUMO DO AGENDAMENTO' : '🤖 Contexto da Conversa com o Bot'}
+                        </span>
                     </div>
                     
-                    <div className="space-y-2 text-xs text-gray-700">
+                    {/* Intenção e Sentimento */}
+                    <div className="flex gap-3 mb-3 flex-wrap">
                         {ctx.intent && (
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">Intenção:</span>
-                                <span className="px-2 py-1 bg-blue-100 rounded text-blue-800">
-                                    {ctx.intent === 'AGENDAR' ? 'Agendamento' :
-                                     ctx.intent === 'INFORMACAO' ? 'Informação' :
-                                     ctx.intent === 'CANCELAR' ? 'Cancelamento' :
-                                     ctx.intent === 'REAGENDAR' ? 'Reagendamento' :
-                                     ctx.intent === 'ATRASO' ? 'Atraso' :
-                                     ctx.intent === 'RECLAMACAO' ? 'Reclamação' :
-                                     ctx.intent}
-                                </span>
-                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                                isScheduling 
+                                    ? 'bg-green-200 text-green-900' 
+                                    : 'bg-blue-200 text-blue-900'
+                            }`}>
+                                {ctx.intent === 'AGENDAR' ? '📅 Quer Agendar' :
+                                 ctx.intent === 'INFORMACAO' ? '💬 Pedindo Info' :
+                                 ctx.intent === 'CANCELAR' ? '❌ Cancelamento' :
+                                 ctx.intent === 'REAGENDAR' ? '🔄 Reagendamento' :
+                                 ctx.intent === 'ATRASO' ? '⏰ Atraso' :
+                                 ctx.intent === 'RECLAMACAO' ? '😠 Reclamação' :
+                                 ctx.intent}
+                            </span>
                         )}
                         
                         {ctx.sentiment && (
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">Sentimento:</span>
-                                <span className={ctx.sentiment === 'positive' ? 'text-green-600' : 
-                                                  ctx.sentiment === 'negative' ? 'text-red-600' : 
-                                                  'text-gray-600'}>
-                                    {ctx.sentiment === 'positive' ? '😊 Positivo' :
-                                     ctx.sentiment === 'negative' ? '😔 Negativo' :
-                                     '😐 Neutro'}
-                                </span>
-                            </div>
-                        )}
-                        
-                        {ctx.confidence !== undefined && (
-                            <div className="flex items-center gap-2">
-                                <span className="font-medium">Confiança da IA:</span>
-                                <span className="text-gray-600">{Math.round(ctx.confidence * 100)}%</span>
-                            </div>
-                        )}
-                        
-                        {ctx.entities && Object.keys(ctx.entities).length > 0 && (
-                            <div className="mt-3 pt-3 border-t border-blue-200">
-                                <span className="font-medium block mb-2">Dados Coletados:</span>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {ctx.entities.nome && (
-                                        <div><span className="text-gray-500">Nome:</span> <span className="font-medium">{ctx.entities.nome}</span></div>
-                                    )}
-                                    {ctx.entities.cpf && (
-                                        <div><span className="text-gray-500">CPF:</span> <span className="font-medium">{ctx.entities.cpf}</span></div>
-                                    )}
-                                    {ctx.entities.email && (
-                                        <div><span className="text-gray-500">Email:</span> <span className="font-medium">{ctx.entities.email}</span></div>
-                                    )}
-                                    {ctx.entities.nascimento && (
-                                        <div><span className="text-gray-500">Nascimento:</span> <span className="font-medium">{ctx.entities.nascimento}</span></div>
-                                    )}
-                                    {ctx.entities.convenio && (
-                                        <div><span className="text-gray-500">Convênio:</span> <span className="font-medium">{ctx.entities.convenio}</span></div>
-                                    )}
-                                    {ctx.entities.procedimento && (
-                                        <div><span className="text-gray-500">Procedimento:</span> <span className="font-medium">{ctx.entities.procedimento}</span></div>
-                                    )}
-                                    {ctx.entities.clinica && (
-                                        <div><span className="text-gray-500">Clínica:</span> <span className="font-medium">{ctx.entities.clinica}</span></div>
-                                    )}
-                                    {ctx.entities.data && (
-                                        <div><span className="text-gray-500">Data:</span> <span className="font-medium">{ctx.entities.data}</span></div>
-                                    )}
-                                    {ctx.entities.horario && (
-                                        <div><span className="text-gray-500">Horário:</span> <span className="font-medium">{ctx.entities.horario}</span></div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        
-                        {ctx.conversationSummary && (
-                            <div className="mt-3 pt-3 border-t border-blue-200">
-                                <span className="font-medium block mb-2">Resumo da Conversa:</span>
-                                <div className="bg-white rounded p-2 text-gray-600 whitespace-pre-wrap font-mono text-[11px]">
-                                    {ctx.conversationSummary}
-                                </div>
-                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                ctx.sentiment === 'positive' ? 'bg-green-100 text-green-800' : 
+                                ctx.sentiment === 'negative' ? 'bg-red-100 text-red-800' : 
+                                'bg-gray-100 text-gray-800'
+                            }`}>
+                                {ctx.sentiment === 'positive' ? '😊 Positivo' :
+                                 ctx.sentiment === 'negative' ? '😞 Negativo' :
+                                 '😐 Neutro'}
+                            </span>
                         )}
                     </div>
                     
-                    <div className="text-gray-400 text-[10px] mt-3 pt-2 border-t border-blue-200">
+                    {/* ✅ SEÇÃO PRINCIPAL: O QUE O PACIENTE QUER (destacado) */}
+                    {isScheduling && ctx.entities && Object.keys(ctx.entities).length > 0 && (
+                        <div className="bg-white rounded-lg p-3 mb-3 border-l-4 border-green-500">
+                            <div className="font-bold text-sm text-gray-900 mb-2">🎯 O Paciente Quer:</div>
+                            <div className="space-y-1.5 text-xs">
+                                {ctx.entities.procedimento && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">🔸 Procedimento:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.procedimento}</span>
+                                    </div>
+                                )}
+                                {ctx.entities.clinica && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">🏥 Unidade:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.clinica}</span>
+                                    </div>
+                                )}
+                                {ctx.entities.data && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">📅 Data:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.data}</span>
+                                    </div>
+                                )}
+                                {ctx.entities.horario && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">⏰ Horário:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.horario}</span>
+                                    </div>
+                                )}
+                                {ctx.entities.convenio && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">💳 Convênio:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.convenio}</span>
+                                    </div>
+                                )}
+                                {ctx.entities.numero_convenio && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-green-700 min-w-[90px]">📇 Nº Cart.:</span>
+                                        <span className="text-gray-900 font-medium">{ctx.entities.numero_convenio}</span>
+                                    </div>
+                                )}
+                                {/* Mostrar se não tem procedimento definido */}
+                                {!ctx.entities.procedimento && (
+                                    <div className="text-orange-600 text-xs italic">⚠️ Procedimento não especificado</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Dados cadastrais */}
+                    {ctx.entities && Object.keys(ctx.entities).length > 0 && (
+                        <div className="bg-white rounded-lg p-3 mb-3">
+                            <div className="font-semibold text-xs text-gray-700 mb-2">📋 Dados Cadastrais:</div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                                {ctx.entities.nome && (
+                                    <div><span className="text-gray-500">Nome:</span> <span className="font-medium text-gray-900">{ctx.entities.nome}</span></div>
+                                )}
+                                {ctx.entities.cpf && (
+                                    <div><span className="text-gray-500">CPF:</span> <span className="font-medium text-gray-900">{ctx.entities.cpf}</span></div>
+                                )}
+                                {ctx.entities.email && (
+                                    <div><span className="text-gray-500">Email:</span> <span className="font-medium text-gray-900">{ctx.entities.email}</span></div>
+                                )}
+                                {ctx.entities.nascimento && (
+                                    <div><span className="text-gray-500">Nascimento:</span> <span className="font-medium text-gray-900">{ctx.entities.nascimento}</span></div>
+                                )}
+                                {/* Mostrar procedimento/clínica aqui apenas se não for agendamento */}
+                                {!isScheduling && ctx.entities.procedimento && (
+                                    <div><span className="text-gray-500">Procedimento:</span> <span className="font-medium text-gray-900">{ctx.entities.procedimento}</span></div>
+                                )}
+                                {!isScheduling && ctx.entities.clinica && (
+                                    <div><span className="text-gray-500">Unidade:</span> <span className="font-medium text-gray-900">{ctx.entities.clinica}</span></div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Resumo da conversa */}
+                    {ctx.conversationSummary && ctx.conversationSummary !== 'Sem histórico disponível' && (
+                        <div className="bg-white rounded-lg p-3">
+                            <div className="font-semibold text-xs text-gray-700 mb-2">💭 Últimas Mensagens:</div>
+                            <div className="bg-gray-50 rounded p-2 text-[11px] text-gray-600 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">
+                                {ctx.conversationSummary}
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="text-gray-400 text-[10px] mt-3 pt-2 border-t">
                         {new Date(timestamp).toLocaleTimeString('pt-BR', {
                             hour: '2-digit',
                             minute: '2-digit'
