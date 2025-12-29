@@ -110,9 +110,31 @@ export class IntelligentRouter {
         conversationId: string,
         existingPatient?: { id: string; name: string; phone: string; cpf?: string | null; email?: string | null; insuranceCompany?: string | null } | null
     ): Promise<RouteDecision> {
-        // ✅ NOVO: Se paciente já existe e IA quer coletar dados, pular coleta e transferir direto
-        if (aiResponse.action === 'collect_data' && existingPatient) {
-            console.log(`✅ Paciente já cadastrado (${existingPatient.name}) - Pulando coleta de dados e transferindo direto`)
+        // ✅ VERIFICAR: Se paciente existe, verificar se todos os dados importantes estão preenchidos
+        if (aiResponse.action === 'collect_data' && existingPatient && aiResponse.intent === 'AGENDAR') {
+            // Verificar quais dados estão faltando
+            const missingData = []
+            if (!existingPatient.cpf || existingPatient.cpf.length === 0) missingData.push('CPF')
+            if (!existingPatient.email || existingPatient.email.length === 0) missingData.push('Email')
+            
+            // Se faltam dados importantes, continuar coleta
+            if (missingData.length > 0) {
+                console.log(`⚠️ Paciente ${existingPatient.name} existe mas faltam dados: ${missingData.join(', ')}`)
+                console.log(`📋 Continuando coleta de dados...`)
+                
+                // Adicionar nome do paciente nas entities se não estiver lá
+                if (!aiResponse.entities.nome) {
+                    aiResponse.entities.nome = existingPatient.name
+                }
+                if (!aiResponse.entities.convenio && existingPatient.insuranceCompany) {
+                    aiResponse.entities.convenio = existingPatient.insuranceCompany
+                }
+                
+                // Continuar coleta normalmente
+                return this.routeToAIWithDataCollection(aiResponse, conversationId)
+            }
+            
+            console.log(`✅ Paciente já cadastrado (${existingPatient.name}) com todos os dados - Pulando coleta e transferindo direto`)
             
             // Usar dados existentes do paciente
             const patientEntities = {

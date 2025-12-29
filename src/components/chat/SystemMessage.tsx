@@ -29,7 +29,21 @@ const SystemMessage: React.FC<SystemMessageProps> = ({
     // Renderizar card especial para dados do paciente
     if (type === 'PATIENT_DATA_CARD' && metadata?.patientData) {
         console.log('✅ Renderizando PatientDataCard com dados:', metadata.patientData);
-        return <PatientDataCard data={metadata.patientData} timestamp={timestamp.toString()} />;
+        
+        // ✅ INCLUIR DADOS DO PROCEDIMENTO DESEJADO
+        const enrichedData = {
+            ...metadata.patientData,
+            // Se tiver requestedService, incluir no card
+            ...(metadata.requestedService && {
+                procedimento: metadata.requestedService.procedure,
+                clinica: metadata.requestedService.clinic,
+                data: metadata.requestedService.preferredDate,
+                horario: metadata.requestedService.preferredTime
+            })
+        };
+        
+        console.log('✅ Dados enriquecidos com procedimento:', enrichedData);
+        return <PatientDataCard data={enrichedData} timestamp={timestamp.toString()} />;
     }
 
     // Renderizar card especial para contexto da intenção

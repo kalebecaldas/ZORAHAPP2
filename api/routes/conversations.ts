@@ -1945,6 +1945,12 @@ export async function processIncomingMessage(
                   return new Date(date).toLocaleDateString('pt-BR')
                 }
 
+                // ✅ INCLUIR PROCEDIMENTO DESEJADO NO CARD
+                const allEntities = {
+                  ...(decision.aiContext?.entities || {}),
+                  ...(decision.initialData || {})
+                }
+                
                 const cardData = {
                   patientData: {
                     name: patient.name,
@@ -1954,6 +1960,13 @@ export async function processIncomingMessage(
                     birthDate: formatDate(patient.birthDate),
                     insuranceCompany: patient.insuranceCompany,
                     insuranceNumber: patient.insuranceNumber
+                  },
+                  // ✅ ADICIONAR PROCEDIMENTO DESEJADO
+                  requestedService: {
+                    procedure: allEntities.procedimento || allEntities.procedure || 'Não especificado',
+                    clinic: allEntities.clinica || allEntities.clinic || 'Não especificada',
+                    preferredDate: allEntities.data || allEntities.date || null,
+                    preferredTime: allEntities.horario || allEntities.time || null
                   }
                 };
 
@@ -1961,7 +1974,7 @@ export async function processIncomingMessage(
 
                 await createSystemMessage(conversation.id, 'PATIENT_DATA_CARD', cardData)
 
-                console.log(`✅ Card de dados do paciente criado: ${patient.name}`)
+                console.log(`✅ Card de dados do paciente criado: ${patient.name} - Procedimento: ${cardData.requestedService.procedure}`)
               }
             } catch (cardError) {
               console.error('⚠️ Erro ao criar card de dados:', cardError)

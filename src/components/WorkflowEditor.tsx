@@ -107,7 +107,7 @@ export default function WorkflowEditor() {
             console.error('Error deleting workflow:', error)
             toast.error('Erro ao excluir workflow')
         }
-    }
+            }
 
     const testWorkflow = async () => {
         if (!selectedWorkflow) return
@@ -315,8 +315,8 @@ export default function WorkflowEditor() {
             case 'transfer': return 'bg-orange-500'
             case 'end': return 'bg-red-500'
             default: return 'bg-gray-500'
-        }
-    }
+                    }
+                }
 
     const getNodeBadgeColor = (type: string) => {
         switch (type) {
@@ -496,7 +496,7 @@ export default function WorkflowEditor() {
                                 <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                     Status
                                 </label>
-                                <button
+                        <button
                                     onClick={() => setSelectedWorkflow({ ...selectedWorkflow, isActive: !selectedWorkflow.isActive })}
                                     className={`w-full px-3 py-2.5 rounded-lg font-semibold transition-all ${
                                         selectedWorkflow.isActive
@@ -505,10 +505,10 @@ export default function WorkflowEditor() {
                                     }`}
                                 >
                                     {selectedWorkflow.isActive ? '● Active' : '○ Inactive'}
-                                </button>
+                        </button>
                             </div>
-                        </div>
                     </div>
+                </div>
 
                     {/* Canvas - Estilo n8n */}
                     <div className="flex-1 p-6 overflow-auto bg-gradient-to-br from-gray-50 to-gray-100">
@@ -518,7 +518,7 @@ export default function WorkflowEditor() {
                             <button
                                 onClick={() => addNode('condition')}
                                 className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:shadow-md hover:border-yellow-400 transition-all text-sm font-medium flex items-center gap-2"
-                            >
+                        >
                                 <span className="text-lg">❓</span>
                                 Condition
                             </button>
@@ -542,8 +542,8 @@ export default function WorkflowEditor() {
                             >
                                 <span className="text-lg">👤</span>
                                 Transfer
-                            </button>
-                        </div>
+                                            </button>
+                                        </div>
 
                         {/* Workflow Nodes - Estilo n8n */}
                         <div className="space-y-3 max-w-4xl mx-auto">
@@ -664,8 +664,8 @@ export default function WorkflowEditor() {
                             <span className="text-gray-600">Drag nodes to reorder • Click to edit • Double-click for quick config</span>
                         </div>
                     </div>
-                </div>
-            )}
+                                                </div>
+                                            )}
         </div>
 
         {/* Modal de Edição de Nó - Estilo n8n */}
@@ -702,19 +702,19 @@ export default function WorkflowEditor() {
                             <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                 Node Label
                             </label>
-                            <input
-                                type="text"
+                                                    <input
+                                                        type="text"
                                 value={editingNode.label}
                                 onChange={(e) => setEditingNode({ ...editingNode, label: e.target.value })}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 font-medium"
                                 placeholder="e.g., Ask for Name"
-                            />
+                                                    />
                             <p className="text-xs text-gray-500 mt-1.5">This name will appear on the workflow canvas</p>
-                        </div>
+                                                </div>
 
                         {/* Configurações específicas por tipo - Estilo n8n */}
                         {editingNode.type === 'condition' && (
-                            <>
+                                                <>
                                 <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
                                     <h4 className="text-sm font-semibold text-yellow-800 mb-3">Condition Settings</h4>
                                     <div className="space-y-4">
@@ -722,8 +722,8 @@ export default function WorkflowEditor() {
                                             <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                                 Field to Evaluate
                                             </label>
-                                            <input
-                                                type="text"
+                                                        <input
+                                                            type="text"
                                                 value={editingNode.config?.field || ''}
                                                 onChange={(e) => setEditingNode({
                                                     ...editingNode,
@@ -731,8 +731,8 @@ export default function WorkflowEditor() {
                                                 })}
                                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                                                 placeholder="e.g., intent, message, patient.insuranceCompany"
-                                            />
-                                        </div>
+                                                        />
+                                                    </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                                 Operator
@@ -756,8 +756,8 @@ export default function WorkflowEditor() {
                                             <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                                 Compare Value
                                             </label>
-                                            <input
-                                                type="text"
+                                                        <input
+                                                            type="text"
                                                 value={editingNode.config?.value || ''}
                                                 onChange={(e) => setEditingNode({
                                                     ...editingNode,
@@ -765,12 +765,12 @@ export default function WorkflowEditor() {
                                                 })}
                                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent"
                                                 placeholder="e.g., AGENDAR, acupuntura"
-                                            />
+                                                        />
                                         </div>
                                     </div>
-                                </div>
-                            </>
-                        )}
+                                                    </div>
+                                                </>
+                                            )}
 
                         {editingNode.type === 'action' && (
                             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
@@ -798,7 +798,7 @@ export default function WorkflowEditor() {
                                         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                             Message
                                         </label>
-                                        <textarea
+                                                    <textarea
                                             value={editingNode.config?.message || ''}
                                             onChange={(e) => setEditingNode({
                                                 ...editingNode,
@@ -826,12 +826,12 @@ export default function WorkflowEditor() {
                                                 })}
                                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-transparent font-mono"
                                                 placeholder="e.g., selected_procedure"
-                                            />
+                                                    />
                                         </div>
                                     )}
                                 </div>
-                            </div>
-                        )}
+                                                </div>
+                                            )}
 
                         {editingNode.type === 'gpt' && (
                             <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
@@ -856,18 +856,18 @@ export default function WorkflowEditor() {
                                         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                             Model
                                         </label>
-                                        <select
+                                                        <select
                                             value={editingNode.config?.model || 'gpt-4o-mini'}
                                             onChange={(e) => setEditingNode({
                                                 ...editingNode,
                                                 config: { ...editingNode.config, model: e.target.value }
                                             })}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent"
-                                        >
+                                                        >
                                             <option value="gpt-4o-mini">gpt-4o-mini (faster & cheaper)</option>
                                             <option value="gpt-4o">gpt-4o (more intelligent)</option>
-                                        </select>
-                                    </div>
+                                                        </select>
+                                                    </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                             Max Tokens
@@ -897,8 +897,8 @@ export default function WorkflowEditor() {
                                         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                             Target Queue
                                         </label>
-                                        <input
-                                            type="text"
+                                                        <input
+                                                            type="text"
                                             value={editingNode.config?.queue || ''}
                                             onChange={(e) => setEditingNode({
                                                 ...editingNode,
@@ -906,8 +906,8 @@ export default function WorkflowEditor() {
                                             })}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-400 focus:border-transparent"
                                             placeholder="e.g., scheduling, supervisor, default"
-                                        />
-                                    </div>
+                                                        />
+                                                    </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
                                             Transfer Message
