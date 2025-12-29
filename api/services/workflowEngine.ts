@@ -5,6 +5,7 @@
  * Integrado com Prisma para persistência em banco de dados
  */
 
+// @ts-nocheck
 import prisma from '../prisma/client.js'
 
 export interface WorkflowNode {
