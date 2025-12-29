@@ -1283,6 +1283,30 @@ export async function processIncomingMessage(
         })
 
         console.log(`✨ Nova conversa criada após conversa FECHADA expirada: ${conversation.id}`)
+        
+        // ✅ NOVO: Disparar webhook de primeira mensagem
+        try {
+          const { WebhookService } = await import('../services/webhookService.js')
+          
+          await WebhookService.trigger('first_message', {
+            conversationId: conversation.id,
+            phone: phone,
+            message: text,
+            timestamp: now.toISOString(),
+            patientId: patient?.id || null,
+            patientName: patient?.name || null,
+            source: channel, // 'whatsapp' | 'instagram' | 'messenger'
+            metadata: {
+              isNewConversation: true,
+              hasPatient: !!patient
+            }
+          })
+          
+          console.log(`📤 Webhook "first_message" disparado para ${phone}`)
+        } catch (webhookError) {
+          console.error('⚠️ Erro ao disparar webhook (não bloqueia fluxo):', webhookError)
+          // Não bloqueia o fluxo se webhook falhar
+        }
 
         // ✅ Emitir evento de nova conversa criada
         try {

@@ -512,3 +512,44 @@ model InsuranceRule {
   @@index([insuranceCode])
 }
 
+// ============================================
+// SISTEMA DE WEBHOOKS PARA INTEGRAÇÕES EXTERNAS
+// ============================================
+
+model WebhookSubscription {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  url             String
+  token           String    @unique
+  events          String[]  @default(["first_message"])
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastTriggeredAt DateTime?
+  metadata        Json?
+  
+  logs            WebhookLog[]
+  
+  @@index([isActive])
+  @@index([token])
+}
+
+model WebhookLog {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  eventType      String
+  payload        Json
+  statusCode     Int?
+  responseTime   Int?
+  error          String?  @db.Text
+  success        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  
+  subscription   WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  
+  @@index([subscriptionId])
+  @@index([createdAt])
+  @@index([success])
+}
+

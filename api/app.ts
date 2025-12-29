@@ -39,6 +39,7 @@ import analyticsRoutes from './routes/analytics.js' // ✅ Analytics avançado
 import systemSettingsRoutes from './routes/systemSettings.js' // ✅ Configurações do sistema
 import botOptimizationRoutes from './routes/botOptimization.js' // ✅ Dashboard de Otimizações
 import rulesRoutes from './routes/rules.js' // ✅ Sistema de Regras do Bot
+import webhooksRoutes from './routes/webhooks.js' // ✅ Sistema de Webhooks
 import { authMiddleware } from './utils/auth.js'
 import { workflowEngine } from './services/workflowEngine.js'
 
@@ -178,6 +179,7 @@ app.use('/api/analytics', authenticatedLimiter, analyticsRoutes) // ✅ Analytic
 app.use('/api/settings/system', authenticatedLimiter, systemSettingsRoutes) // ✅ Configurações do sistema
 app.use('/api/bot-optimization', authenticatedLimiter, botOptimizationRoutes) // ✅ Dashboard de Otimizações
 app.use('/api/rules', authenticatedLimiter, rulesRoutes) // ✅ Sistema de Regras do Bot
+app.use('/api/webhooks', authenticatedLimiter, webhooksRoutes) // ✅ Sistema de Webhooks para Integrações
 app.use('/api', authenticatedLimiter, aliasRoutes)
 
 // Debug auth endpoint
