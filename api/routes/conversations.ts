@@ -1654,7 +1654,7 @@ export async function processIncomingMessage(
     })
 
     if (existingMessageByContent) {
-      console.log(`⚠️ Mensagem duplicada detectada por conteúdo: "${text.substring(0, 50)}..." de ${phone} (últimos 2 minutos)`)
+      console.log(`⚠️ Mensagem duplicada detectada por conteúdo: "${text?.substring(0, 50) || '[vazio]'}..." de ${phone} (últimos 2 minutos)`)
       // Se a mensagem duplicada está na mesma conversa, não processar
       if (existingMessageByContent.conversationId === conversation.id) {
         console.log(`⚠️ Mensagem duplicada na mesma conversa - ignorando`)
@@ -1985,10 +1985,12 @@ export async function processIncomingMessage(
             // Criar resumo da conversa
             const conversationSummary = recentMessages
               .reverse() // Ordem cronológica
+              .filter(msg => msg.messageText && msg.messageText.length > 0) // ✅ Filtrar mensagens vazias
               .map(msg => {
                 const role = msg.direction === 'RECEIVED' ? '👤 Paciente' : '🤖 Bot'
-                const content = msg.messageText && msg.messageText.length > 0 
-                    ? (msg.messageText.substring(0, 80) + (msg.messageText.length > 80 ? '...' : ''))
+                const text = msg.messageText || ''
+                const content = text.length > 0 
+                    ? (text.substring(0, 80) + (text.length > 80 ? '...' : ''))
                     : '[Mensagem vazia]'
                 return `${role}: ${content}`
               })
@@ -3742,8 +3744,10 @@ async function advanceWorkflow(conversation: any, incomingText: string): Promise
           ?.slice(-1)[0];
         if (lastBotMessage && n.type === 'MESSAGE') {
           const nodeMessage = n.content?.message || n.data?.message || '';
-          return lastBotMessage.content?.includes(nodeMessage.substring(0, 50)) ||
-            nodeMessage.substring(0, 50).includes(lastBotMessage.content?.substring(0, 50) || '');
+          const nodeMsgSafe = nodeMessage || ''
+          const lastMsgSafe = lastBotMessage.content || ''
+          return lastMsgSafe.includes(nodeMsgSafe.substring(0, Math.min(50, nodeMsgSafe.length))) ||
+            nodeMsgSafe.substring(0, Math.min(50, nodeMsgSafe.length)).includes(lastMsgSafe.substring(0, Math.min(50, lastMsgSafe.length)));
         }
         return false;
       });

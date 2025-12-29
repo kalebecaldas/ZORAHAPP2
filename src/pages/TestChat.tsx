@@ -261,7 +261,7 @@ export function TestChat() {
       // Verificar última mensagem do bot para adicionar log
       const msgs = await getConversation()
       const lastBotMsg = [...msgs].reverse().find(m => m.from === 'BOT' && m.direction === 'SENT')
-      if (lastBotMsg) {
+      if (lastBotMsg && lastBotMsg.messageText) {
         setTestLog(prev => [...prev, `🤖 Bot respondeu: "${lastBotMsg.messageText.substring(0, 50)}..."`])
       }
     } catch (e: any) {

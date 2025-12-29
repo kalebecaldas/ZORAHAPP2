@@ -1428,7 +1428,7 @@ const ConversationsPage: React.FC = () => {
                                        c.phone === selectedConversation?.phone
                         
                         if (matches) {
-                            console.log('✅ Atualizando card da conversa com última mensagem:', messageData.messageText.substring(0, 20))
+                            console.log('✅ Atualizando card da conversa com última mensagem:', messageData.messageText?.substring(0, 20) || '[vazio]')
                             return {
                                 ...c,
                                 lastMessage: messageData.messageText,
