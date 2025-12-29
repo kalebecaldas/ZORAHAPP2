@@ -207,17 +207,10 @@ export default function WebhooksManagement() {
       {webhooks.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <Webhook className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum webhook configurado</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum webhook configurado ainda</h3>
           <p className="text-gray-600 mb-4">
-            Crie seu primeiro webhook para começar a receber notificações
+            Clique em "Novo Webhook" no canto superior direito para criar o primeiro
           </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            Criar Webhook
-          </button>
         </div>
       ) : (
         <div className="grid gap-4">
