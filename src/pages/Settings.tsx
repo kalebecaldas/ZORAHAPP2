@@ -13,6 +13,7 @@ import SystemSettingsTab from '../components/settings/SystemSettingsTab';
 interface Unit {
   id: string;
   name: string;
+  address?: string;
   mapsUrl: string;
   phone: string;
 }
@@ -374,7 +375,7 @@ export const Settings = () => {
                   <button
                     onClick={() => setClinicData({
                       ...clinicData,
-                      units: [...clinicData.units, { id: `unit_${Date.now()}`, name: 'Nova Unidade', mapsUrl: '', phone: '' }]
+                      units: [...clinicData.units, { id: `unit_${Date.now()}`, name: 'Nova Unidade', address: '', mapsUrl: '', phone: '' }]
                     })}
                     className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
                   >
@@ -418,6 +419,20 @@ export const Settings = () => {
                               newUnits[index].name = e.target.value;
                               setClinicData({ ...clinicData, units: newUnits });
                             }}
+                            className="w-full border rounded px-2 py-1 text-sm"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-xs text-gray-500 mb-1">Endereço Completo</label>
+                          <input
+                            type="text"
+                            value={unit.address || ''}
+                            onChange={(e) => {
+                              const newUnits = [...clinicData.units];
+                              newUnits[index].address = e.target.value;
+                              setClinicData({ ...clinicData, units: newUnits });
+                            }}
+                            placeholder="Ex: Rua Vieiralves, 1230 - Vieiralves, Manaus/AM"
                             className="w-full border rounded px-2 py-1 text-sm"
                           />
                         </div>

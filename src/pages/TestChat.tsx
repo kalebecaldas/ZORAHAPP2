@@ -10,6 +10,10 @@ interface Message {
   direction: 'RECEIVED' | 'SENT'
   from: 'USER' | 'AGENT' | 'BOT'
   timestamp: string
+  metadata?: {
+    isClosingMessage?: boolean
+    [key: string]: any
+  }
 }
 
 export function TestChat() {
@@ -152,11 +156,24 @@ export function TestChat() {
         }
       } catch { }
     }
+    const onClosed = (payload: any) => {
+      try {
+        const convPhone = payload?.phone
+        if (convPhone === phone) {
+          // Buscar mensagens novamente para pegar a mensagem de encerramento
+          setTimeout(() => getConversation(), 500)
+        }
+      } catch { }
+    }
     socket.on('new_message', onNew)
     socket.on('conversation_updated', onUpdated)
+    socket.on('conversation:updated', onUpdated) // Adicionar formato com dois pontos
+    socket.on('conversation:closed', onClosed) // Escutar encerramento
     return () => {
       socket.off('new_message', onNew)
       socket.off('conversation_updated', onUpdated)
+      socket.off('conversation:updated', onUpdated)
+      socket.off('conversation:closed', onClosed)
     }
   }, [socket, isConnected, phone])
 
@@ -393,19 +410,35 @@ export function TestChat() {
               <div className="text-gray-500">Nenhuma mensagem ainda.</div>
             ) : (
               <ul className="space-y-3">
-                {messages.map((m) => (
-                  <li key={m.id} className={`flex ${m.direction === 'RECEIVED' ? 'justify-start' : 'justify-end'}`}>
-                    <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${m.direction === 'RECEIVED' ? 'bg-gray-100 text-gray-900' : (m.from === 'BOT' ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white')
+                {messages.map((m) => {
+                  // Verificar se é mensagem de encerramento
+                  const isClosingMessage = m.metadata?.isClosingMessage === true
+                  
+                  return (
+                    <li key={m.id} className={`flex ${m.direction === 'RECEIVED' ? 'justify-start' : 'justify-end'}`}>
+                      <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${
+                        isClosingMessage
+                          ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-2 border-purple-300'
+                          : m.direction === 'RECEIVED' 
+                            ? 'bg-gray-100 text-gray-900' 
+                            : (m.from === 'BOT' ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white')
                       }`}>
-                      <div className="opacity-80 text-[11px] mb-1 flex items-center gap-1">
-                        {m.direction === 'RECEIVED' ? <User className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
-                        {m.from}
+                        {isClosingMessage && (
+                          <div className="text-xs opacity-90 mb-1 flex items-center gap-1">
+                            <span>✨</span>
+                            <span className="font-semibold">Mensagem de Encerramento</span>
+                          </div>
+                        )}
+                        <div className="opacity-80 text-[11px] mb-1 flex items-center gap-1">
+                          {m.direction === 'RECEIVED' ? <User className="h-3 w-3" /> : <MessageSquare className="h-3 w-3" />}
+                          {m.from}
+                        </div>
+                        <div className="whitespace-pre-line break-words leading-relaxed">{m.messageText}</div>
+                        <div className="opacity-60 text-[10px] mt-2">{new Date(m.timestamp).toLocaleString()}</div>
                       </div>
-                      <div className="whitespace-pre-line break-words leading-relaxed">{m.messageText}</div>
-                      <div className="opacity-60 text-[10px] mt-2">{new Date(m.timestamp).toLocaleString()}</div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
                 <div ref={messagesEndRef} />
               </ul>
             )}

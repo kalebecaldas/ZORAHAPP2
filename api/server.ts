@@ -2,6 +2,7 @@ import { createServer } from 'http'
 import app from './app.js'
 import { initRealtime } from './realtime.js'
 import { startInactivityMonitor, stopInactivityMonitor } from './services/inactivityMonitor.js'
+import { workflowEngine } from './services/workflowEngine.js'
 
 /**
  * start server with port
@@ -58,6 +59,14 @@ httpServer.listen(PORT, async () => {
   console.log(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`)
   console.log(`💚 Health Check: http://localhost:${PORT}/api/health`)
   console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`)
+
+  // Carregar workflows
+  try {
+    await workflowEngine.loadWorkflows()
+    console.log('✅ Workflows carregados')
+  } catch (error) {
+    console.error('⚠️ Erro ao carregar workflows:', error)
+  }
 
   // Iniciar monitor de inatividade
   try {

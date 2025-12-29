@@ -262,7 +262,7 @@ export async function getProcedureInfoForGPT(procedureName: string, clinicCode?:
   }
   
   info += `\n📞 *Próximos passos:*\n`;
-  info += `Para agendar uma sessão, entre em contato conosco ou use o comando de agendamento!`;
+  info += `Posso agendar sua sessão agora mesmo! Qual dia e horário prefere?`;
   
   // Format for WhatsApp with proper line breaks (reduced spacing)
   return formatMessageForWhatsApp(info);

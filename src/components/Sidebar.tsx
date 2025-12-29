@@ -57,7 +57,7 @@ const Sidebar: React.FC = () => {
         // ✅ Contar TODAS as conversas com status PRINCIPAL (com ou sem assignedToId)
         const principalQueue = conversations.filter((c: any) => c.status === 'PRINCIPAL');
         setPendingCount(principalQueue.length);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao buscar conversas da fila principal:', error);
       }
     };

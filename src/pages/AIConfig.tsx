@@ -1,192 +1,59 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-
-interface AIConfiguration {
-    id: string
-    name: string
-    description?: string
-    systemPrompt: string
-    personality: string
-    tone: string
-    useEmojis: boolean
-    offerPackages: boolean
-    askInsurance: boolean
-    maxResponseLength: number
-    temperature: number
-    maxTokens: number
-    isActive: boolean
-    examples: AIExample[]
-    transferRules: TransferRule[]
-}
-
-interface AIExample {
-    id: string
-    name: string
-    description?: string
-    category: string
-    userMessage: string
-    expectedIntent: string
-    expectedAction: string
-    botResponse: string
-    entities: any
-    confidence: number
-    priority: number
-    isActive: boolean
-}
-
-interface TransferRule {
-    id: string
-    name: string
-    description?: string
-    keywords: string[]
-    intents: string[]
-    minConfidence: number
-    targetQueue: string
-    priority: number
-    transferMessage?: string
-    isActive: boolean
-}
+import { api } from '../lib/utils'
+import { RefreshCw, DollarSign, TrendingDown, MessageSquare, Zap, ChevronUp, Activity, Settings2 } from 'lucide-react'
+import { PieChart, Pie, Cell, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
+import RulesManagement from '../components/RulesManagement'
 
 export default function AIConfigPage() {
-    const [config, setConfig] = useState<AIConfiguration | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [activeTab, setActiveTab] = useState<'config' | 'examples' | 'rules'>('config')
-    const [testMessage, setTestMessage] = useState('')
-    const [testResult, setTestResult] = useState<any>(null)
+    const [activeTab, setActiveTab] = useState<'costs' | 'rules'>('costs')
+    const [optimizationStats, setOptimizationStats] = useState<any>(null)
+    const [refreshing, setRefreshing] = useState(false)
 
     useEffect(() => {
-        loadConfiguration()
+        loadOptimizationStats()
+        
+        // Auto-refresh stats a cada 30s
+        const interval = setInterval(loadOptimizationStats, 30000)
+        return () => clearInterval(interval)
     }, [])
 
-    const loadConfiguration = async () => {
+    const loadOptimizationStats = async (showToast = false) => {
         try {
-            const response = await fetch('/api/ai-config', {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                }
-            })
-            const data = await response.json()
-            setConfig(data)
-        } catch (error) {
-            console.error('Erro ao carregar configuração:', error)
-            toast.error('Erro ao carregar configuração')
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const saveConfiguration = async () => {
-        if (!config) return
-
-        try {
-            const response = await fetch(`/api/ai-config/${config.id}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify(config)
-            })
-
-            if (response.ok) {
-                toast.success('Configuração salva com sucesso!')
-            } else {
-                toast.error('Erro ao salvar configuração')
+            setRefreshing(true)
+            const response = await api.get('/api/bot-optimization/stats')
+            setOptimizationStats(response.data)
+            
+            if (showToast) {
+                toast.success('Estatísticas atualizadas!')
             }
         } catch (error) {
-            console.error('Erro ao salvar:', error)
-            toast.error('Erro ao salvar configuração')
+            console.error('Erro ao carregar estatísticas:', error)
+        } finally {
+            setRefreshing(false)
         }
     }
 
-    const testAI = async () => {
-        if (!testMessage.trim()) {
-            toast.error('Digite uma mensagem para testar')
-            return
-        }
-
+    const toggleService = async (service: string, enabled: boolean) => {
         try {
-            const response = await fetch('/api/ai-config/test', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ message: testMessage })
-            })
-
-            const result = await response.json()
-            setTestResult(result)
-            toast.success('Teste concluído!')
+            await api.post(`/api/bot-optimization/${service}/toggle`, { enabled })
+            toast.success(`${service} ${enabled ? 'ativado' : 'desativado'}`)
+            loadOptimizationStats()
         } catch (error) {
-            console.error('Erro ao testar:', error)
-            toast.error('Erro ao testar IA')
+            toast.error('Erro ao atualizar serviço')
         }
     }
 
-    const toggleExample = async (exampleId: string, isActive: boolean) => {
+    const resetStats = async () => {
+        if (!confirm('Deseja resetar todas as estatísticas de otimização?')) return
+        
         try {
-            await fetch(`/api/ai-config/examples/${exampleId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ isActive: !isActive })
-            })
-
-            loadConfiguration()
-            toast.success('Exemplo atualizado!')
+            await api.post('/api/bot-optimization/reset-stats')
+            toast.success('Estatísticas resetadas!')
+            loadOptimizationStats()
         } catch (error) {
-            console.error('Erro ao atualizar exemplo:', error)
-            toast.error('Erro ao atualizar exemplo')
+            toast.error('Erro ao resetar estatísticas')
         }
-    }
-
-    const toggleRule = async (ruleId: string, isActive: boolean) => {
-        try {
-            await fetch(`/api/ai-config/transfer-rules/${ruleId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`
-                },
-                body: JSON.stringify({ isActive: !isActive })
-            })
-
-            loadConfiguration()
-            toast.success('Regra atualizada!')
-        } catch (error) {
-            console.error('Erro ao atualizar regra:', error)
-            toast.error('Erro ao atualizar regra')
-        }
-    }
-
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Carregando configuração...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (!config) {
-        return (
-            <div className="flex items-center justify-center h-screen">
-                <div className="text-center">
-                    <p className="text-red-600 mb-4">Erro ao carregar configuração</p>
-                    <button
-                        onClick={loadConfiguration}
-                        className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                    >
-                        Tentar Novamente
-                    </button>
-                </div>
-            </div>
-        )
     }
 
     return (
@@ -194,269 +61,475 @@ export default function AIConfigPage() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-gray-900">🤖 Configuração da IA</h1>
-                            <p className="text-gray-600 mt-2">
-                                Configure o comportamento, exemplos e regras da assistente virtual Zorah
-                            </p>
-                        </div>
-                        <button
-                            onClick={saveConfiguration}
-                            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium"
-                        >
-                            💾 Salvar Alterações
-                        </button>
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900">⚙️ Configuração da IA</h1>
+                        <p className="text-gray-600 mt-2">
+                            Gerencie custos, otimizações e regras de resposta da assistente virtual Zorah
+                        </p>
                     </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="bg-white rounded-lg shadow-sm mb-6">
-                    <div className="border-b border-gray-200">
-                        <nav className="flex space-x-8 px-6" aria-label="Tabs">
+                    
+                    {/* Tabs do Header */}
+                    <div className="mt-6 border-b border-gray-200">
+                        <nav className="flex -mb-px space-x-8">
                             <button
-                                onClick={() => setActiveTab('config')}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'config'
+                                onClick={() => setActiveTab('costs')}
+                                className={`pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                                    activeTab === 'costs'
                                         ? 'border-blue-500 text-blue-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                }`}
                             >
-                                ⚙️ Configuração Geral
+                                <DollarSign className="w-4 h-4" />
+                                Custos & Economia
                             </button>
-                            <button
-                                onClick={() => setActiveTab('examples')}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'examples'
-                                        ? 'border-blue-500 text-blue-600'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
-                            >
-                                📚 Exemplos ({config.examples.length})
-                            </button>
+                            
                             <button
                                 onClick={() => setActiveTab('rules')}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'rules'
+                                className={`pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
+                                    activeTab === 'rules'
                                         ? 'border-blue-500 text-blue-600'
                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                    }`}
+                                }`}
                             >
-                                👤 Regras de Transferência ({config.transferRules.length})
+                                <Settings2 className="w-4 h-4" />
+                                Regras & Templates
                             </button>
                         </nav>
                     </div>
+                </div>
 
-                    {/* Tab Content */}
+                {/* Content */}
+                <div className="bg-white rounded-lg shadow-sm">
                     <div className="p-6">
-                        {activeTab === 'config' && (
-                            <div className="space-y-6">
-                                {/* Personalidade */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Personalidade
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={config.personality}
-                                        onChange={(e) => setConfig({ ...config, personality: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Ex: Empática e profissional"
-                                    />
-                                </div>
-
-                                {/* Tom de Voz */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Tom de Voz
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={config.tone}
-                                        onChange={(e) => setConfig({ ...config, tone: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        placeholder="Ex: Conversacional e amigável"
-                                    />
-                                </div>
-
-                                {/* Opções */}
-                                <div className="space-y-3">
-                                    <label className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.useEmojis}
-                                            onChange={(e) => setConfig({ ...config, useEmojis: e.target.checked })}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <span className="ml-2 text-sm text-gray-700">Usar emojis nas respostas</span>
-                                    </label>
-
-                                    <label className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.offerPackages}
-                                            onChange={(e) => setConfig({ ...config, offerPackages: e.target.checked })}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <span className="ml-2 text-sm text-gray-700">Oferecer pacotes e descontos proativamente</span>
-                                    </label>
-
-                                    <label className="flex items-center">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.askInsurance}
-                                            onChange={(e) => setConfig({ ...config, askInsurance: e.target.checked })}
-                                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                        />
-                                        <span className="ml-2 text-gray-700">Perguntar sobre convênio antes de informar preços</span>
-                                    </label>
-                                </div>
-
-                                {/* Prompt Base */}
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Prompt Base
-                                    </label>
-                                    <textarea
-                                        value={config.systemPrompt}
-                                        onChange={(e) => setConfig({ ...config, systemPrompt: e.target.value })}
-                                        rows={10}
-                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                                        placeholder="Prompt base da IA..."
-                                    />
-                                    <p className="mt-2 text-sm text-gray-500">
-                                        Este é o prompt base que a IA usará. Ele será combinado com exemplos e regras.
-                                    </p>
-                                </div>
-
-                                {/* Teste da IA */}
-                                <div className="border-t pt-6">
-                                    <h3 className="text-lg font-medium text-gray-900 mb-4">🧪 Testar IA</h3>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={testMessage}
-                                            onChange={(e) => setTestMessage(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && testAI()}
-                                            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                                            placeholder="Digite uma mensagem para testar..."
-                                        />
-                                        <button
-                                            onClick={testAI}
-                                            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
-                                        >
-                                            Testar
-                                        </button>
-                                    </div>
-
-                                    {testResult && (
-                                        <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-                                            <p className="font-medium text-gray-900 mb-2">Resposta:</p>
-                                            <p className="text-gray-700 mb-3">{testResult.message}</p>
-                                            <div className="grid grid-cols-3 gap-2 text-sm">
-                                                <div>
-                                                    <span className="font-medium">Intent:</span> {testResult.intent}
-                                                </div>
-                                                <div>
-                                                    <span className="font-medium">Action:</span> {testResult.action}
-                                                </div>
-                                                <div>
-                                                    <span className="font-medium">Confidence:</span> {(testResult.confidence * 100).toFixed(0)}%
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                        {activeTab === 'costs' && optimizationStats ? (
+                            <OptimizationTab 
+                                stats={optimizationStats}
+                                refreshing={refreshing}
+                                onRefresh={() => loadOptimizationStats(true)}
+                                onToggle={toggleService}
+                                onReset={resetStats}
+                            />
+                        ) : activeTab === 'costs' && !optimizationStats ? (
+                            <div className="flex items-center justify-center p-8">
+                                <div className="text-center">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                                    <p className="text-gray-600">Carregando estatísticas...</p>
                                 </div>
                             </div>
-                        )}
-
-                        {activeTab === 'examples' && (
-                            <div className="space-y-4">
-                                {config.examples.map((example) => (
-                                    <div
-                                        key={example.id}
-                                        className={`border rounded-lg p-4 ${example.isActive ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
-                                            }`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <h4 className="font-medium text-gray-900">{example.name}</h4>
-                                                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
-                                                        {example.category}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-600 mb-2">{example.description}</p>
-                                                <div className="space-y-2 text-sm">
-                                                    <div>
-                                                        <span className="font-medium">Usuário:</span> "{example.userMessage}"
-                                                    </div>
-                                                    <div>
-                                                        <span className="font-medium">Bot:</span> "{example.botResponse.substring(0, 100)}..."
-                                                    </div>
-                                                    <div className="flex gap-4">
-                                                        <span><strong>Intent:</strong> {example.expectedIntent}</span>
-                                                        <span><strong>Action:</strong> {example.expectedAction}</span>
-                                                        <span><strong>Confiança:</strong> {(example.confidence * 100).toFixed(0)}%</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => toggleExample(example.id, example.isActive)}
-                                                className={`ml-4 px-4 py-2 rounded-lg text-sm font-medium ${example.isActive
-                                                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                                    }`}
-                                            >
-                                                {example.isActive ? 'Desativar' : 'Ativar'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {activeTab === 'rules' && (
-                            <div className="space-y-4">
-                                {config.transferRules.map((rule) => (
-                                    <div
-                                        key={rule.id}
-                                        className={`border rounded-lg p-4 ${rule.isActive ? 'border-orange-200 bg-orange-50' : 'border-gray-200 bg-gray-50'
-                                            }`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <h4 className="font-medium text-gray-900 mb-2">{rule.name}</h4>
-                                                <p className="text-sm text-gray-600 mb-3">{rule.description}</p>
-                                                <div className="space-y-2 text-sm">
-                                                    <div>
-                                                        <span className="font-medium">Palavras-chave:</span>{' '}
-                                                        {rule.keywords.join(', ')}
-                                                    </div>
-                                                    <div>
-                                                        <span className="font-medium">Fila:</span> {rule.targetQueue}
-                                                    </div>
-                                                    {rule.transferMessage && (
-                                                        <div>
-                                                            <span className="font-medium">Mensagem:</span> "{rule.transferMessage}"
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => toggleRule(rule.id, rule.isActive)}
-                                                className={`ml-4 px-4 py-2 rounded-lg text-sm font-medium ${rule.isActive
-                                                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                                                    }`}
-                                            >
-                                                {rule.isActive ? 'Desativar' : 'Ativar'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                        ) : (
+                            <RulesManagement />
                         )}
                     </div>
                 </div>
             </div>
+        </div>
+    )
+}
+
+// Componente da aba de Otimizações
+interface OptimizationTabProps {
+    stats: any
+    refreshing: boolean
+    onRefresh: () => void
+    onToggle: (service: string, enabled: boolean) => void
+    onReset: () => void
+}
+
+function OptimizationTab({ stats, refreshing, onRefresh, onToggle, onReset }: OptimizationTabProps) {
+    const [expandedNode, setExpandedNode] = useState<string | null>(null)
+    
+    // Safety check: if stats is null/undefined, show loading state
+    if (!stats) {
+        return (
+            <div className="flex items-center justify-center p-8">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando estatísticas...</p>
+                </div>
+            </div>
+        )
+    }
+    
+    const COLORS = ['#3B82F6', '#10B981']
+
+    const pieData = [
+        { name: 'Cache', value: stats.responseCache?.savings ?? 0 },
+        { name: 'Fallbacks', value: stats.simpleFallbacks?.savings ?? 0 }
+    ]
+
+    return (
+        <div className="space-y-6">
+            {/* Header com Título e Ações */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold text-gray-900">Fluxo de Processamento da IA</h2>
+                    <p className="text-sm text-gray-600 mt-1">Configure cada etapa do processamento e monitore a economia</p>
+                </div>
+                <div className="flex gap-3">
+                    <button
+                        onClick={onRefresh}
+                        disabled={refreshing}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        Atualizar
+                    </button>
+                    <button
+                        onClick={onReset}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                        Resetar Stats
+                    </button>
+                </div>
+            </div>
+
+            {/* Dashboard de Economia Resumido */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                    <DollarSign className="h-8 w-8 mb-2" />
+                    <p className="text-sm opacity-90">Economia Total</p>
+                    <p className="text-3xl font-bold mt-1">${(stats.overall?.totalSavings ?? 0).toFixed(4)}</p>
+                    <p className="text-xs mt-2 opacity-75">{stats.overall?.economyPercentage ?? 0}% mais eficiente</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                    <TrendingDown className="h-8 w-8 mb-2" />
+                    <p className="text-sm opacity-90">Custo Mensal</p>
+                    <p className="text-3xl font-bold mt-1">${(stats.overall?.projectedMonthlyCost ?? 0).toFixed(2)}</p>
+                    <p className="text-xs mt-2 opacity-75">Meta: ${stats.overall?.targetMonthlyCost ?? 15}/mês</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                    <MessageSquare className="h-8 w-8 mb-2" />
+                    <p className="text-sm opacity-90">Conversas</p>
+                    <p className="text-3xl font-bold mt-1">{stats.overall?.conversationsToday ?? 0}</p>
+                    <p className="text-xs mt-2 opacity-75">Custo médio: ${(stats.costMonitoring?.avgCostPerCall ?? 0).toFixed(4)}</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-lg p-6 text-white">
+                    <Zap className="h-8 w-8 mb-2" />
+                    <p className="text-sm opacity-90">Chamadas GPT</p>
+                    <p className="text-3xl font-bold mt-1">{stats.costMonitoring?.totalCalls ?? 0}</p>
+                    <p className="text-xs mt-2 opacity-75">Custo: ${(stats.costMonitoring?.totalCost ?? 0).toFixed(4)}</p>
+                </div>
+            </div>
+
+            {/* Fluxo Visual com Configurações */}
+            <div className="bg-white rounded-lg border p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                    <Activity className="h-5 w-5 text-blue-600" />
+                    Fluxo de Processamento
+                </h3>
+                
+                <div className="space-y-4">
+                    {/* Nó: Entrada */}
+                    <FlowNode
+                        id="input"
+                        title="📥 Entrada"
+                        description="Mensagem do usuário recebida"
+                        status="always"
+                        expanded={false}
+                        onToggle={() => {}}
+                    />
+
+                    {/* Nó: Fallbacks */}
+                    <FlowNode
+                        id="fallbacks"
+                        title="⚡ Respostas Rápidas"
+                        description="Respostas pré-definidas sem GPT"
+                        status={stats.simpleFallbacks?.enabled ? 'active' : 'inactive'}
+                        enabled={stats.simpleFallbacks?.enabled}
+                        stats={{
+                            hits: stats.simpleFallbacks?.hits ?? 0,
+                            hitRate: stats.simpleFallbacks?.hitRate ?? 0,
+                            savings: stats.simpleFallbacks?.savings ?? 0
+                        }}
+                        expanded={expandedNode === 'fallbacks'}
+                        onToggle={(enabled) => onToggle('simpleFallbacks', enabled)}
+                        onExpand={() => setExpandedNode(expandedNode === 'fallbacks' ? null : 'fallbacks')}
+                        config={
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <label className="font-medium text-gray-700">Tipos de Resposta:</label>
+                                    <p className="text-gray-600">Saudações, Localização, Horários, Convênios básicos</p>
+                                </div>
+                            </div>
+                        }
+                    />
+
+                    {/* Nó: Cache */}
+                    <FlowNode
+                        id="cache"
+                        title="💾 Cache de Respostas"
+                        description="Respostas armazenadas em memória"
+                        status={stats.responseCache?.enabled ? 'active' : 'inactive'}
+                        enabled={stats.responseCache?.enabled}
+                        stats={{
+                            hits: stats.responseCache?.hits ?? 0,
+                            hitRate: stats.responseCache?.hitRate ?? 0,
+                            savings: stats.responseCache?.savings ?? 0
+                        }}
+                        expanded={expandedNode === 'cache'}
+                        onToggle={(enabled) => onToggle('responseCache', enabled)}
+                        onExpand={() => setExpandedNode(expandedNode === 'cache' ? null : 'cache')}
+                        config={
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <label className="font-medium text-gray-700">TTL (Time to Live):</label>
+                                    <p className="text-gray-600">3600 segundos (1 hora)</p>
+                                </div>
+                                <div>
+                                    <label className="font-medium text-gray-700">Itens em Cache:</label>
+                                    <p className="text-gray-600">{stats.responseCache?.cacheSize ?? 0} entradas</p>
+                                </div>
+                            </div>
+                        }
+                    />
+
+                    {/* Nó: GPT */}
+                    <FlowNode
+                        id="gpt"
+                        title="🤖 GPT (OpenAI)"
+                        description="Processamento com IA quando necessário"
+                        status="always"
+                        stats={{
+                            hits: stats.costMonitoring?.totalCalls ?? 0,
+                            hitRate: 100,
+                            savings: -(stats.costMonitoring?.totalCost ?? 0)
+                        }}
+                        expanded={expandedNode === 'gpt'}
+                        onExpand={() => setExpandedNode(expandedNode === 'gpt' ? null : 'gpt')}
+                        config={
+                            <div className="space-y-3 text-sm">
+                                <div>
+                                    <label className="font-medium text-gray-700">Modelo:</label>
+                                    <p className="text-gray-600">gpt-4o-mini</p>
+                                </div>
+                                <div>
+                                    <label className="font-medium text-gray-700">Max Tokens:</label>
+                                    <p className="text-gray-600">200-250</p>
+                                </div>
+                                <div>
+                                    <label className="font-medium text-gray-700">Custo por Chamada:</label>
+                                    <p className="text-gray-600">${(stats.costMonitoring?.avgCostPerCall ?? 0).toFixed(4)}</p>
+                                </div>
+                            </div>
+                        }
+                    />
+
+                    {/* Nó: Saída */}
+                    <FlowNode
+                        id="output"
+                        title="📤 Resposta"
+                        description="Mensagem enviada ao usuário"
+                        status="always"
+                        expanded={false}
+                        onToggle={() => {}}
+                    />
+                </div>
+            </div>
+
+            {/* Resumo de Economia com Gráfico */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg border p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribuição de Economia</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                        <PieChart>
+                            <Pie
+                                data={pieData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                outerRadius={80}
+                                fill="#8884d8"
+                                dataKey="value"
+                            >
+                                {pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <RechartsTooltip formatter={(value: any) => `$${value.toFixed(4)}`} />
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+
+                <div className="bg-white rounded-lg border p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumo de Performance</h3>
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-700">Economia Total Hoje</span>
+                            <span className="text-lg font-bold text-green-600">${(stats.overall?.totalSavings ?? 0).toFixed(4)}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-700">Custo do Dia</span>
+                            <span className="text-lg font-bold text-blue-600">${(stats.costMonitoring?.totalCost ?? 0).toFixed(4)}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-700">Conversas Processadas</span>
+                            <span className="text-lg font-bold text-purple-600">{stats.overall?.conversationsToday ?? 0}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                            <span className="text-sm font-medium text-gray-700">Projeção Mensal</span>
+                            <span className="text-lg font-bold text-orange-600">${(stats.overall?.projectedMonthlyCost ?? 0).toFixed(2)}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Barra de Progresso da Meta */}
+            <div className="bg-white rounded-lg border p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Meta de Economia Mensal</h3>
+                    <span className="text-sm text-gray-600">
+                        ${(stats.overall?.projectedMonthlyCost ?? 0).toFixed(2)} / ${stats.overall?.targetMonthlyCost ?? 15}
+                    </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4">
+                    <div
+                        className={`h-4 rounded-full transition-all ${
+                            stats.overall.projectedMonthlyCost <= stats.overall.targetMonthlyCost
+                                ? 'bg-green-500'
+                                : 'bg-orange-500'
+                        }`}
+                        style={{
+                            width: `${Math.min(((stats.overall?.projectedMonthlyCost ?? 0) / (stats.overall?.targetMonthlyCost ?? 15)) * 100, 100)}%`
+                        }}
+                    />
+                </div>
+                <p className="text-sm text-gray-600 mt-2">
+                    {(stats.overall?.projectedMonthlyCost ?? 0) <= (stats.overall?.targetMonthlyCost ?? 15)
+                        ? '✅ Dentro da meta!'
+                        : '⚠️ Acima da meta'}
+                </p>
+            </div>
+        </div>
+    )
+}
+
+// Componente FlowNode - Representa cada etapa do fluxo
+interface FlowNodeProps {
+    id: string
+    title: string
+    description: string
+    status: 'active' | 'inactive' | 'always'
+    enabled?: boolean
+    stats?: {
+        hits: number
+        hitRate: number
+        savings: number
+    }
+    expanded: boolean
+    onToggle?: (enabled: boolean) => void
+    onExpand?: () => void
+    config?: React.ReactNode
+}
+
+function FlowNode({ id, title, description, status, enabled, stats, expanded, onToggle, onExpand, config }: FlowNodeProps) {
+    const isConfigurable = onToggle !== undefined
+    const hasStats = stats !== undefined
+    
+    // Cores baseadas no status
+    const statusColors = {
+        active: 'border-green-500 bg-green-50',
+        inactive: 'border-gray-300 bg-gray-50',
+        always: 'border-blue-500 bg-blue-50'
+    }
+    
+    const statusIcons = {
+        active: '✅',
+        inactive: '⚪',
+        always: '🔵'
+    }
+
+    return (
+        <div className="relative">
+            {/* Linha conectora */}
+            {id !== 'input' && (
+                <div className="absolute left-1/2 -top-4 w-0.5 h-4 bg-gray-300 transform -translate-x-1/2"></div>
+            )}
+            
+            <div className={`border-2 rounded-lg overflow-hidden transition-all ${statusColors[status]}`}>
+                {/* Header do Nó */}
+                <div className="p-4 bg-white">
+                    <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg">{statusIcons[status]}</span>
+                                <h4 className="font-semibold text-gray-900">{title}</h4>
+                            </div>
+                            <p className="text-sm text-gray-600">{description}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 ml-4">
+                            {/* Toggle ON/OFF */}
+                            {isConfigurable && (
+                                <button
+                                    onClick={() => onToggle(!enabled)}
+                                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                                        enabled
+                                            ? 'bg-green-500 text-white hover:bg-green-600'
+                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                    }`}
+                                >
+                                    {enabled ? 'ON' : 'OFF'}
+                                </button>
+                            )}
+                            
+                            {/* Botão Configurar */}
+                            {config && (
+                                <button
+                                    onClick={onExpand}
+                                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                                    title="Configurar"
+                                >
+                                    {expanded ? (
+                                        <ChevronUp className="h-5 w-5 text-gray-600" />
+                                    ) : (
+                                        <Settings2 className="h-5 w-5 text-gray-600" />
+                                    )}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Estatísticas Inline */}
+                    {hasStats && (
+                        <div className="mt-3 grid grid-cols-3 gap-3 text-center">
+                            <div className="bg-gray-50 rounded p-2">
+                                <div className="text-xs text-gray-600">Hits</div>
+                                <div className="text-lg font-bold text-gray-900">{stats.hits}</div>
+                            </div>
+                            <div className="bg-gray-50 rounded p-2">
+                                <div className="text-xs text-gray-600">Taxa</div>
+                                <div className="text-lg font-bold text-gray-900">{stats.hitRate.toFixed(1)}%</div>
+                            </div>
+                            <div className="bg-green-50 rounded p-2">
+                                <div className="text-xs text-gray-600">Economia</div>
+                                <div className="text-lg font-bold text-green-600">
+                                    {stats.savings >= 0 ? '+' : ''}{stats.savings < 0 ? stats.savings.toFixed(4) : `$${stats.savings.toFixed(4)}`}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Configurações Expandidas */}
+                {expanded && config && (
+                    <div className="p-4 bg-gray-50 border-t">
+                        <div className="flex items-center gap-2 mb-3">
+                            <Settings2 className="h-4 w-4 text-gray-600" />
+                            <h5 className="font-medium text-gray-900">Configurações</h5>
+                        </div>
+                        {config}
+                    </div>
+                )}
+            </div>
+            
+            {/* Linha conectora para baixo */}
+            {id !== 'output' && (
+                <div className="absolute left-1/2 -bottom-4 w-0.5 h-4 bg-gray-300 transform -translate-x-1/2"></div>
+            )}
         </div>
     )
 }

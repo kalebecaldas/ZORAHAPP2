@@ -532,8 +532,11 @@ const actionsAuth = process.env.NODE_ENV === 'development'
   : authMiddleware
 
 router.post('/actions', actionsAuth, async (req: Request, res: Response): Promise<void> => {
+  console.log('🚨 [/actions] REQUISIÇÃO RECEBIDA!', { body: req.body, headers: req.headers['content-type'] });
   try {
     const { action, phone, assignTo, conversationId } = req.body
+    
+    console.log('🎯 [POST /actions] Recebida ação:', { action, conversationId, phone })
 
     // ✅ Se conversationId foi fornecido, usar ele diretamente (mais preciso)
     // Caso contrário, buscar por phone (comportamento legado)
@@ -558,6 +561,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
     }
 
     if (!conversation) {
+      console.log('❌ Conversa não encontrada!')
       res.status(404).json({ error: 'Conversa não encontrada' })
       return
     }
@@ -637,10 +641,85 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
       case 'close':
         updateData = {
           status: 'FECHADA',
-          assignedToId: null
-          // ✅ NÃO alterar sessionExpiryTime - preservar para verificar se expirou depois
+          assignedToId: null,
+          sessionStatus: 'closed'
         }
         actionDescription = 'Conversa fechada'
+        
+        // ✅ Verificar se a sessão está expirada (mais de 24h sem resposta do cliente)
+        const isSessionExpired = conversation.sessionExpiryTime 
+          ? new Date(conversation.sessionExpiryTime) < new Date() 
+          : false
+        
+        // ✅ Só envia mensagem de encerramento se a sessão NÃO estiver expirada
+        if (!isSessionExpired) {
+          const settings = await prisma.systemSettings.findFirst()
+          const closingMessage = settings?.closingMessage || 'Obrigado pelo contato! Estamos à disposição. 😊'
+          
+          // ✅ Tentar enviar via WhatsApp (mas continuar mesmo se falhar)
+          try {
+            console.log(`📨 Enviando mensagem de encerramento para ${conversation.phone}...`)
+            await whatsappService.sendTextMessage(conversation.phone, closingMessage)
+            console.log(`✅ Mensagem de encerramento enviada com sucesso para ${conversation.phone}`)
+          } catch (sendError) {
+            console.warn('⚠️ WhatsApp falhou (continuando mesmo assim):', sendError)
+          }
+          
+          // ✅ SEMPRE salvar mensagem no histórico (mesmo se WhatsApp falhar)
+          try {
+            const closingMsg = await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                phoneNumber: conversation.phone,
+                direction: 'SENT', // ✅ Usar 'SENT' em vez de 'outgoing' para compatibilidade com frontend
+                from: 'AGENT',
+                messageText: closingMessage,
+                messageType: 'TEXT',
+                timestamp: new Date(),
+                metadata: { isClosingMessage: true }
+              }
+            })
+            
+            // #region agent log
+            const fs = require('fs');
+            const logPath = '/Users/kalebecaldas/Documents/cursor_projects/ZORAHAPP2-1/.cursor/debug.log';
+            fs.appendFileSync(logPath, JSON.stringify({location:'conversations.ts:670',message:'CLOSING MESSAGE SAVED',data:{messageId:closingMsg.id,direction:closingMsg.direction,from:closingMsg.from,metadata:closingMsg.metadata},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
+            // #endregion
+            
+            console.log(`✅ Mensagem de encerramento salva no histórico: ${closingMsg.id}`)
+            
+            // ✅ Emitir evento para atualizar frontend imediatamente
+            try {
+              const realtime = getRealtime()
+              realtime.io.to(`conv:${conversation.phone}`).emit('new_message', {
+                conversation: { phone: conversation.phone, id: conversation.id },
+                message: closingMsg
+              })
+              // Também emitir para a sala específica da conversa
+              realtime.io.to(`conv:${conversation.id}`).emit('new_message', {
+                conversation: { phone: conversation.phone, id: conversation.id },
+                message: closingMsg
+              })
+              console.log(`📡 Eventos Socket.IO emitidos para mensagem de encerramento`)
+            } catch (e) {
+              console.warn('⚠️ Erro ao emitir evento de nova mensagem:', e)
+            }
+          } catch (dbError) {
+            console.error('❌ Erro ao salvar mensagem de encerramento no histórico:', dbError)
+          }
+        } else {
+          console.log(`⏰ Sessão expirada para ${conversation.phone} - mensagem de encerramento não enviada`)
+        }
+        
+        // ✅ Sempre criar mensagem do sistema (independente de expiração)
+        try {
+          const { createSystemMessage } = await import('../utils/systemMessages.js')
+          await createSystemMessage(conversation.id, 'CONVERSATION_CLOSED', {
+            agentName: conversation.assignedTo?.name || req.user?.name || 'Sistema'
+          })
+        } catch (sysError) {
+          console.error('⚠️ Erro ao criar mensagem do sistema:', sysError)
+        }
         break
 
       case 'reopen':
@@ -760,14 +839,19 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
       realtime.io.to(`conv:${phone}`).emit('conversation_updated', updatedConversation)
       realtime.io.emit('queue_updated', { action, conversation: updatedConversation })
       // ✅ Emitir conversation:updated para garantir atualização em tempo real
-      realtime.io.emit('conversation:updated', {
+      const updateEvent: any = {
         conversationId: updatedConversation.id,
         phone: updatedConversation.phone,
         status: updatedConversation.status,
         assignedToId: updatedConversation.assignedToId,
         assignedTo: updatedConversation.assignedTo
-      })
-      console.log(`📡 Eventos emitidos para conversa assumida: ${updatedConversation.id}`)
+      }
+      // ✅ Adicionar reason para reabertura
+      if (action === 'reopen') {
+        updateEvent.reason = 'conversation_reopened'
+      }
+      realtime.io.emit('conversation:updated', updateEvent)
+      console.log(`📡 Eventos emitidos para conversa ${action}: ${updatedConversation.id}`)
     } catch (emitError) {
       console.warn('Realtime not initialized, skipping emit:', emitError instanceof Error ? emitError.message : emitError)
     }
@@ -3096,19 +3180,62 @@ router.post('/:phone/close', authMiddleware, async (req: Request, res: Response)
       agentName: conversation.assignedTo?.name || req.user?.name || 'Sistema'
     })
 
-    // Enviar mensagem de encerramento para o paciente
-    // TODO: Implementar envio de mensagem WhatsApp com credenciais corretas
-    console.log(`📨 Mensagem de encerramento para ${phone}: ${closingMessage}`)
-    /*
-    try {
-      const { WhatsAppService } = await import('../services/whatsapp.js')
-      const whatsappService = new WhatsAppService(accessToken, phoneNumberId)
-      await whatsappService.sendTextMessage(phone, closingMessage)
-    } catch (error) {
-      console.error('Erro ao enviar mensagem de encerramento:', error)
-      // Continua mesmo se falhar o envio
+    // ✅ Verificar se a sessão está expirada (mais de 24h sem resposta do cliente)
+    const isSessionExpired = conversation.sessionExpiryTime 
+      ? new Date(conversation.sessionExpiryTime) < new Date() 
+      : false
+
+    // ✅ Só envia mensagem de encerramento se a sessão NÃO estiver expirada
+    if (!isSessionExpired) {
+      // ✅ Tentar enviar via WhatsApp (mas continuar mesmo se falhar)
+      try {
+        console.log(`📨 Enviando mensagem de encerramento para ${phone}...`)
+        await whatsappService.sendTextMessage(phone, closingMessage)
+        console.log(`✅ Mensagem de encerramento enviada com sucesso para ${phone}`)
+      } catch (sendError) {
+        console.warn('⚠️ WhatsApp falhou (continuando mesmo assim):', sendError)
+      }
+      
+      // ✅ SEMPRE salvar mensagem no histórico (mesmo se WhatsApp falhar)
+      try {
+        const closingMsg = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            phoneNumber: phone,
+            direction: 'SENT', // ✅ Usar 'SENT' em vez de 'outgoing' para compatibilidade com frontend
+            from: 'AGENT',
+            messageText: closingMessage,
+            messageType: 'TEXT',
+            timestamp: new Date(),
+            metadata: { isClosingMessage: true }
+          }
+        })
+        
+        console.log(`✅ Mensagem de encerramento salva no histórico: ${closingMsg.id}`)
+        
+        // ✅ Emitir evento para atualizar frontend imediatamente
+        try {
+          const { getRealtime } = await import('../realtime.js')
+          const { io } = getRealtime()
+          io.to(`conv:${phone}`).emit('new_message', {
+            conversation: { phone, id: conversation.id },
+            message: closingMsg
+          })
+          // Também emitir para a sala específica da conversa
+          io.to(`conv:${conversation.id}`).emit('new_message', {
+            conversation: { phone, id: conversation.id },
+            message: closingMsg
+          })
+          console.log(`📡 Eventos Socket.IO emitidos para mensagem de encerramento`)
+        } catch (e) {
+          console.warn('⚠️ Erro ao emitir evento de nova mensagem:', e)
+        }
+      } catch (dbError) {
+        console.error('❌ Erro ao salvar mensagem de encerramento no histórico:', dbError)
+      }
+    } else {
+      console.log(`⏰ Sessão expirada para ${phone} - mensagem de encerramento não enviada`)
     }
-    */
 
     // Emitir eventos Socket.IO
     try {

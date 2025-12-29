@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import { z } from 'zod'
+import { costMonitoringService } from './costMonitoring.js'
 
 const aiResponseSchema = z.object({
   intent: z.string().optional(),
@@ -88,11 +89,22 @@ export class AIService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message },
         ],
-        max_tokens: 500,
+        max_tokens: parseInt(process.env.GPT_MAX_TOKENS_RESPONSE || '300'), // Reduzido de 500 para 300 (economia de 40%)
         temperature: 0.7,
       }, {
         timeout: this.timeout,
       })
+
+      // Monitorar custos
+      const usage = completion.usage
+      if (usage) {
+        costMonitoringService.logUsage({
+          model: this.model,
+          inputTokens: usage.prompt_tokens || 0,
+          outputTokens: usage.completion_tokens || 0,
+          service: 'AIService'
+        })
+      }
 
       const response = completion.choices[0]?.message?.content || ''
       
@@ -164,8 +176,13 @@ export class AIService {
 
     const proceduresList = procedures && procedures.length > 0 
       ? procedures
-          .filter(p => p && p.name && typeof p.price === 'number')
-          .map(p => `- ${p.name}: R$ ${p.price.toFixed(2)}${p.requiresEvaluation ? ' (requer avaliação)' : ''}${p.isEvaluation ? ' (avaliação)' : ''}`)
+          .filter(p => {
+            if (!p || !p.name || typeof p.price !== 'number') return false
+            // ✅ Filtrar avaliações (não devem aparecer como procedimentos separados)
+            const name = p.name.toLowerCase()
+            return !name.startsWith('avaliacao') && !name.startsWith('avaliação')
+          })
+          .map(p => `- ${p.name}: R$ ${p.price.toFixed(2)}${p.requiresEvaluation ? ' (requer avaliação)' : ''}`)
           .join('\n')
       : 'Nenhum procedimento disponível no momento'
 

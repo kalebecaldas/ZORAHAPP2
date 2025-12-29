@@ -2,6 +2,10 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import { prismaClinicDataService } from './prismaClinicDataService.js'
 import { type Procedure, type InsuranceCompany, type ClinicLocation } from '../data/clinicData.js'
+import { responseCacheService } from './responseCache.js'
+import { simpleFallbacksService } from './simpleFallbacks.js'
+import { costMonitoringService } from './costMonitoring.js'
+import { workflowEngine } from './workflowEngine.js'
 
 const aiResponseSchema = z.object({
   intent: z.string().optional(),
@@ -83,6 +87,75 @@ export class IntelligentBotService {
     conversationId: string,
     existingContext?: Partial<AIContext>
   ): Promise<AIResponse> {
+    // 1. Try workflows first (prioridade máxima)
+    try {
+      const workflowContext = {
+        message,
+        intent: existingContext?.currentIntent,
+        entities: {},
+        patient: existingContext?.patient,
+        conversation: { id: conversationId, phone },
+        variables: existingContext?.workflowContext?.collectedData || {}
+      }
+      
+      const matchingWorkflow = await workflowEngine.findMatchingWorkflow(workflowContext)
+      if (matchingWorkflow) {
+        console.log(`🔄 [Workflow] Executando workflow: ${matchingWorkflow.name}`)
+        const workflowResult = await workflowEngine.executeWorkflow(matchingWorkflow, workflowContext)
+        
+        if (workflowResult.success && workflowResult.message) {
+          return {
+            response: workflowResult.message,
+            confidence: 0.95,
+            suggestedAction: workflowResult.action === 'transfer' ? 'transfer_human' : 'continue',
+            context: {
+              patientIdentified: !!existingContext?.patient?.id,
+              schedulingIntent: workflowResult.action === 'collect_data',
+              pricingIntent: false,
+              informationIntent: true
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ [Workflow] Erro ao executar workflow:', error)
+      // Continua para os fallbacks se workflow falhar
+    }
+    
+    // 2. Try simple fallbacks (economia de 10-15%)
+    const fallbackResponse = await simpleFallbacksService.tryFallback(message, existingContext?.workflowContext?.preferredLocation)
+    if (fallbackResponse) {
+      console.log(`🎯 [Fallbacks] Resposta gerada sem GPT!`)
+      return {
+        response: fallbackResponse.response,
+        confidence: fallbackResponse.confidence,
+        suggestedAction: 'continue',
+        context: {
+          patientIdentified: false,
+          schedulingIntent: false,
+          pricingIntent: false,
+          informationIntent: true
+        }
+      }
+    }
+
+    // Check cache (economia de 30-40%)
+    const cachedResponse = await responseCacheService.get(message, existingContext?.workflowContext?.preferredLocation)
+    if (cachedResponse) {
+      console.log(`💾 [Cache] Resposta encontrada no cache, economizando chamada GPT!`)
+      return {
+        response: cachedResponse,
+        confidence: 0.95,
+        suggestedAction: 'continue',
+        context: {
+          patientIdentified: false,
+          schedulingIntent: false,
+          pricingIntent: false,
+          informationIntent: true
+        }
+      }
+    }
+
     // Get or create context for this conversation
     let context = this.context.get(conversationId)
     if (!context) {
@@ -100,6 +173,12 @@ export class IntelligentBotService {
     // Analyze message intent and extract entities
     const analysis = await this.analyzeMessage(message, context)
 
+    // ✅ Se detectou procedimento não atendido, responder direto (sem chamar GPT)
+    if (analysis.unavailableProcedure) {
+      console.log(`⚠️ Procedimento não atendido detectado: ${analysis.unavailableProcedure}`)
+      return await this.handleUnavailableProcedure(analysis.unavailableProcedure, context)
+    }
+
     // Build context-aware prompt
     const systemPrompt = await this.buildIntelligentSystemPrompt(context, analysis)
 
@@ -110,18 +189,29 @@ export class IntelligentBotService {
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          ...context.history.slice(-10).map(h => ({
+          ...context.history.slice(-8).map(h => ({
             role: h.role as 'user' | 'assistant',
             content: h.content
           })),
           { role: 'user', content: message }
         ],
-        max_tokens: 800,
+        max_tokens: parseInt(process.env.GPT_MAX_TOKENS_CONVERSATION || '400'), // Reduzido de 800 para 400 (economia de 50%)
         temperature: 0.7,
         // signal for abort timeout
         signal: controller.signal
       } as any)
       clearTimeout(timeoutId)
+
+      // Monitorar custos
+      const usage = completion.usage
+      if (usage) {
+        costMonitoringService.logUsage({
+          model: this.model,
+          inputTokens: usage.prompt_tokens || 0,
+          outputTokens: usage.completion_tokens || 0,
+          service: 'IntelligentBot'
+        })
+      }
 
       const response = completion.choices[0]?.message?.content || ''
 
@@ -171,6 +261,14 @@ export class IntelligentBotService {
     phone: string,
     existingContext?: Partial<AIContext>
   ): Promise<AIContext> {
+    // Buscar dados das clínicas do banco
+    const locations = await prismaClinicDataService.getLocations() as any
+    const mainLocation = locations[0] || {
+      name: 'Clínica IAAM',
+      address: 'Endereço não cadastrado',
+      phone: 'Telefone não cadastrado'
+    }
+
     const baseContext: AIContext = {
       patient: {
         phone,
@@ -178,12 +276,12 @@ export class IntelligentBotService {
       },
       history: existingContext?.history || [],
       clinicData: {
-        name: 'Clínica de Fisioterapia',
-        address: 'Rua Vieiralves, 1230 - Manaus/AM',
-        phone: '(92) 3234-5678',
-        procedures: await prismaClinicDataService.getProcedures() as any,
+        name: mainLocation.name || 'Clínica IAAM',
+        address: mainLocation.address || 'Endereço não cadastrado',
+        phone: mainLocation.phone || 'Telefone não cadastrado',
+        procedures: this.filterProceduresForDisplay(await prismaClinicDataService.getProcedures()) as any,
         insuranceCompanies: await prismaClinicDataService.getInsuranceCompanies() as any,
-        locations: await prismaClinicDataService.getLocations() as any
+        locations: locations
       },
       currentIntent: existingContext?.currentIntent,
       sentimentTrend: existingContext?.sentimentTrend,
@@ -202,6 +300,10 @@ export class IntelligentBotService {
 
     // Extract entities and intents
     const iaam = await this.interpretIntentIAAM(message)
+    
+    // ✅ Detectar procedimentos não atendidos (async agora)
+    const unavailableProcedure = await this.detectUnavailableProcedure(message)
+    
     const analysis = {
       intent: await this.classifyIntent(message),
       sentiment: await this.analyzeSentiment(message),
@@ -209,6 +311,7 @@ export class IntelligentBotService {
       pricingIntent: this.detectPricingIntent(lowerMessage),
       informationIntent: this.detectInformationIntent(lowerMessage),
       procedureMentioned: await this.detectProcedureMention(message),
+      unavailableProcedure, // ✅ Detectar procedimentos não atendidos (dinâmico)
       insuranceMentioned: await this.detectInsuranceMention(message),
       locationMentioned: await this.detectLocationMention(message),
       greetingDetected: this.detectGreeting(lowerMessage),
@@ -230,9 +333,9 @@ export class IntelligentBotService {
       ? `Convênio: ${context.patient.insuranceCompany}`
       : 'Convênio: não informado'
 
-    // Get relevant procedures and pricing
-    const relevantProcedures = await this.getRelevantProcedures(analysis.procedureMentioned, context.patient?.insuranceCompany)
-    const pricingInfo = await this.getPricingInformation(relevantProcedures, context.patient?.insuranceCompany)
+    // Get relevant procedures and pricing (passar locationMentioned para usar valores corretos)
+    const relevantProcedures = await this.getRelevantProcedures(analysis.procedureMentioned, context.patient?.insuranceCompany, analysis.locationMentioned)
+    const pricingInfo = await this.getPricingInformation(relevantProcedures, context.patient?.insuranceCompany, analysis.locationMentioned)
 
     // Get location information
     const locationInfo = await this.getLocationInformation(analysis.locationMentioned)
@@ -295,30 +398,50 @@ AÇÃO: [continue|transfer_human|schedule_appointment|provide_info|collect_data]
 Contexto atual: ${context.conversationStage}`
   }
 
-  private async getRelevantProcedures(procedureMentioned: string | null, insuranceCompany?: string): Promise<string> {
+  private async getRelevantProcedures(procedureMentioned: string | null, insuranceCompany?: string, locationCode?: string): Promise<string> {
+    // ✅ Se está perguntando sobre valores, verificar se tem unidade
+    // Se não tiver, retornar instrução para perguntar
+    const needsPricing = true // Sempre mostra preços em getRelevantProcedures
+    
+    if (needsPricing && !locationCode) {
+      const allProcs = await prismaClinicDataService.getProcedures()
+      const mainProcs = this.filterProceduresForDisplay(allProcs)
+      
+      return `⚠️ ATENÇÃO: Valores variam por unidade. Você DEVE perguntar a unidade primeiro antes de informar valores.
+      
+Procedimentos gerais disponíveis (valores não informados - pergunte unidade primeiro):
+${mainProcs.slice(0, 5).map(p => `- ${p.name}: ${p.description}`).join('\n')}`
+    }
+    
     if (procedureMentioned) {
       const procedure = await prismaClinicDataService.getProcedureById(procedureMentioned)
       if (procedure) {
-        const priceInfo = await prismaClinicDataService.calculatePrice(procedureMentioned, insuranceCompany)
-        return `${procedure.name}: ${procedure.description}\n` +
+        const priceInfo = await prismaClinicDataService.calculatePrice(procedureMentioned, insuranceCompany, locationCode)
+        return `${procedure.name} (unidade: ${locationCode || 'não especificada'}): ${procedure.description}\n` +
           `Preço: R$ ${priceInfo?.patientPays || procedure.basePrice}\n` +
           `Duração: ${procedure.duration} minutos`
       }
     }
 
-    // Return top 5 procedures
+    // Return top 5 procedures with prices from specific location
     const allProcedures = await prismaClinicDataService.getProcedures()
-    const topProcedures = allProcedures.slice(0, 5)
+    const mainProcedures = this.filterProceduresForDisplay(allProcedures)
+    const topProcedures = mainProcedures.slice(0, 5)
 
     const proceduresList = await Promise.all(topProcedures.map(async p => {
-      const priceInfo = await prismaClinicDataService.calculatePrice(p.id, insuranceCompany)
+      const priceInfo = await prismaClinicDataService.calculatePrice(p.id, insuranceCompany, locationCode)
       return `${p.name}: R$ ${priceInfo?.patientPays || p.basePrice} (${p.duration}min)`
     }))
 
     return proceduresList.join('\n')
   }
 
-  private async getPricingInformation(procedures: any, insuranceCompany?: string): Promise<string> {
+  private async getPricingInformation(procedures: any, insuranceCompany?: string, locationCode?: string): Promise<string> {
+    // ✅ Verificar se tem unidade quando é necessário informar valores
+    if (!locationCode) {
+      return `⚠️ ATENÇÃO: Não informe valores específicos ainda. Pergunte a unidade primeiro.`
+    }
+    
     if (insuranceCompany) {
       const insurances = await prismaClinicDataService.getInsuranceCompanies()
       const insurance = insurances.find(i => i.id === insuranceCompany)
@@ -330,7 +453,7 @@ Contexto atual: ${context.conversationStage}`
       }
     }
 
-    return `💰 PREÇOS ESPECIAIS:\n` +
+    return `💰 PREÇOS ESPECIAIS (unidade: ${locationCode}):\n` +
       `• Pacote de 10 sessões: 10% de desconto + avaliação grátis\n` +
       `• Pacote de 5 sessões: 5% de desconto\n` +
       `• Primeira avaliação: R$ 100 (necessária para alguns procedimentos)`
@@ -560,6 +683,167 @@ Corrija mentalmente o texto antes de interpretar.`
     return null
   }
 
+  /**
+   * Detecta se a mensagem é uma pergunta sobre se atendemos algum procedimento
+   */
+  private isProcedureInquiry(message: string): boolean {
+    const lowerMessage = message.toLowerCase()
+    
+    const inquiryPatterns = [
+      'atendem', 'atende', 'fazem', 'faz', 'tem ',
+      'oferece', 'oferecem', 'trabalham com', 'trabalha com',
+      'realizam', 'realiza', 'disponibiliza', 'disponibilizam',
+      'presta', 'prestam', 'consulta de', 'sessao de',
+      'tratamento de', 'terapia'
+    ]
+    
+    return inquiryPatterns.some(pattern => lowerMessage.includes(pattern))
+  }
+
+  /**
+   * Detecta menção a procedimentos que NÃO atendemos
+   * Inclui lista hardcoded + detecção dinâmica
+   */
+  private async detectUnavailableProcedure(message: string): Promise<string | null> {
+    const lowerMessage = message.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
+
+    // 1. Lista hardcoded de procedimentos conhecidos que NÃO atendemos
+    const unavailableProcedures: Record<string, string[]> = {
+      'Terapia Ocupacional': ['terapia ocupacional', 'to ', 't.o', 't.o.', 'terapeuta ocupacional'],
+      'Psicologia': ['psicologo', 'psicologa', 'psicologia', 'psicoterapeuta', 'psicoterapia'],
+      'Nutrição': ['nutricao', 'nutricionista', 'nutri'],
+      'Fonoaudiologia': ['fonoaudiologo', 'fonoaudiologa', 'fonoaudiologia', 'fono'],
+      'Quiropraxia': ['quiropraxia', 'quiroprata'],
+      'Medicina': ['medico', 'consulta medica', 'ortopedista', 'neurologista', 'clinico geral'],
+      'Odontologia': ['dentista', 'odontologia', 'odontologo'],
+      'Massoterapia': ['massagem terapeutica', 'massoterapia', 'massoterapeuta'],
+      'Estética': ['estetica', 'esteticista', 'procedimento estetico', 'botox', 'preenchimento']
+    }
+
+    // Verificar lista hardcoded primeiro
+    for (const [procedureName, variants] of Object.entries(unavailableProcedures)) {
+      for (const variant of variants) {
+        const normalizedVariant = variant.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (lowerMessage.includes(normalizedVariant)) {
+          return procedureName
+        }
+      }
+    }
+
+    // 2. Detecção dinâmica: verificar se é pergunta sobre procedimento
+    if (!this.isProcedureInquiry(message)) {
+      return null // Não é uma pergunta sobre procedimento
+    }
+
+    // 3. Verificar se o procedimento mencionado existe no banco de dados
+    const procedures = await prismaClinicDataService.getProcedures()
+    const procedureNames = procedures.map(p => p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+    
+    // Verificar se algum procedimento do banco está na mensagem
+    const foundInDatabase = procedureNames.some(procName => {
+      return lowerMessage.includes(procName) || procName.includes(lowerMessage.split(' ')[0])
+    })
+
+    // Se é pergunta sobre procedimento E não encontrou no banco, então não atendemos
+    if (!foundInDatabase) {
+      // Extrair o possível nome do procedimento da mensagem
+      const extractedProcedure = this.extractProcedureName(message)
+      return extractedProcedure || 'esse procedimento'
+    }
+
+    return null
+  }
+
+  /**
+   * Tenta extrair o nome do procedimento da mensagem
+   */
+  private extractProcedureName(message: string): string | null {
+    const lowerMessage = message.toLowerCase()
+    
+    // Padrões para extrair procedimento: "atendem X?", "fazem X?", etc.
+    const patterns = [
+      /atendem?\s+(.+?)[\?\.!]?$/i,
+      /fazem?\s+(.+?)[\?\.!]?$/i,
+      /tem\s+(.+?)[\?\.!]?$/i,
+      /oferecem?\s+(.+?)[\?\.!]?$/i,
+      /trabalham?\s+com\s+(.+?)[\?\.!]?$/i,
+      /realizam?\s+(.+?)[\?\.!]?$/i
+    ]
+    
+    for (const pattern of patterns) {
+      const match = message.match(pattern)
+      if (match && match[1]) {
+        return match[1].trim()
+      }
+    }
+    
+    return null
+  }
+
+  /**
+   * Filtra procedimentos para exibição, removendo avaliações que são parte de outros procedimentos
+   */
+  private filterProceduresForDisplay(procedures: any[]): any[] {
+    return procedures.filter(p => {
+      const name = p.name.toLowerCase()
+      
+      // ✅ Remover procedimentos que começam com "avaliação" 
+      // pois são parte de outros procedimentos
+      if (name.startsWith('avaliacao') || name.startsWith('avaliação')) {
+        return false
+      }
+      
+      return true
+    })
+  }
+
+  /**
+   * Responde quando um procedimento não atendido é mencionado
+   */
+  private async handleUnavailableProcedure(procedureName: string, context: AIContext): Promise<AIResponse> {
+    // Buscar procedimentos relacionados que atendemos
+    const allProcedures = await prismaClinicDataService.getProcedures()
+    
+    // ✅ Filtrar procedimentos principais (sem avaliações separadas)
+    const mainProcedures = this.filterProceduresForDisplay(allProcedures)
+    
+    const suggestedProcedures = mainProcedures
+      .filter(p => p.name.toLowerCase().includes('fisio') || 
+                   p.name.toLowerCase().includes('pilates') ||
+                   p.name.toLowerCase().includes('rpg') ||
+                   p.name.toLowerCase().includes('acupuntura'))
+      .slice(0, 5)
+      .map(p => `• ${p.name}`)
+      .join('\n')
+
+    const response = `Entendo seu interesse em ${procedureName}! 😊
+
+Infelizmente, não atendemos ${procedureName} na nossa clínica. Somos especializados em **Fisioterapia e tratamentos relacionados**.
+
+📋 **Procedimentos que oferecemos:**
+${suggestedProcedures}
+
+Algum desses procedimentos te interessa? Posso te dar mais informações! 💙`
+
+    return aiResponseSchema.parse({
+      response,
+      confidence: 0.95,
+      intent: 'INFORMACAO',
+      sentiment: 'neutral',
+      suggestedAction: 'continue',
+      context: {
+        patientIdentified: !!context.patient?.name,
+        procedureMentioned: null,
+        insuranceMentioned: null,
+        locationMentioned: null,
+        schedulingIntent: false,
+        pricingIntent: false,
+        informationIntent: true
+      }
+    })
+  }
+
   private async detectInsuranceMention(message: string): Promise<string | null> {
     const insuranceCompanies = await prismaClinicDataService.getInsuranceCompanies()
     const lowerMessage = message.toLowerCase()
@@ -577,7 +861,33 @@ Corrija mentalmente o texto antes de interpretar.`
   private async detectLocationMention(message: string): Promise<string | null> {
     const locations = await prismaClinicDataService.getLocations()
     const lowerMessage = message.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove acentos
 
+    // Mapeamento de sinônimos por unidade
+    const synonyms: Record<string, string[]> = {
+      'vieiralves': ['vieiralves', 'vieira alves', 'vieira', 'vieralves', 'viera', 'rua rio ica'],
+      'sao_jose': ['sao jose', 'sao josé', 'são jose', 'são josé', 'sj', 'av sao jose', 'avenida sao jose']
+    }
+
+    // Verificar sinônimos primeiro
+    for (const [locationKey, variants] of Object.entries(synonyms)) {
+      for (const variant of variants) {
+        const normalizedVariant = variant.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        if (lowerMessage.includes(normalizedVariant)) {
+          // Encontrar a location pelo código ou nome
+          const location = locations.find(l => 
+            l.id.toLowerCase() === locationKey ||
+            l.name.toLowerCase().includes(locationKey.replace('_', ' ')) ||
+            l.neighborhood.toLowerCase().includes(locationKey.replace('_', ' '))
+          )
+          if (location) {
+            return location.id
+          }
+        }
+      }
+    }
+
+    // Fallback para detecção padrão
     for (const location of locations) {
       if (lowerMessage.includes(location.name.toLowerCase()) ||
         lowerMessage.includes(location.neighborhood.toLowerCase())) {

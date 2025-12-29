@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         if (!settings) {
             settings = await prisma.systemSettings.create({
                 data: {
-                    inactivityTimeoutMinutes: 10,
+                    inactivityTimeoutMinutes: 20,
                     closingMessage: 'Obrigado pelo contato! Estamos à disposição. 😊',
                     autoAssignEnabled: true,
                     maxConversationsPerAgent: 5
@@ -80,7 +80,7 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
             // Criar novo
             settings = await prisma.systemSettings.create({
                 data: {
-                    inactivityTimeoutMinutes: inactivityTimeoutMinutes || 10,
+                    inactivityTimeoutMinutes: inactivityTimeoutMinutes || 20,
                     closingMessage: closingMessage || 'Obrigado pelo contato! Estamos à disposição. 😊',
                     autoAssignEnabled: autoAssignEnabled !== undefined ? autoAssignEnabled : true,
                     maxConversationsPerAgent: maxConversationsPerAgent || 5

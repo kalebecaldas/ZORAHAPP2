@@ -89,7 +89,7 @@ REGRA DE OURO:
             userMessage: 'Quanto custa acupuntura?',
             expectedIntent: 'INFORMACAO',
             expectedAction: 'collect_data',
-            botResponse: 'Ótima escolha! 😊 A acupuntura é excelente para várias condições.\n\nPara te informar o valor correto, você tem algum convênio? Temos parceria com Bradesco, SulAmérica, Mediservice e outros.\n\nSe for particular:\n• Avaliação: R$ 200\n• Sessão avulsa: R$ 180\n• **Pacote 10 sessões: R$ 1.600** (avaliação GRÁTIS + economia de R$ 400!)\n\nQual é o seu caso?',
+            botResponse: 'Ótima escolha! 😊 A acupuntura é excelente para várias condições.\n\nPara te informar o valor correto, você tem algum convênio? Temos parceria com Bradesco, SulAmérica, Mediservice e outros.\n\nSe for particular:\n• Avaliação: R$ 200\n• Sessão avulsa: R$ 180\n• **Pacote 10 sessões: R$ 1.600** (avaliação GRÁTIS + economia de R$ 400!)\n\nVocê tem convênio ou prefere particular?',
             entities: {
                 procedimento: 'Acupuntura',
                 convenio: null,

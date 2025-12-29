@@ -202,6 +202,7 @@ model Clinic {
   zipCode   String
   phone     String
   email     String?
+  mapsUrl   String?
   openingHours Json
   coordinates Json?
   specialties Json
@@ -409,8 +410,8 @@ model TransferRule {
 model SystemSettings {
   id                        String   @id @default(cuid())
   
-  // Timeout de inatividade
-  inactivityTimeoutMinutes  Int      @default(10)
+  // Timeout de inatividade (padrão: 20 minutos)
+  inactivityTimeoutMinutes  Int      @default(20)
   
   // Mensagem de encerramento
   closingMessage            String   @default("Obrigado pelo contato! Estamos à disposição. 😊") @db.Text
@@ -423,5 +424,91 @@ model SystemSettings {
   updatedAt                 DateTime @updatedAt
   
   @@map("system_settings")
+}
+
+// ============================================
+// SISTEMA DE REGRAS E TEMPLATES DE RESPOSTA
+// ============================================
+
+// Sistema de Regras e Templates de Resposta
+model ResponseRule {
+  id          String   @id @default(cuid())
+  
+  // Classificação
+  intent      String   // 'INFORMACAO', 'AGENDAR', 'VALOR_PARTICULAR', 'CONVENIO_PROCEDIMENTOS', etc.
+  context     String?  // 'procedimento', 'convenio', 'geral'
+  
+  // Filtros (quando aplicar esta regra)
+  targetType  String?  // 'procedure', 'insurance', 'general'
+  targetId    String?  // Code do procedimento ou convênio específico
+  
+  // Template de resposta
+  template    String   @db.Text // Template com variáveis: "{procedimento} custa R$ {preco}"
+  conditions  Json?    // Condições: { requiresEvaluation: true, hasPackage: true }
+  priority    Int      @default(0) // Ordem de aplicação (maior = mais prioritário)
+  
+  // Regras específicas
+  rules       Json?    // { evaluationPrice: 200, includePackages: true }
+  
+  // Metadata
+  isActive    Boolean  @default(true)
+  description String?  // Descrição para o admin
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([intent, targetType])
+  @@index([isActive])
+  @@index([priority])
+}
+
+// Regras específicas por procedimento
+model ProcedureRule {
+  id            String   @id @default(cuid())
+  procedureCode String   @unique // Código do procedimento
+  
+  // Regras de precificação
+  requiresEvaluation     Boolean  @default(false)
+  evaluationPrice        Decimal? @db.Decimal(10,2)
+  evaluationInPackage    Boolean  @default(false) // Avaliação incluída em pacotes?
+  evaluationIncludesFirstSession Boolean @default(true) // Avaliação já inclui a primeira sessão? (padrão: true)
+  minimumPackageSessions Int?     // A partir de quantas sessões inclui avaliação
+  
+  // Regras de apresentação
+  highlightPackages      Boolean  @default(false)
+  showEvaluationFirst    Boolean  @default(true)
+  customMessage          String?  @db.Text // Mensagem especial
+  
+  // Condições especiais (JSON)
+  specialConditions      Json?    // { "packageDiscount": "evaluation_free", "minSessions": 10 }
+  
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([procedureCode])
+}
+
+// Regras específicas por convênio
+model InsuranceRule {
+  id            String   @id @default(cuid())
+  insuranceCode String   @unique // Código do convênio
+  
+  // Regras de apresentação
+  showCoveredProcedures Boolean  @default(true)
+  mentionOtherBenefits  Boolean  @default(true)
+  customGreeting        String?  @db.Text // "Ótimo! Com {convenio}..."
+  
+  // Regras de valores
+  hideValues            Boolean  @default(true) // Esconder valores para convênios normais
+  canShowDiscount       Boolean  @default(false) // Pode mostrar desconto?
+  
+  // Procedimentos especiais (JSON)
+  specialProcedures     Json?    // Lista de procedimentos com regras especiais
+  
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([insuranceCode])
 }
 

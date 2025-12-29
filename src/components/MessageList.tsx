@@ -1019,6 +1019,13 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
 
           // Use direction as the source of truth for alignment
           const isFromBot = message.direction === 'SENT'
+          const isClosingMessage = message.metadata?.isClosingMessage === true
+          
+          // #region agent log
+          if (message.messageText?.includes('Obrigado pelo contato') || message.metadata?.isClosingMessage) {
+            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MessageList.tsx:1022',message:'RENDERING CLOSING MESSAGE',data:{messageId:message.id,direction:message.direction,sender:message.sender,isFromBot,isClosingMessage,metadata:message.metadata},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+          }
+          // #endregion
 
           return (
             <div
@@ -1033,13 +1040,24 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
                   {getSenderAvatar(message.sender)}
                 </div>
 
-                <div className={`px-4 py-2 shadow-sm ${isFromBot
-                  ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
-                  : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
+                <div className={`px-4 py-2 shadow-sm ${
+                  isClosingMessage 
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-2xl rounded-br-sm border-2 border-purple-300'
+                    : isFromBot
+                      ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm'
+                      : 'bg-white text-gray-900 rounded-2xl rounded-bl-sm'
                   }`}>
                   {/* Show text only if it exists and is not a media-only message */}
                   {message.messageText && !message.messageText.startsWith('[IMAGE]') && !message.messageText.startsWith('[AUDIO]') && !message.messageText.startsWith('[DOCUMENT]') && (
-                    <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
+                    <div>
+                      {isClosingMessage && (
+                        <div className="text-xs opacity-90 mb-1 flex items-center gap-1">
+                          <span>✨</span>
+                          <span className="font-semibold">Mensagem de Encerramento</span>
+                        </div>
+                      )}
+                      <p className="text-sm whitespace-pre-line break-words">{message.messageText}</p>
+                    </div>
                   )}
 
                   {/* File att attachments & Media */}

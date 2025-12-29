@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 
 const SystemSettingsTab: React.FC = () => {
     const [settings, setSettings] = useState({
-        inactivityTimeoutMinutes: 10,
+        inactivityTimeoutMinutes: 20,
         closingMessage: '',
         autoAssignEnabled: true,
         maxConversationsPerAgent: 5
@@ -101,7 +101,7 @@ const SystemSettingsTab: React.FC = () => {
                                 <div className="text-sm text-blue-800">
                                     <p className="font-medium mb-1">Como funciona:</p>
                                     <ul className="list-disc list-inside space-y-1 text-blue-700">
-                                        <li>Após este tempo sem resposta, a conversa retorna automaticamente para a fila BOT_QUEUE</li>
+                                        <li>Após este tempo sem resposta, a conversa retorna automaticamente para a fila PRINCIPAL</li>
                                         <li>Uma mensagem do sistema é criada informando o timeout</li>
                                         <li>O agente recebe uma notificação em tempo real</li>
                                         <li>O sistema verifica conversas inativas a cada 1 minuto</li>

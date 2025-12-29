@@ -365,8 +365,9 @@ router.get('/clinic-data', settingsAuth, async (req: Request, res: Response): Pr
       units: clinics.map(clinic => ({
         id: clinic.code,
         name: clinic.displayName,
+        address: clinic.address || '',
         phone: clinic.phone,
-        mapsUrl: ''
+        mapsUrl: clinic.mapsUrl || ''
       })),
       insurance: allInsurances
         .filter(ins => !ins.discount)
@@ -457,7 +458,9 @@ router.post('/clinic-data', authMiddleware, async (req: Request, res: Response):
             where: { id: existingClinic.id },
             data: {
               displayName: unit.name,
-              phone: unit.phone
+              address: unit.address || existingClinic.address,
+              phone: unit.phone,
+              mapsUrl: unit.mapsUrl || existingClinic.mapsUrl || null
             }
           })
           console.log(`✅ Unidade atualizada: ${unit.name}`)
@@ -467,12 +470,13 @@ router.post('/clinic-data', authMiddleware, async (req: Request, res: Response):
               code: unit.id,
               name: unit.id,
               displayName: unit.name,
-              phone: unit.phone,
-              address: '',
+              address: unit.address || '',
               neighborhood: '',
               city: 'Manaus',
               state: 'AM',
               zipCode: '',
+              phone: unit.phone,
+              mapsUrl: unit.mapsUrl || null,
               openingHours: {},
               specialties: [],
               accessibility: {}

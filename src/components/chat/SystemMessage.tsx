@@ -26,9 +26,6 @@ const SystemMessage: React.FC<SystemMessageProps> = ({
     metadata,
     timestamp
 }) => {
-    // 🔍 DEBUG
-    console.log('🔍 SystemMessage props:', { type, content, metadata, hasPatientData: !!metadata?.patientData });
-
     // Renderizar card especial para dados do paciente
     if (type === 'PATIENT_DATA_CARD' && metadata?.patientData) {
         console.log('✅ Renderizando PatientDataCard com dados:', metadata.patientData);

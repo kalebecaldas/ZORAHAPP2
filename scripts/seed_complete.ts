@@ -87,7 +87,7 @@ async function seedComplete() {
             console.log('   💡 Criando configuração padrão...')
             await prisma.systemSettings.create({
                 data: {
-                    inactivityTimeoutMinutes: 10,
+                    inactivityTimeoutMinutes: 20,
                     closingMessage: 'Obrigado pelo contato! Estamos à disposição. 😊',
                     autoAssignEnabled: true,
                     maxConversationsPerAgent: 5

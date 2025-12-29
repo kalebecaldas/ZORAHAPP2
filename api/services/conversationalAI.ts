@@ -1,6 +1,9 @@
 import OpenAI from 'openai'
 import { conversationContextService, type EnhancedContext } from './conversationContext.js'
 import { prismaClinicDataService } from './prismaClinicDataService.js'
+import { responseCacheService } from './responseCache.js'
+import { simpleFallbacksService } from './simpleFallbacks.js'
+import { costMonitoringService } from './costMonitoring.js'
 
 /**
  * Resposta estruturada da IA conversacional
@@ -57,7 +60,37 @@ export class ConversationalAIService {
         console.log(`🤖 Gerando resposta conversacional para: "${message}"`)
 
         try {
-            // 1. Buscar contexto enriquecido
+            // 0. Tentar fallback simples primeiro (economia de 10-15%)
+            const fallbackResponse = await simpleFallbacksService.tryFallback(message)
+            if (fallbackResponse) {
+                console.log(`🎯 [Fallbacks] Resposta gerada sem GPT!`)
+                return {
+                    message: fallbackResponse.response,
+                    intent: fallbackResponse.intent.toUpperCase() as any,
+                    sentiment: 'neutral',
+                    action: 'continue',
+                    confidence: fallbackResponse.confidence,
+                    entities: {},
+                    suggestedNextSteps: []
+                }
+            }
+
+            // 1. Verificar cache (economia de 30-40%)
+            const cachedResponse = await responseCacheService.get(message)
+            if (cachedResponse) {
+                console.log(`💾 [Cache] Resposta encontrada no cache, economizando chamada GPT!`)
+                return {
+                    message: cachedResponse,
+                    intent: 'INFORMACAO',
+                    sentiment: 'neutral',
+                    action: 'continue',
+                    confidence: 0.95,
+                    entities: {},
+                    suggestedNextSteps: []
+                }
+            }
+
+            // 2. Buscar contexto enriquecido
             const context = await conversationContextService.buildContext(conversationId, phone)
 
             console.log(`🔍 CONTEXTO COMPLETO:`, {
@@ -70,26 +103,33 @@ export class ConversationalAIService {
             // 2. Buscar dados da clínica OU todos os procedimentos
             let clinicData = await this.getClinicData(context.currentState.selectedClinic)
 
-            // Se não há clínica selecionada, buscar TODOS os procedimentos
+            // Se não há clínica selecionada, buscar TODOS os procedimentos SEM VALORES
+            // ✅ MUDANÇA: Não incluir preços quando não há unidade definida
             if (!clinicData) {
-                console.log(`📦 Nenhuma clínica selecionada, buscando TODOS os procedimentos...`)
+                console.log(`📦 Nenhuma clínica selecionada, buscando procedimentos SEM valores...`)
                 const allProcedures = await prismaClinicDataService.getProcedures()
                 const allInsurances = await prismaClinicDataService.getInsuranceCompanies()
 
+                // ✅ Filtrar procedimentos principais (sem avaliações separadas)
+                const mainProcedures = allProcedures.filter(p => {
+                    const name = p.name.toLowerCase()
+                    return !name.startsWith('avaliacao') && !name.startsWith('avaliação')
+                })
+
                 clinicData = {
-                    name: 'Clínicas IAAM',
-                    address: 'Vieiralves e São José',
-                    phone: '(92) 3000-0000',
-                    procedures: allProcedures.map(p => ({
+                    name: 'Clínicas IAAM (Vieiralves e São José)',
+                    address: 'Múltiplas unidades - pergunte qual unidade o paciente prefere',
+                    phone: 'Varia por unidade - pergunte primeiro',
+                    procedures: mainProcedures.map(p => ({
                         id: p.id,
                         name: p.name,
                         description: p.description,
-                        price: p.basePrice, // Mapear basePrice para price
+                        price: null, // ✅ NÃO incluir preço quando não há unidade
                         hasPackage: p.packages && p.packages.length > 0,
-                        packages: p.packages,
+                        packages: [], // ✅ NÃO incluir pacotes sem unidade (valores variam)
                         duration: p.duration,
                         requiresEvaluation: p.requiresEvaluation,
-                        importantInfo: '' // Campo não existe em Procedure base
+                        importantInfo: '⚠️ Valores variam por unidade - pergunte qual unidade o paciente prefere primeiro'
                     })),
                     insurances: allInsurances.map(i => ({
                         id: i.id,
@@ -98,16 +138,16 @@ export class ConversationalAIService {
                         discount: false, // Campo não existe em Insurance base
                         discountPercentage: 0
                     }))
-                }
+                } as any // ✅ Type assertion para evitar erro TS
 
-                console.log(`✅ Carregados ${allProcedures.length} procedimentos`)
+                console.log(`✅ Carregados ${mainProcedures.length} procedimentos principais (SEM valores - aguardando seleção de unidade)`)
             }
 
             // 3. Construir system prompt RICO (agora dinâmico do banco)
             const systemPrompt = await this.buildRichSystemPrompt(context, clinicData)
 
-            // 4. Preparar histórico de mensagens (últimas 20 para manter contexto)
-            const historyMessages = context.history.recent.slice(-20).map(h => ({
+            // 4. Preparar histórico de mensagens (últimas 10 para otimização de tokens)
+            const historyMessages = context.history.recent.slice(-10).map(h => ({
                 role: h.role as 'user' | 'assistant',
                 content: h.content
             }))
@@ -140,7 +180,7 @@ export class ConversationalAIService {
                     { role: 'user', content: message }
                 ],
                 temperature: 0.7,
-                max_tokens: 1000,
+                max_tokens: parseInt(process.env.GPT_MAX_TOKENS_CONVERSATION || '500'), // Reduzido de 1000 para 500 (economia de 50%)
                 response_format: { type: 'json_object' }
             })
                     break // Sucesso, sair do loop
@@ -159,6 +199,18 @@ export class ConversationalAIService {
             }
 
             console.log(`📥 Resposta recebida da OpenAI`)
+            
+            // Monitorar custos
+            const usage = completion.usage
+            if (usage) {
+                costMonitoringService.logUsage({
+                    model: this.model,
+                    inputTokens: usage.prompt_tokens || 0,
+                    outputTokens: usage.completion_tokens || 0,
+                    service: 'ConversationalAI'
+                })
+            }
+            
             const responseText = completion.choices[0]?.message?.content || '{}'
             console.log(`📝 Resposta bruta (primeiros 200 caracteres): ${responseText.substring(0, 200)}`)
             

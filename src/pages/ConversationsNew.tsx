@@ -162,16 +162,6 @@ const ConversationsPage: React.FC = () => {
             });
             
             const convs = Array.from(conversationsMap.values());
-
-            // 🔍 DEBUG: Verificar unreadCount
-            console.log('🔍 Conversas recebidas:', convs.map((c: any) => ({
-                phone: c.phone,
-                unreadCount: c.unreadCount,
-                lastMessage: c.lastMessage?.substring(0, 20),
-                status: c.status,
-                assignedToId: c.assignedToId
-            })));
-
             setConversations(convs);
         } catch (error) {
             console.error('Error fetching conversations:', error);
@@ -223,19 +213,27 @@ const ConversationsPage: React.FC = () => {
                 messagesCount: response.data?.messages?.length 
             });
             
-            const msgs = (response.data?.messages || []).map((m: any) => ({
-                id: m.id,
-                conversationId: response.data.id || conversationPhone,
-                // Use direction as primary source: RECEIVED = PATIENT, SENT = BOT/AGENT
-                sender: m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT'),
-                messageText: m.messageText,
-                messageType: m.messageType || 'TEXT',
-                mediaUrl: m.mediaUrl,
-                direction: m.direction,
-                timestamp: m.timestamp,
-                status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
-                metadata: m.metadata
-            }));
+            const msgs = (response.data?.messages || []).map((m: any) => {
+                const mapped = {
+                    id: m.id,
+                    conversationId: response.data.id || conversationPhone,
+                    // Use direction as primary source: RECEIVED = PATIENT, SENT = BOT/AGENT
+                    sender: m.direction === 'RECEIVED' ? 'PATIENT' : (m.from === 'BOT' ? 'BOT' : 'AGENT'),
+                    messageText: m.messageText,
+                    messageType: m.messageType || 'TEXT',
+                    mediaUrl: m.mediaUrl,
+                    direction: m.direction,
+                    timestamp: m.timestamp,
+                    status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
+                    metadata: m.metadata
+                };
+                // #region agent log
+                if (m.metadata?.isClosingMessage) {
+                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:227',message:'CLOSING MESSAGE FOUND in fetchMessages',data:{messageId:m.id,direction:m.direction,from:m.from,metadata:m.metadata,mappedSender:mapped.sender,mappedDirection:mapped.direction},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                }
+                // #endregion
+                return mapped;
+            });
             setMessages(msgs);
 
             // Update selected conversation data with complete response
@@ -434,40 +432,56 @@ const ConversationsPage: React.FC = () => {
     const handleClose = async () => {
         if (!selectedConversation) return;
 
+        const phoneToReload = selectedConversation.phone;
+        const conversationIdToReload = selectedConversation.id;
+
         try {
-            console.log('🔒 Encerrando conversa:', {
-                id: selectedConversation.id,
-                phone: selectedConversation.phone,
-                status: selectedConversation.status
-            });
-            
-            // ✅ Enviar conversationId específico para garantir que a conversa correta seja encerrada
             await api.post('/api/conversations/actions', {
                 action: 'close',
-                conversationId: selectedConversation.id, // ✅ Usar ID específico
-                phone: selectedConversation.phone // Manter para compatibilidade
+                conversationId: selectedConversation.id,
+                phone: selectedConversation.phone
             });
 
             toast.success('Conversa encerrada com sucesso');
             setShowCloseModal(false);
-            setSelectedConversation(null);
+            
+            // ✅ Recarregar mensagens após encerramento para mostrar mensagem template
+            // Aguardar um pouco para garantir que o backend processou
+            setTimeout(() => {
+                if (phoneToReload && conversationIdToReload) {
+                    fetchMessages(phoneToReload, conversationIdToReload);
+                }
+            }, 1000); // Aumentar delay para garantir processamento
+            
+            // Não limpar selectedConversation imediatamente para manter a conversa visível
+            // setSelectedConversation(null);
             fetchConversations();
         } catch (error) {
-            console.error('Error closing conversation:', error);
+            console.error('❌ Error closing conversation:', error);
             toast.error('Erro ao encerrar conversa');
         }
     };
 
     // Reopen conversation
     const handleReopen = async (conversation: Conversation) => {
+        // #region agent log
+        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:458',message:'handleReopen ENTRY',data:{conversationId:conversation.id,phone:conversation.phone,closedCountBefore:closedConversations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         try {
             await api.post('/api/conversations/actions', {
                 action: 'reopen',
-                conversationId: conversation.id, // ✅ Usar ID específico
-                phone: conversation.phone // Manter para compatibilidade
+                conversationId: conversation.id,
+                phone: conversation.phone
             });
+            
+            // ✅ NÃO remover aqui - deixar o evento Socket.IO fazer isso para evitar duplicação
+            // O evento Socket.IO já vai remover quando receber conversation_reopened
+            
             toast.success('Conversa reaberta com sucesso');
-            fetchConversations();
+            // #region agent log
+            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:475',message:'handleReopen CALLING fetchConversations',data:{conversationId:conversation.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
+            fetchConversations(); // Recarregar todas as conversas
             if (selectedConversation?.id === conversation.id) {
                 setSelectedConversation(null);
             }
@@ -663,7 +677,6 @@ const ConversationsPage: React.FC = () => {
                 const total = response.data.pagination?.total;
                 if (total !== undefined) {
                     setClosedTotal(total);
-                    console.log(`📊 Contador de encerrados inicializado: ${total}`);
                 }
             } catch (err) {
                 console.error('Erro ao buscar total inicial de encerradas:', err);
@@ -801,7 +814,6 @@ const ConversationsPage: React.FC = () => {
                             const total = response.data.pagination?.total;
                             if (total !== undefined) {
                                 setClosedTotal(total); // ✅ Confirmar com backend
-                                console.log(`📊 Contador de encerrados confirmado: ${total}`);
                             }
                         })
                         .catch(err => {
@@ -880,7 +892,6 @@ const ConversationsPage: React.FC = () => {
                             const total = response.data.pagination?.total;
                             if (total !== undefined) {
                                 setClosedTotal(total); // ✅ Confirmar com backend
-                                console.log(`📊 Contador de encerrados confirmado: ${total}`);
                             }
                         })
                         .catch(err => {
@@ -893,8 +904,25 @@ const ConversationsPage: React.FC = () => {
             else if (data.conversationId && data.status === 'PRINCIPAL' && data.reason === 'conversation_reopened') {
                 console.log('🔄 [GLOBAL] conversation:updated - Conversa reaberta:', data);
                 
-                // ✅ Remover da lista de encerradas (se estiver lá)
-                setClosedConversations(prev => prev.filter(c => c.id !== data.conversationId));
+                // #region agent log
+                fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:891',message:'Socket.IO conversation_reopened EVENT',data:{conversationId:data.conversationId,closedCountBefore:closedConversations.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
+                
+                // ✅ Remover da lista de encerradas (se estiver lá) - apenas uma vez
+                setClosedConversations(prev => {
+                    const exists = prev.find(c => c.id === data.conversationId);
+                    if (!exists) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:896',message:'Socket.IO SKIP - already removed',data:{conversationId:data.conversationId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                        // #endregion
+                        return prev; // Já foi removida, não remover novamente
+                    }
+                    const filtered = prev.filter(c => c.id !== data.conversationId);
+                    // #region agent log
+                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationsNew.tsx:900',message:'Socket.IO AFTER filter',data:{conversationId:data.conversationId,closedCountBefore:prev.length,closedCountAfter:filtered.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    return filtered;
+                });
                 setClosedTotal(prev => Math.max(0, prev - 1));
                 
                 // ✅ Buscar dados completos da conversa reaberta

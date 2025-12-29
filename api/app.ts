@@ -37,7 +37,10 @@ import aiConfigRoutes from './routes/aiConfig.js'
 import quickRepliesRoutes from './routes/quick-replies.js' // ✅ NOVO
 import analyticsRoutes from './routes/analytics.js' // ✅ Analytics avançado
 import systemSettingsRoutes from './routes/systemSettings.js' // ✅ Configurações do sistema
+import botOptimizationRoutes from './routes/botOptimization.js' // ✅ Dashboard de Otimizações
+import rulesRoutes from './routes/rules.js' // ✅ Sistema de Regras do Bot
 import { authMiddleware } from './utils/auth.js'
+import { workflowEngine } from './services/workflowEngine.js'
 
 // for esm mode
 const __filename = fileURLToPath(import.meta.url)
@@ -108,15 +111,21 @@ app.use(morgan('dev'))
 // For authenticated routes (conversations, patients, etc.)
 const authenticatedLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: 1000, // 1000 requests per minute (generous for 100+ simultaneous conversations with WebSockets)
+  max: 10000, // 10000 requests per minute (MUITO alto para debug)
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     error: 'Muitas requisições. Tente novamente mais tarde.'
   },
   skip: (req) => {
-    // Skip rate limiting for testing in development
-    return process.env.NODE_ENV === 'development' && req.path.includes('/test')
+    // ✅ DESABILITAR rate limiting em desenvolvimento completamente
+    if (process.env.NODE_ENV === 'development') {
+      return true // Pular rate limiting em dev
+    }
+    return req.path.includes('/test')
+  },
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Muitas requisições. Tente novamente mais tarde.' })
   }
 })
 
@@ -167,6 +176,8 @@ app.use('/api/ai-config', authenticatedLimiter, aiConfigRoutes)
 app.use('/api/quick-replies', authenticatedLimiter, quickRepliesRoutes) // ✅ NOVO
 app.use('/api/analytics', authenticatedLimiter, analyticsRoutes) // ✅ Analytics avançado
 app.use('/api/settings/system', authenticatedLimiter, systemSettingsRoutes) // ✅ Configurações do sistema
+app.use('/api/bot-optimization', authenticatedLimiter, botOptimizationRoutes) // ✅ Dashboard de Otimizações
+app.use('/api/rules', authenticatedLimiter, rulesRoutes) // ✅ Sistema de Regras do Bot
 app.use('/api', authenticatedLimiter, aliasRoutes)
 
 // Debug auth endpoint
