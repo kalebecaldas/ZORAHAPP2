@@ -113,6 +113,8 @@ class ResponseCacheService {
           const procedures = await prismaClinicDataService.getProcedures()
           // ✅ Filtrar procedimentos principais (sem avaliações separadas)
           const mainProcedures = procedures.filter(p => {
+            // Validação de segurança
+            if (!p || !p.name || typeof p.name !== 'string') return false
             const name = p.name.toLowerCase()
             return !name.startsWith('avaliacao') && !name.startsWith('avaliação')
           })

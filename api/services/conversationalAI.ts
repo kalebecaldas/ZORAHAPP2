@@ -112,6 +112,8 @@ export class ConversationalAIService {
 
                 // ✅ Filtrar procedimentos principais (sem avaliações separadas)
                 const mainProcedures = allProcedures.filter(p => {
+                    // Validação de segurança
+                    if (!p || !p.name || typeof p.name !== 'string') return false
                     const name = p.name.toLowerCase()
                     return !name.startsWith('avaliacao') && !name.startsWith('avaliação')
                 })

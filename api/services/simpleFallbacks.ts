@@ -332,6 +332,12 @@ class SimpleFallbacksService {
    */
   private filterProceduresForDisplay(procedures: any[]): any[] {
     return procedures.filter(p => {
+      // ✅ Validação de segurança: verificar se procedimento e nome existem
+      if (!p || !p.name || typeof p.name !== 'string') {
+        console.warn('⚠️ Procedimento inválido encontrado:', p)
+        return false
+      }
+      
       const name = p.name.toLowerCase()
       
       // ✅ Remover procedimentos que começam com "avaliação" 

@@ -468,7 +468,9 @@ ${filteredInsurances.map((i: any) => `- ${i.displayName}${i.discount ? ` (${i.di
         
         // ✅ Filtrar avaliações antes de formatar (não devem aparecer como procedimentos separados)
         const mainProcedures = procedures.filter(p => {
-            const name = p?.name?.toLowerCase() || ''
+            // Validação de segurança
+            if (!p || !p.name || typeof p.name !== 'string') return false
+            const name = p.name.toLowerCase()
             return !name.startsWith('avaliacao') && !name.startsWith('avaliação')
         })
         
