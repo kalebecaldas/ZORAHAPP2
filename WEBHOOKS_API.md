@@ -59,14 +59,25 @@ O sistema de webhooks permite que sistemas externos (parceiros) recebam notifica
 
 ## 📨 Eventos Disponíveis
 
-| Evento | Descrição | Quando dispara |
-|--------|-----------|----------------|
-| `first_message` | Primeira mensagem de um paciente | Nova conversa criada (primeira interação) |
-| `appointment_created` | Agendamento criado | Paciente agenda consulta *(em breve)* |
-| `conversation_closed` | Conversa encerrada | Atendimento finalizado *(em breve)* |
-| `patient_registered` | Paciente cadastrado | Cadastro completo realizado *(em breve)* |
+| Evento | Descrição | Quando dispara | Status |
+|--------|-----------|----------------|--------|
+| `received_message` | Nova mensagem recebida | Mensagem recebida de paciente (fila ou bot) | ✅ Ativo |
+| `started_chat` | Conversa iniciada | Nova conversa criada por qualquer canal | ✅ Ativo |
+| `agent_entered` | Agente assumiu | Agente entra na conversa | ✅ Ativo |
+| `closed_chat` | Conversa finalizada | Atendimento encerrado | ✅ Ativo |
+| `created_patient` | Paciente cadastrado | Novo contato criado no sistema | ✅ Ativo |
+| `left_queue` | Saiu da fila | Chat sai da fila de atendimento | ✅ Ativo |
+| `agent_changed_status` | Status do agente alterado | Agente muda status (online/offline/ausente) | 🔜 Em breve |
+| `updated_patient` | Paciente atualizado | Dados do contato foram modificados | 🔜 Em breve |
+| `appointment_created` | Agendamento criado | Paciente agenda consulta | 🔜 Em breve |
 
-> **Nota:** Atualmente apenas `first_message` está implementado. Mais eventos serão adicionados em breve.
+> **Nota:** Eventos marcados com ✅ estão ativos. Eventos com 🔜 serão implementados em futuras versões.
+
+### **Eventos Especiais:**
+- **`received_message`** → Ideal para rastreamento de conversões (primeira mensagem)
+- **`started_chat`** → Similar ao `first_message`, mas mais abrangente
+- **`agent_entered`** → Útil para métricas de tempo de espera
+- **`closed_chat`** → Análise de duração e satisfação do atendimento
 
 ---
 

@@ -40,6 +40,7 @@ import systemSettingsRoutes from './routes/systemSettings.js' // ✅ Configuraç
 import botOptimizationRoutes from './routes/botOptimization.js' // ✅ Dashboard de Otimizações
 import rulesRoutes from './routes/rules.js' // ✅ Sistema de Regras do Bot
 import webhooksRoutes from './routes/webhooks.js' // ✅ Sistema de Webhooks
+import docsRoutes from './routes/docs.js' // ✅ Documentação Pública
 import { authMiddleware } from './utils/auth.js'
 import { workflowEngine } from './services/workflowEngine.js'
 
@@ -194,6 +195,9 @@ app.use('/api/debug/auth', authenticatedLimiter, authMiddleware, (req: Request, 
 app.use('/webhook', webhookLimiter, webhookRoutes)
 app.use('/webhook/instagram', webhookLimiter, instagramWebhookRoutes)
 
+// ✅ Documentação Pública (sem autenticação)
+app.use('/api/docs', docsRoutes)
+
 // Serve static files from public folder (logos, favicon, etc.)
 // Must be before dist to prioritize public files
 // IMPORTANT: These routes must be registered BEFORE the SPA fallback
@@ -215,8 +219,22 @@ app.use(express.static(clientDistPath, {
   lastModified: true
 }))
 
+// Fallback to index.html for SPA routing
+// IMPORTANT: This must be LAST and must NOT match static file routes
+app.get('*', (req: Request, res: Response, next: NextFunction) => {
+  // Skip API routes, webhook routes, and static file routes
+  if (req.path.startsWith('/api') ||
+    req.path.startsWith('/webhook') ||
+    req.path.startsWith('/logos/') ||
+    req.path.startsWith('/favicon') ||
+    req.path.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2|ttf|eot)$/i)) {
+    return next()
+  }
+  res.sendFile(path.join(clientDistPath, 'index.html'))
+})
+
 /**
- * Global error handler (deve vir ANTES do 404)
+ * Global error handler
  */
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   console.error('Erro global:', error)
@@ -244,28 +262,15 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
 })
 
 /**
- * 404 handler para rotas de API
- * Apenas para rotas /api/* e /webhook/*
+ * 404 handler
  */
-app.use((req: Request, res: Response, next: NextFunction) => {
-  // Apenas retornar 404 JSON para rotas de API
-  if (req.path.startsWith('/api') || req.path.startsWith('/webhook')) {
-    return res.status(404).json({
-      success: false,
-      error: 'Rota não encontrada',
-      path: req.path,
-      method: req.method
-    })
-  }
-  next()
-})
-
-/**
- * SPA Fallback - DEVE SER A ÚLTIMA ROTA
- * Serve index.html para todas as rotas que não são API ou arquivos estáticos
- */
-app.get('*', (req: Request, res: Response) => {
-  res.sendFile(path.join(clientDistPath, 'index.html'))
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    error: 'Rota não encontrada',
+    path: req.path,
+    method: req.method
+  })
 })
 
 export default app

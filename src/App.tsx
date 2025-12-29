@@ -13,7 +13,6 @@ import { Settings } from "./pages/Settings";
 import { Users } from "./pages/Users";
 import { TestChat } from "./pages/TestChat";
 import AIConfig from "./pages/AIConfig";
-import WebhooksDocs from "./pages/WebhooksDocs";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -23,9 +22,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
-  const isPublicPage = location.pathname === '/webhooks-docs';
 
-  if (isLoginPage || isPublicPage) {
+  if (isLoginPage) {
     return <>{children}</>;
   }
 
@@ -100,7 +98,6 @@ function AppRoutes() {
           <AIConfig />
         </ProtectedRoute>
       } />
-      <Route path="/webhooks-docs" element={<WebhooksDocs />} />
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
   );

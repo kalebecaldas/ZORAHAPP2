@@ -197,7 +197,7 @@ export default function WebhooksManagement() {
               <li>Webhooks notificam sistemas externos quando eventos ocorrem</li>
               <li>Cada webhook possui um token único para autenticação</li>
               <li>Retry automático (3x) em caso de falha</li>
-              <li><a href="/webhooks-docs" target="_blank" className="underline hover:text-blue-700 flex items-center gap-1">Ver documentação completa <ExternalLink className="w-3 h-3" /></a></li>
+              <li><a href="/api/docs/webhooks" target="_blank" className="underline hover:text-blue-700">Ver documentação completa →</a></li>
             </ul>
           </div>
         </div>
@@ -207,10 +207,17 @@ export default function WebhooksManagement() {
       {webhooks.length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <Webhook className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum webhook configurado ainda</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum webhook configurado</h3>
           <p className="text-gray-600 mb-4">
-            Clique em "Novo Webhook" no canto superior direito para criar o primeiro
+            Crie seu primeiro webhook para começar a receber notificações
           </p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            Criar Webhook
+          </button>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -390,12 +397,22 @@ export default function WebhooksManagement() {
 }
 
 // Create Webhook Modal
+// Eventos disponíveis no sistema
+const AVAILABLE_EVENTS = [
+  { id: 'received_message', label: 'Nova mensagem recebida', description: 'Quando paciente envia mensagem' },
+  { id: 'started_chat', label: 'Conversa iniciada', description: 'Nova conversa criada' },
+  { id: 'agent_entered', label: 'Agente assumiu', description: 'Agente entra na conversa' },
+  { id: 'closed_chat', label: 'Conversa finalizada', description: 'Atendimento encerrado' },
+  { id: 'created_patient', label: 'Paciente cadastrado', description: 'Novo contato criado' },
+  { id: 'left_queue', label: 'Saiu da fila', description: 'Chat sai da fila' },
+]
+
 function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     url: '',
-    events: ['first_message']
+    events: ['received_message', 'started_chat']
   })
   const [creating, setCreating] = useState(false)
   const [createdWebhook, setCreatedWebhook] = useState<Webhook | null>(null)
@@ -514,37 +531,31 @@ function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuc
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Eventos</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'first_message', label: '📨 Primeira mensagem' },
-                { value: 'message_received', label: '💬 Mensagem recebida' },
-                { value: 'conversation_started', label: '🆕 Conversa iniciada' },
-                { value: 'agent_joined', label: '👤 Atendente assumiu' },
-                { value: 'conversation_closed', label: '❌ Conversa encerrada' },
-                { value: 'patient_registered', label: '📋 Paciente cadastrado' },
-                { value: 'appointment_created', label: '📅 Agendamento criado' },
-                { value: 'bot_transferred', label: '🤖 Bot transferiu' },
-                { value: 'message_sent', label: '📤 Mensagem enviada' }
-              ].map(event => (
-                <label key={event.value} className="flex items-center gap-2 text-sm">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Eventos <span className="text-gray-500 text-xs">(selecione ao menos 1)</span>
+            </label>
+            <div className="space-y-2 max-h-64 overflow-y-auto p-3 bg-gray-50 rounded border">
+              {AVAILABLE_EVENTS.map((event) => (
+                <label key={event.id} className="flex items-start gap-3 p-2 hover:bg-white rounded transition-colors cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={formData.events.includes(event.value)}
+                    checked={formData.events.includes(event.id)}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setFormData({ ...formData, events: [...formData.events, event.value] })
+                        setFormData({ ...formData, events: [...formData.events, event.id] })
                       } else {
-                        setFormData({ ...formData, events: formData.events.filter(ev => ev !== event.value) })
+                        setFormData({ ...formData, events: formData.events.filter(ev => ev !== event.id) })
                       }
                     }}
-                    className="rounded"
+                    className="mt-1 rounded"
                   />
-                  <span>{event.label}</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-gray-900">{event.label}</div>
+                    <div className="text-xs text-gray-500">{event.description}</div>
+                  </div>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">Selecione quais eventos você deseja receber</p>
           </div>
 
           <div className="flex gap-3 pt-4">

@@ -40,12 +40,6 @@ async function checkInactiveConversations(timeoutMinutes: number) {
         const timeoutDate = new Date()
         timeoutDate.setMinutes(timeoutDate.getMinutes() - timeoutMinutes)
 
-        // #region agent log
-        const fs = require('fs');
-        const logPath = '/Users/kalebecaldas/Documents/cursor_projects/ZORAHAPP2-1/.cursor/debug.log';
-        fs.appendFileSync(logPath, JSON.stringify({location:'inactivityMonitor.ts:37',message:'checkInactiveConversations START',data:{now:now.toISOString(),timeoutDate:timeoutDate.toISOString(),timeoutMinutes},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');
-        // #endregion
-
         // Buscar conversas inativas (atribuídas a agente mas sem atividade recente)
         // ✅ IMPORTANTE: Usar lastUserActivity em vez de lastTimestamp
         // lastTimestamp é atualizado quando QUALQUER mensagem é enviada (agente ou paciente)
@@ -68,15 +62,6 @@ async function checkInactiveConversations(timeoutMinutes: number) {
         })
 
         // #region agent log
-        for (const conv of inactiveConversations) {
-            const lastTimestamp = conv.lastTimestamp ? new Date(conv.lastTimestamp) : null;
-            const lastUserActivity = conv.lastUserActivity ? new Date(conv.lastUserActivity) : null;
-            const diffLastTimestamp = lastTimestamp ? Math.round((now.getTime() - lastTimestamp.getTime()) / 60000) : null;
-            const diffLastUserActivity = lastUserActivity ? Math.round((now.getTime() - lastUserActivity.getTime()) / 60000) : null;
-            fs.appendFileSync(logPath, JSON.stringify({location:'inactivityMonitor.ts:71',message:'INACTIVE CONVERSATION FOUND',data:{conversationId:conv.id,phone:conv.phone,lastTimestamp:lastTimestamp?.toISOString(),lastUserActivity:lastUserActivity?.toISOString(),diffLastTimestamp,diffLastUserActivity,timeoutMinutes,now:now.toISOString(),timeoutDate:timeoutDate.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-        }
-        // #endregion
-
         if (inactiveConversations.length === 0) {
             return
         }
@@ -84,13 +69,6 @@ async function checkInactiveConversations(timeoutMinutes: number) {
         console.log(`⏰ Encontradas ${inactiveConversations.length} conversas inativas`)
 
         for (const conversation of inactiveConversations) {
-            // #region agent log
-            const lastTimestamp = conversation.lastTimestamp ? new Date(conversation.lastTimestamp) : null;
-            const lastUserActivity = conversation.lastUserActivity ? new Date(conversation.lastUserActivity) : null;
-            const diffLastTimestamp = lastTimestamp ? Math.round((now.getTime() - lastTimestamp.getTime()) / 60000) : null;
-            const diffLastUserActivity = lastUserActivity ? Math.round((now.getTime() - lastUserActivity.getTime()) / 60000) : null;
-            fs.appendFileSync(logPath, JSON.stringify({location:'inactivityMonitor.ts:85',message:'RETURNING CONVERSATION',data:{conversationId:conversation.id,phone:conversation.phone,lastTimestamp:lastTimestamp?.toISOString(),lastUserActivity:lastUserActivity?.toISOString(),diffLastTimestamp,diffLastUserActivity,timeoutMinutes},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');
-            // #endregion
             // Retornar para fila PRINCIPAL
             await prisma.conversation.update({
                 where: { id: conversation.id },

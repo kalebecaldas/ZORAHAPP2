@@ -522,7 +522,7 @@ model WebhookSubscription {
   description     String?
   url             String
   token           String    @unique
-  events          String[]  @default(["first_message"])
+  events          String[]  @default(["received_message", "started_chat"])
   isActive        Boolean   @default(true)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
