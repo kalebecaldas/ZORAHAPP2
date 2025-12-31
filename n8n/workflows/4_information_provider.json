@@ -1,0 +1,175 @@
+{
+  "name": "ℹ️ Information Provider Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "information",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "📨 Webhook Start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tentar fallbacks simples primeiro (economia de GPT)\\nconst message = $json.message.toLowerCase();\\n\\nconst fallbacks = {\\n  horario: {\\n    patterns: ['horário', 'horario', 'funciona', 'aberto', 'fecha'],\\n    response: '🕐 **Horários de Atendimento:**\\\\n\\\\n📍 Vieiralves: Segunda a Sexta, 8h às 21h | Sábado, 8h às 12h\\\\n📍 São José: Segunda a Sexta, 8h às 21h | Sábado, 8h às 12h'\\n  },\\n  localizacao: {\\n    patterns: ['endereço', 'endereco', 'fica', 'localização', 'localizacao', 'onde'],\\n    response: '📍 **Nossas Unidades:**\\\\n\\\\n🏥 Vieiralves\\\\nRua Rio Içá, 850 - Vieiralves\\\\nTelefone: (92) 3584-2864\\\\n\\\\n🏥 São José\\\\nAv. das Acácias, 123 - São José\\\\nTelefone: (92) 3584-2865'\\n  },\\n  convenios: {\\n    patterns: ['convênio', 'convenio', 'plano', 'aceita'],\\n    response: '🏥 **Convênios Aceitos:**\\\\n\\\\n✅ Bradesco\\\\n✅ SulAmérica\\\\n✅ Mediservice\\\\n✅ Unimed\\\\n✅ Amil\\\\n\\\\nAtendemos também particular!'\\n  }\\n};\\n\\nfor (const [key, fallback] of Object.entries(fallbacks)) {\\n  if (fallback.patterns.some(p => message.includes(p))) {\\n    return {\\n      json: {\\n        usedFallback: true,\\n        response: fallback.response,\\n        confidence: 0.95\\n      }\\n    };\\n  }\\n}\\n\\nreturn {\\n  json: {\\n    usedFallback: false,\\n    message: $json.message\\n  }\\n};"
+      },
+      "id": "try-fallback",
+      "name": "⚡ Tentar Fallback Simples",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{"value1": "={{$json.usedFallback}}", "value2": true}]
+        }
+      },
+      "id": "has-fallback",
+      "name": "✅ Tem Fallback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{`cache:info:${$json.message.toLowerCase().trim()}`}}"
+      },
+      "id": "check-cache",
+      "name": "💾 Verificar Cache",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "redis": {"id": "1"}
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [{"value1": "={{$json.value}}", "operation": "isNotEmpty"}]
+        }
+      },
+      "id": "has-cache",
+      "name": "✅ Tem Cache?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Você é a Zorah, assistente virtual da clínica.\\n\\n**Dados da Clínica:**\\n\\n**Procedimentos:**\\n{{$json.clinic.procedures}}\\n\\n**Convênios:**\\n{{$json.clinic.insuranceCompanies}}\\n\\n**Unidades:**\\n1. Vieiralves - (92) 3584-2864\\n   Rua Rio Içá, 850\\n   Horário: Seg-Sex 8h-21h, Sáb 8h-12h\\n\\n2. São José - (92) 3584-2865\\n   Av. das Acácias, 123\\n   Horário: Seg-Sex 8h-21h, Sáb 8h-12h\\n\\n**REGRAS IMPORTANTES:**\\n1. SEMPRE pergunte a UNIDADE antes de fornecer valores ou informações específicas\\n2. Cada unidade pode ter valores e horários diferentes\\n3. Seja natural e conversacional, como o ChatGPT\\n4. Evite listas quando possível\\n5. Use emojis com moderação\\n6. Sempre pergunte: \\"Em qual unidade você gostaria de ser atendido?\\"\\n\\n**Contexto da conversa:**\\nUnidade mencionada: {{$json.selectedClinic}}\\nProcedimento mencionado: {{$json.selectedProcedure}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 400
+        }
+      },
+      "id": "gpt-information",
+      "name": "🤖 GPT: Gerar Informação",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1250, 500],
+      "credentials": {"openAiApi": {"id": "1"}}
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{`cache:info:${$json.message.toLowerCase().trim()}`}}",
+        "value": "={{$json.response}}",
+        "ttl": 86400
+      },
+      "id": "save-cache",
+      "name": "💾 Salvar no Cache (24h)",
+      "type": "n8n-nodes-base.redis",
+      "typeVersion": 1,
+      "position": [1450, 500],
+      "credentials": {"redis": {"id": "1"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Monitorar custo do GPT\\nconst model = 'gpt-4o';\\nconst tokens = $json.usage?.total_tokens || 0;\\n\\n// Preços aproximados (USD por 1k tokens)\\nconst prices = {\\n  'gpt-4o': { input: 0.005, output: 0.015 },\\n  'gpt-4o-mini': { input: 0.00015, output: 0.0006 }\\n};\\n\\nconst cost = (tokens / 1000) * prices[model].output;\\n\\nreturn {\\n  json: {\\n    ...$json,\\n    monitoring: {\\n      model,\\n      tokens,\\n      estimatedCost: cost.toFixed(6),\\n      timestamp: new Date().toISOString()\\n    }\\n  }\\n};"
+      },
+      "id": "monitor-cost",
+      "name": "💰 Monitorar Custo GPT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1450, 600]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/analytics/gpt-usage",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "model", "value": "={{$json.monitoring.model}}"},
+            {"name": "tokens", "value": "={{$json.monitoring.tokens}}"},
+            {"name": "cost", "value": "={{$json.monitoring.estimatedCost}}"},
+            {"name": "usedCache", "value": "={{$json.usedCache || false}}"},
+            {"name": "usedFallback", "value": "={{$json.usedFallback || false}}"}
+          ]
+        }
+      },
+      "id": "log-analytics",
+      "name": "📊 Registrar Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1650, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatar resposta final\\nreturn {\\n  json: {\\n    conversationId: $json.conversationId,\\n    message: $json.response || $json.value,\\n    intent: 'INFORMACAO',\\n    action: 'continue',\\n    confidence: $json.confidence || 0.90,\\n    usedCache: $json.usedCache || false,\\n    usedFallback: $json.usedFallback || false,\\n    cost: $json.monitoring?.estimatedCost || 0,\\n    success: true\\n  }\\n};"
+      },
+      "id": "format-response",
+      "name": "📦 Formatar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "webhook-response",
+      "name": "📤 Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Start": {"main": [[{"node": "Tentar Fallback Simples"}]]},
+    "Tentar Fallback Simples": {"main": [[{"node": "Tem Fallback?"}]]},
+    "Tem Fallback?": {"main": [[{"node": "Formatar Resposta"}], [{"node": "Verificar Cache"}]]},
+    "Verificar Cache": {"main": [[{"node": "Tem Cache?"}]]},
+    "Tem Cache?": {"main": [[{"node": "Formatar Resposta"}], [{"node": "GPT: Gerar Informação"}]]},
+    "GPT: Gerar Informação": {"main": [[{"node": "Salvar no Cache (24h)"}, {"node": "Monitorar Custo GPT"}]]},
+    "Salvar no Cache (24h)": {"main": [[{"node": "Registrar Analytics"}]]},
+    "Monitorar Custo GPT": {"main": [[{"node": "Registrar Analytics"}]]},
+    "Registrar Analytics": {"main": [[{"node": "Formatar Resposta"}]]},
+    "Formatar Resposta": {"main": [[{"node": "Response"}]]}
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1",
+  "id": "information-provider-flow",
+  "tags": ["information", "gpt", "cache", "optimization"]
+}

@@ -1,0 +1,165 @@
+{
+  "name": "📝 Patient Registration Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "patient-registration",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "📨 Webhook Start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Você é a Zorah, assistente virtual da clínica.\\n\\n**Tarefa**: Coletar dados do paciente de forma natural e amigável.\\n\\n**Campos a coletar (um por vez):**\\n1. Nome completo\\n2. CPF (formato: 000.000.000-00)\\n3. Data de nascimento (DD/MM/AAAA)\\n4. Telefone celular\\n5. E-mail\\n6. CEP (para buscar endereço automaticamente)\\n7. Número da residência\\n8. Complemento (opcional)\\n9. Convênio (se tiver)\\n\\n**Regras:**\\n- Colete um campo por vez\\n- Valide cada campo antes de prosseguir\\n- Seja natural e conversacional\\n- Se o paciente fornecer múltiplos dados de uma vez, aceite todos\\n- Use emojis com moderação\\n\\n**Estado atual:**\\n{{$json.collectedFields}}\\n\\n**Próximo campo:**\\n{{$json.nextField}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 250,
+          "jsonResponse": true
+        },
+        "jsonOutput": "{\\n  \\\"field\\\": \\\"nome | cpf | nascimento | telefone | email | cep | numero | complemento | convenio\\\",\\n  \\\"value\\\": \\\"valor extraído\\\",\\n  \\\"isValid\\\": true,\\n  \\\"message\\\": \\\"Mensagem amigável\\\",\\n  \\\"needsMoreInfo\\\": false,\\n  \\\"allFieldsCollected\\\": false\\n}"
+      },
+      "id": "gpt-collect-field",
+      "name": "🤖 GPT: Coletar Campo",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "openAiApi": {"id": "1"}
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{"value1": "={{$json.isValid}}", "value2": true}]
+        }
+      },
+      "id": "validate-field",
+      "name": "✅ Campo Válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar campos específicos\\nconst field = $json.field;\\nconst value = $json.value;\\n\\nlet isValid = true;\\nlet errorMessage = '';\\n\\nswitch(field) {\\n  case 'cpf':\\n    // Validar CPF\\n    const cpfRegex = /^\\\\d{3}\\\\.\\\\d{3}\\\\.\\\\d{3}-\\\\d{2}$/;\\n    isValid = cpfRegex.test(value);\\n    errorMessage = 'CPF inválido. Use o formato: 000.000.000-00';\\n    break;\\n    \\n  case 'email':\\n    const emailRegex = /^[^\\\\s@]+@[^\\\\s@]+\\\\.[^\\\\s@]+$/;\\n    isValid = emailRegex.test(value);\\n    errorMessage = 'E-mail inválido';\\n    break;\\n    \\n  case 'nascimento':\\n    const dateRegex = /^\\\\d{2}\\\\/\\\\d{2}\\\\/\\\\d{4}$/;\\n    isValid = dateRegex.test(value);\\n    errorMessage = 'Data inválida. Use o formato: DD/MM/AAAA';\\n    break;\\n    \\n  case 'cep':\\n    const cepRegex = /^\\\\d{5}-\\\\d{3}$/;\\n    isValid = cepRegex.test(value);\\n    errorMessage = 'CEP inválido. Use o formato: 00000-000';\\n    break;\\n}\\n\\nreturn {\\n  json: {\\n    ...$json,\\n    validated: isValid,\\n    error: isValid ? null : errorMessage\\n  }\\n};"
+        },
+        "id": "specific-validation",
+        "name": "🔍 Validação Específica",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 1,
+        "position": [850, 250]
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://viacep.com.br/ws/={{$json.value}}/json/",
+        "options": {}
+      },
+      "id": "fetch-address-by-cep",
+      "name": "🏠 Buscar Endereço (ViaCEP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Armazenar campo coletado\\nconst storage = $('Get Storage').first().json || { fields: {} };\\nconst field = $json.field;\\nconst value = $json.value;\\n\\nstorage.fields[field] = value;\\n\\n// Verificar se todos os campos foram coletados\\nconst requiredFields = ['nome', 'cpf', 'nascimento', 'telefone', 'email', 'cep', 'numero'];\\nconst collectedFields = Object.keys(storage.fields);\\nconst allCollected = requiredFields.every(f => collectedFields.includes(f));\\n\\nreturn {\\n  json: {\\n    ...storage,\\n    allFieldsCollected: allCollected,\\n    nextField: !allCollected ? requiredFields.find(f => !collectedFields.includes(f)) : null\\n  }\\n};"
+      },
+      "id": "store-field",
+      "name": "💾 Armazenar Campo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{"value1": "={{$json.allFieldsCollected}}", "value2": true}]
+        }
+      },
+      "id": "all-fields-collected",
+      "name": "✅ Todos os Campos Coletados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/patients",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "name", "value": "={{$json.fields.nome}}"},
+            {"name": "cpf", "value": "={{$json.fields.cpf}}"},
+            {"name": "phone", "value": "={{$json.fields.telefone}}"},
+            {"name": "email", "value": "={{$json.fields.email}}"},
+            {"name": "birthDate", "value": "={{$json.fields.nascimento}}"},
+            {"name": "address", "value": "={{$json.fields.cep}} - {{$json.fields.numero}} {{$json.fields.complemento || ''}}"},
+            {"name": "insuranceCompany", "value": "={{$json.fields.convenio || ''}}"}
+          ]
+        }
+      },
+      "id": "create-patient-api",
+      "name": "💾 API: Criar Paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1450, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\\n  json: {\\n    success: true,\\n    patient: $json,\\n    message: `✅ Cadastro concluído com sucesso!\\\\n\\\\nOlá ${$json.name}, seja bem-vindo(a) à ZoraH! 🎉\\\\n\\\\nSeus dados foram salvos com segurança. Agora você já pode agendar suas consultas.\\\\n\\\\nComo posso ajudar?`\\n  }\\n};"
+      },
+      "id": "success-message",
+      "name": "✨ Mensagem de Sucesso",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1650, 250]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "webhook-response",
+      "name": "📤 Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Start": {"main": [[{"node": "GPT: Coletar Campo"}]]},
+    "GPT: Coletar Campo": {"main": [[{"node": "Campo Válido?"}]]},
+    "Campo Válido?": {"main": [[{"node": "Validação Específica"}, {"node": "Buscar Endereço (ViaCEP)"}]]},
+    "Validação Específica": {"main": [[{"node": "Armazenar Campo"}]]},
+    "Buscar Endereço (ViaCEP)": {"main": [[{"node": "Armazenar Campo"}]]},
+    "Armazenar Campo": {"main": [[{"node": "Todos os Campos Coletados?"}]]},
+    "Todos os Campos Coletados?": {"main": [[{"node": "API: Criar Paciente"}], [{"node": "GPT: Coletar Campo"}]]},
+    "API: Criar Paciente": {"main": [[{"node": "Mensagem de Sucesso"}]]},
+    "Mensagem de Sucesso": {"main": [[{"node": "Webhook Response"}]]}
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "1",
+  "id": "patient-registration-flow",
+  "tags": ["registration", "patient", "data-collection"]
+}
