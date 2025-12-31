@@ -1,0 +1,511 @@
+{
+  "name": "ZoraH Bot - Multi AI Provider",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zorahbot",
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-start",
+      "name": "Webhook Start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 1000]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const data = $input.item.json.body || $input.item.json;\nreturn [{\n  json: {\n    message: data.message || '',\n    phone: data.phone || '',\n    conversationId: data.conversationId || '',\n    patient: data.patient || {},\n    context: data.context || {},\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "extract-data",
+      "name": "Extract Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 1000]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/conversations/{{$json.conversationId}}/context",
+        "authentication": "none"
+      },
+      "id": "get-context",
+      "name": "Get Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 950]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/clinic/data",
+        "authentication": "none"
+      },
+      "id": "get-clinic",
+      "name": "Get Clinic Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 1050]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const baseData = $input.first().json;\nconst contextData = $input.all()[1]?.json || {};\nconst clinicData = $input.all()[2]?.json || {};\n\nconst systemPrompt = `Você é Zorah, assistente virtual da clínica.\n\nDados disponíveis:\n- Procedimentos: ${JSON.stringify(clinicData.procedures || [])}\n- Convênios: ${JSON.stringify(clinicData.insuranceCompanies || [])}\n- Unidades: Vieiralves, São José\n\nRegras importantes:\n1. SEMPRE pergunte a UNIDADE antes de fornecer valores\n2. Seja natural e conversacional\n3. Identifique a intenção do paciente\n\nIntenções possíveis:\n- INFORMACAO_VALORES: Quer saber preços\n- INFORMACAO_CONVENIOS: Quer saber convênios aceitos\n- INFORMACAO_LOCALIZACAO: Quer endereço/horários\n- EXPLICACAO_PROCEDIMENTO: Quer detalhes de procedimento\n- AGENDAR: Quer marcar consulta\n- FALAR_ATENDENTE: Quer falar com humano\n\nPaciente: ${baseData.patient?.name || 'Não identificado'}\nHistórico: ${JSON.stringify(contextData.history || [])}`;\n\nreturn [{\n  json: {\n    ...baseData,\n    systemPrompt,\n    clinic: clinicData,\n    history: contextData.history || [],\n    currentIntent: contextData.currentIntent,\n    workflowContext: contextData.workflowContext || {}\n  }\n}];"
+      },
+      "id": "merge-context",
+      "name": "Merge Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AI_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{$env.AI_API_HEADER_NAME || 'Authorization'}}",
+              "value": "={{$env.AI_API_HEADER_VALUE || 'Bearer ' + $env.AI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $env.AI_MODEL || 'gpt-4o',\n  messages: [\n    { role: 'system', content: $json.systemPrompt },\n    { role: 'user', content: $json.message + '\\n\\nResponda em JSON: {\"intent\": \"INFORMACAO_VALORES|INFORMACAO_CONVENIOS|INFORMACAO_LOCALIZACAO|EXPLICACAO_PROCEDIMENTO|AGENDAR|FALAR_ATENDENTE\", \"confidence\": 0.95, \"response\": \"sua resposta natural\", \"entities\": {\"procedimento\": \"\", \"clinica\": \"\"}}' }\n  ],\n  temperature: 0.7,\n  max_tokens: 500\n}) }}"
+      },
+      "id": "ai-classifier",
+      "name": "AI Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 1000]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "try {\n  let aiResponse = $input.item.json;\n  \n  // Suporta diferentes formatos de resposta (OpenAI, Claude, Gemini, etc.)\n  let content = '';\n  \n  if (aiResponse.choices && aiResponse.choices[0]) {\n    // Formato OpenAI\n    content = aiResponse.choices[0].message?.content || aiResponse.choices[0].text || '';\n  } else if (aiResponse.content) {\n    // Formato Anthropic/Claude\n    if (Array.isArray(aiResponse.content)) {\n      content = aiResponse.content[0]?.text || '';\n    } else {\n      content = aiResponse.content;\n    }\n  } else if (aiResponse.candidates) {\n    // Formato Google Gemini\n    content = aiResponse.candidates[0]?.content?.parts?.[0]?.text || '';\n  } else if (aiResponse.response) {\n    // Formato genérico\n    content = aiResponse.response;\n  } else {\n    content = JSON.stringify(aiResponse);\n  }\n  \n  // Parse JSON da resposta\n  const parsed = typeof content === 'string' ? JSON.parse(content) : content;\n  \n  return [{\n    json: {\n      ...$input.item.json,\n      intent: parsed.intent || 'CONVERSA',\n      response: parsed.response || 'Como posso ajudar?',\n      confidence: parsed.confidence || 0.8,\n      entities: parsed.entities || {},\n      needsMoreInfo: parsed.needsMoreInfo || false,\n      aiProvider: $env.AI_PROVIDER || 'custom'\n    }\n  }];\n} catch (error) {\n  // Fallback se o AI falhar\n  const message = ($input.item.json.message || '').toLowerCase();\n  let intent = 'CONVERSA';\n  let response = 'Olá! Como posso ajudar?';\n  \n  if (message.includes('agendar') || message.includes('marcar')) {\n    intent = 'AGENDAR';\n    response = 'Vou te ajudar a agendar!';\n  } else if (message.includes('valor') || message.includes('quanto')) {\n    intent = 'INFORMACAO_VALORES';\n    response = 'Qual unidade? Vieiralves ou São José?';\n  } else if (message.includes('convênio') || message.includes('convenio')) {\n    intent = 'INFORMACAO_CONVENIOS';\n    response = 'Aceitamos: Bradesco, SulAmérica, Mediservice, Unimed, Amil';\n  }\n  \n  return [{\n    json: {\n      ...$input.item.json,\n      intent,\n      response,\n      confidence: 0.5,\n      entities: {},\n      aiProvider: 'fallback',\n      error: error.message\n    }\n  }];\n}"
+      },
+      "id": "parse-ai",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "valores-cond",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "INFORMACAO_VALORES",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "check-valores",
+      "name": "Valores?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "convenios-cond",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "INFORMACAO_CONVENIOS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "check-convenios",
+      "name": "Convenios?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 850]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "agendar-cond",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "AGENDAR",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "check-agendar",
+      "name": "Agendar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "human-cond",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "FALAR_ATENDENTE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "check-human",
+      "name": "Falar Humano?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 1150]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/patients/search?phone={{$json.phone}}",
+        "authentication": "none"
+      },
+      "id": "search-patient",
+      "name": "Search Patient",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "patient-found-cond",
+              "leftValue": "={{ $json.id ? true : false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "patient-found",
+      "name": "Patient Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1850, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AI_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{$env.AI_API_HEADER_NAME || 'Authorization'}}",
+              "value": "={{$env.AI_API_HEADER_VALUE || 'Bearer ' + $env.AI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $env.AI_MODEL || 'gpt-4o',\n  messages: [\n    { role: 'system', content: 'Colete dados do paciente: Nome, CPF, Data nascimento, E-mail, CEP, Endereço. Pergunte um campo por vez de forma natural.' },\n    { role: 'user', content: $json.message }\n  ],\n  temperature: 0.7,\n  max_tokens: 250\n}) }}"
+      },
+      "id": "ai-collect",
+      "name": "AI Collect Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.AI_API_URL}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "={{$env.AI_API_HEADER_NAME || 'Authorization'}}",
+              "value": "={{$env.AI_API_HEADER_VALUE || 'Bearer ' + $env.AI_API_KEY}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: $env.AI_MODEL || 'gpt-4o',\n  messages: [\n    { role: 'system', content: 'Ajude a agendar consulta. Pergunte: 1) Procedimento 2) Unidade (Vieiralves/São José) 3) Convênio 4) Data 5) Turno. Seja natural.' },\n    { role: 'user', content: $json.message }\n  ],\n  temperature: 0.8,\n  max_tokens: 400\n}) }}"
+      },
+      "id": "ai-scheduling",
+      "name": "AI Scheduling",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/appointments/check-availability",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ date: '2025-12-30', time: '10:00' }) }}"
+      },
+      "id": "check-availability",
+      "name": "Check Availability",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "avail-cond",
+              "leftValue": "={{ $json.available !== false }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "is-available",
+      "name": "Available?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2450, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/appointments",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ patientId: $json.patient?.id, status: 'PENDING' }) }}"
+      },
+      "id": "create-appointment",
+      "name": "Create Appointment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2650, 850]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/conversations/{{$json.conversationId}}/transfer",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ queue: 'PRINCIPAL', reason: 'Solicitou atendimento humano' }) }}"
+      },
+      "id": "transfer-human",
+      "name": "Transfer to Human",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 1150]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "let responseText = $input.item.json.response || $input.item.json.message || 'Processado';\n\n// Se veio de AI, extrair conteúdo\nif ($input.item.json.choices) {\n  responseText = $input.item.json.choices[0]?.message?.content || responseText;\n} else if ($input.item.json.content) {\n  if (Array.isArray($input.item.json.content)) {\n    responseText = $input.item.json.content[0]?.text || responseText;\n  } else {\n    responseText = $input.item.json.content;\n  }\n}\n\nreturn [{\n  json: {\n    conversationId: $input.item.json.conversationId,\n    message: responseText,\n    intent: $input.item.json.intent,\n    entities: $input.item.json.entities || {},\n    success: true,\n    timestamp: new Date().toISOString(),\n    aiProvider: $input.item.json.aiProvider\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2850, 1000]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.ZORAHAPP_API_URL}}/webhook/n8n-response",
+        "authentication": "none",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "send-to-system",
+      "name": "Send to System",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3050, 1000]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "webhook-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [3250, 1000]
+    }
+  ],
+  "connections": {
+    "Webhook Start": {
+      "main": [[{"node": "Extract Data", "type": "main", "index": 0}]]
+    },
+    "Extract Data": {
+      "main": [[
+        {"node": "Get Context", "type": "main", "index": 0},
+        {"node": "Get Clinic Data", "type": "main", "index": 0}
+      ]]
+    },
+    "Get Context": {
+      "main": [[{"node": "Merge Context", "type": "main", "index": 0}]]
+    },
+    "Get Clinic Data": {
+      "main": [[{"node": "Merge Context", "type": "main", "index": 0}]]
+    },
+    "Merge Context": {
+      "main": [[{"node": "AI Classifier", "type": "main", "index": 0}]]
+    },
+    "AI Classifier": {
+      "main": [[{"node": "Parse AI Response", "type": "main", "index": 0}]]
+    },
+    "Parse AI Response": {
+      "main": [[
+        {"node": "Valores?", "type": "main", "index": 0},
+        {"node": "Convenios?", "type": "main", "index": 0},
+        {"node": "Agendar?", "type": "main", "index": 0},
+        {"node": "Falar Humano?", "type": "main", "index": 0}
+      ]]
+    },
+    "Valores?": {
+      "main": [
+        [{"node": "Format Response", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Convenios?": {
+      "main": [
+        [{"node": "Format Response", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Agendar?": {
+      "main": [
+        [{"node": "Search Patient", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Falar Humano?": {
+      "main": [
+        [{"node": "Transfer to Human", "type": "main", "index": 0}],
+        []
+      ]
+    },
+    "Search Patient": {
+      "main": [[{"node": "Patient Found?", "type": "main", "index": 0}]]
+    },
+    "Patient Found?": {
+      "main": [
+        [{"node": "AI Scheduling", "type": "main", "index": 0}],
+        [{"node": "AI Collect Data", "type": "main", "index": 0}]
+      ]
+    },
+    "AI Collect Data": {
+      "main": [[{"node": "Format Response", "type": "main", "index": 0}]]
+    },
+    "AI Scheduling": {
+      "main": [[{"node": "Check Availability", "type": "main", "index": 0}]]
+    },
+    "Check Availability": {
+      "main": [[{"node": "Available?", "type": "main", "index": 0}]]
+    },
+    "Available?": {
+      "main": [
+        [{"node": "Create Appointment", "type": "main", "index": 0}],
+        [{"node": "Format Response", "type": "main", "index": 0}]
+      ]
+    },
+    "Create Appointment": {
+      "main": [[{"node": "Format Response", "type": "main", "index": 0}]]
+    },
+    "Transfer to Human": {
+      "main": [[{"node": "Format Response", "type": "main", "index": 0}]]
+    },
+    "Format Response": {
+      "main": [[{"node": "Send to System", "type": "main", "index": 0}]]
+    },
+    "Send to System": {
+      "main": [[{"node": "Response", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-12-29T00:00:00.000Z",
+  "versionId": "4.0.0"
+}
