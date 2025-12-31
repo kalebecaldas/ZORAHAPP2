@@ -1,0 +1,468 @@
+{
+  "name": "ZoraH Bot - Complete Unified",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zorahbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "Webhook Receber",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 1000],
+      "webhookId": "zorahbot-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.item.json.body.message;\nconst phone = $input.item.json.body.phone;\nconst conversationId = $input.item.json.body.conversationId;\nconst patientData = $input.item.json.body.patient || {};\nconst contextData = $input.item.json.body.context || {};\n\nreturn {\n  json: {\n    message,\n    phone,\n    conversationId,\n    patient: patientData,\n    context: contextData,\n    timestamp: new Date().toISOString(),\n    hasPatient: !!patientData.id,\n    patientName: patientData.name,\n    registrationComplete: patientData.registrationComplete || false\n  }\n};"
+      },
+      "id": "extract-data",
+      "name": "Extrair Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/conversations/{{$json.conversationId}}/context",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "load-context",
+      "name": "Carregar Contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/clinic/data",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "load-clinic-data",
+      "name": "Dados Clinica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 1150]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseData = $('Extrair Dados').first().json;\nconst contextData = $('Carregar Contexto').first().json;\nconst clinicData = $('Dados Clinica').first().json;\n\nconst systemPrompt = `Você é a Zorah, assistente virtual da clínica.\n\n**DADOS DA CLÍNICA:**\nProcedimentos: ${JSON.stringify(clinicData.procedures || [])}\nConvênios: ${JSON.stringify(clinicData.insuranceCompanies || [])}\nUnidades: ${JSON.stringify(clinicData.locations || [])}\n\n**REGRAS:**\n1. SEMPRE pergunte a UNIDADE antes de fornecer valores\n2. Seja natural e conversacional\n3. Identifique a intenção do paciente\n\n**INTENÇÕES:**\n- INFORMACAO: Valores, procedimentos, convênios\n- AGENDAR: Marcar consulta\n- CANCELAR: Cancelar agendamento\n- RECLAMACAO: Transferir para humano\n\nPaciente: ${baseData.patientName || 'Não identificado'}\nHistórico: ${JSON.stringify(contextData.history || [])}`;\n\nreturn {\n  json: {\n    ...baseData,\n    systemPrompt,\n    history: contextData.history || [],\n    clinic: clinicData,\n    currentIntent: contextData.currentIntent,\n    workflowContext: contextData.workflowContext || {}\n  }\n};"
+      },
+      "id": "merge-context",
+      "name": "Mesclar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 1000]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": "gpt-4o",
+        "messages": {
+          "messageValues": [
+            {
+              "role": "system",
+              "content": "={{$json.systemPrompt}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}\n\nResponda em JSON:\n{\"intent\":\"INFORMACAO|AGENDAR|CANCELAR|RECLAMACAO\",\"confidence\":0.95,\"response\":\"sua resposta natural\",\"entities\":{\"procedimento\":\"\",\"clinica\":\"\"}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        },
+        "jsonOutput": true
+      },
+      "id": "gpt-classifier",
+      "name": "GPT Classificar",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.3,
+      "position": [1050, 1000],
+      "credentials": {
+        "openAiApi": {
+          "id": "{{$credentials.openAiApi.id}}",
+          "name": "OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "info-condition",
+              "leftValue": "={{$json.intent}}",
+              "rightValue": "INFORMACAO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "intent-info",
+      "name": "Check Info",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "schedule-condition",
+              "leftValue": "={{$json.intent}}",
+              "rightValue": "AGENDAR",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "intent-schedule",
+      "name": "Check Agendar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "cancel-condition",
+              "leftValue": "={{$json.intent}}",
+              "rightValue": "CANCELAR",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "intent-cancel",
+      "name": "Check Cancelar",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 1200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "id": "complaint-condition",
+              "leftValue": "={{$json.intent}}",
+              "rightValue": "RECLAMACAO",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combineOperation": "any"
+        }
+      },
+      "id": "intent-complaint",
+      "name": "Check Reclamacao",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 1500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $json.message.toLowerCase();\n\nconst fallbacks = {\n  horario: {\n    patterns: ['horário', 'horario', 'funciona', 'aberto'],\n    response: '🕐 Horários: Seg-Sex 8h-21h | Sáb 8h-12h'\n  },\n  localizacao: {\n    patterns: ['endereço', 'endereco', 'fica', 'onde'],\n    response: '📍 Vieiralves: Rua Rio Içá, 850 | São José: Av. Acácias, 123'\n  },\n  convenios: {\n    patterns: ['convênio', 'convenio', 'plano'],\n    response: '🏥 Convênios: Bradesco, SulAmérica, Mediservice, Unimed, Amil'\n  }\n};\n\nfor (const [key, fallback] of Object.entries(fallbacks)) {\n  if (fallback.patterns.some(p => message.includes(p))) {\n    return {\n      json: {\n        ...$json,\n        usedFallback: true,\n        response: fallback.response,\n        confidence: 0.95\n      }\n    };\n  }\n}\n\nreturn { json: { ...$json, usedFallback: false } };"
+      },
+      "id": "try-fallback",
+      "name": "Try Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.usedFallback}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "has-fallback",
+      "name": "Has Fallback",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1650, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseContext = $('Mesclar Contexto').first().json;\n\nreturn {\n  json: {\n    ...baseContext,\n    ...$json,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "format-response",
+      "name": "Formatar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2850, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/webhook/n8n-response",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{JSON.stringify($json)}}"
+      },
+      "id": "send-to-system",
+      "name": "Enviar ao Sistema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3050, 1000]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "webhook-response",
+      "name": "Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 1000]
+    }
+  ],
+  "connections": {
+    "Webhook Receber": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Carregar Contexto",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Dados Clinica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Mesclar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados Clinica": {
+      "main": [
+        [
+          {
+            "node": "Mesclar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mesclar Contexto": {
+      "main": [
+        [
+          {
+            "node": "GPT Classificar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT Classificar": {
+      "main": [
+        [
+          {
+            "node": "Check Info",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Agendar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Cancelar",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Reclamacao",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Info": {
+      "main": [
+        [
+          {
+            "node": "Try Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Try Fallback": {
+      "main": [
+        [
+          {
+            "node": "Has Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Fallback": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Agendar": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Cancelar": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Reclamacao": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Enviar ao Sistema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar ao Sistema": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1.0",
+  "id": "zorahbot-unified-fixed",
+  "meta": {
+    "instanceId": "zorahapp"
+  },
+  "tags": []
+}
