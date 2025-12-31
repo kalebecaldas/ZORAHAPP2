@@ -1,0 +1,1010 @@
+{
+  "name": "🤖 ZoraH Bot Intelligence - Complete Unified Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zorahbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "📨 Webhook: Receber Mensagem",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 1000],
+      "webhookId": "zorahbot-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $input.item.json.body.message;\nconst phone = $input.item.json.body.phone;\nconst conversationId = $input.item.json.body.conversationId;\nconst patientData = $input.item.json.body.patient || {};\nconst contextData = $input.item.json.body.context || {};\n\nreturn {\n  json: {\n    message,\n    phone,\n    conversationId,\n    patient: patientData,\n    context: contextData,\n    timestamp: new Date().toISOString(),\n    hasPatient: !!patientData.id,\n    patientName: patientData.name,\n    registrationComplete: patientData.registrationComplete || false\n  }\n};"
+      },
+      "id": "extract-data",
+      "name": "🔍 Extrair Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/conversations/{{$json.conversationId}}/context",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        }
+      },
+      "id": "load-context",
+      "name": "📚 Carregar Contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [650, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/clinic/data",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        }
+      },
+      "id": "load-clinic-data",
+      "name": "🏥 Dados da Clínica",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [650, 1150]
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseData = $('Extrair Dados').first().json;\nconst contextData = $('Carregar Contexto').first().json;\nconst clinicData = $('Dados da Clínica').first().json;\n\nconst systemPrompt = `Você é a Zorah, assistente virtual da clínica.\n\n**DADOS DA CLÍNICA:**\n\nProcedimentos: ${JSON.stringify(clinicData.procedures || [])}\nConvênios: ${JSON.stringify(clinicData.insuranceCompanies || [])}\nUnidades: ${JSON.stringify(clinicData.locations || [])}\n\n**REGRAS IMPORTANTES:**\n1. SEMPRE pergunte a UNIDADE antes de fornecer valores\n2. Seja natural e conversacional como ChatGPT\n3. Use emojis com moderação\n4. Identifique a intenção do paciente\n\n**INTENÇÕES POSSÍVEIS:**\n- INFORMACAO: Quer saber sobre valores, procedimentos, convênios, localização\n- AGENDAR: Quer marcar consulta/sessão\n- CANCELAR: Quer cancelar agendamento\n- REAGENDAR: Quer mudar data/horário\n- RECLAMACAO: Está insatisfeito\n- CONVERSA_LIVRE: Conversa casual\n\n**CONTEXTO DA CONVERSA:**\nPaciente: ${baseData.patientName || 'Não identificado'}\nHistórico: ${JSON.stringify(contextData.history || [])}`;\n\nreturn {\n  json: {\n    ...baseData,\n    systemPrompt,\n    history: contextData.history || [],\n    clinic: clinicData,\n    currentIntent: contextData.currentIntent,\n    workflowContext: contextData.workflowContext || {}\n  }\n};"
+      },
+      "id": "merge-context",
+      "name": "🔗 Mesclar Contexto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [850, 1000]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{$json.systemPrompt}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 500
+        },
+        "text": "{\"intent\":\"INFORMACAO|AGENDAR|CANCELAR|REAGENDAR|RECLAMACAO|CONVERSA_LIVRE\",\"sentiment\":\"positive|neutral|negative\",\"confidence\":0.95,\"suggestedAction\":\"continue|transfer_human|start_workflow|collect_data\",\"entities\":{\"procedimento\":\"\",\"convenio\":\"\",\"clinica\":\"\",\"data\":\"\",\"horario\":\"\"},\"response\":\"Mensagem natural e amigável\"}"
+      },
+      "id": "gpt-classifier",
+      "name": "🧠 GPT: Classificar Intenção",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1050, 1000],
+      "credentials": {
+        "openAiApi": {
+          "id": "1",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.intent}}",
+              "operation": "equals",
+              "value2": "INFORMACAO"
+            }
+          ]
+        }
+      },
+      "id": "intent-info",
+      "name": "ℹ️ INFORMAÇÃO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.intent}}",
+              "operation": "equals",
+              "value2": "AGENDAR"
+            }
+          ]
+        }
+      },
+      "id": "intent-schedule",
+      "name": "📅 AGENDAR?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.intent}}",
+              "operation": "equals",
+              "value2": "CANCELAR"
+            }
+          ]
+        }
+      },
+      "id": "intent-cancel",
+      "name": "❌ CANCELAR?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 1200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.intent}}",
+              "operation": "equals",
+              "value2": "RECLAMACAO"
+            }
+          ]
+        }
+      },
+      "id": "intent-complaint",
+      "name": "⚠️ RECLAMAÇÃO?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 1500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $json.message.toLowerCase();\n\nconst fallbacks = {\n  horario: {\n    patterns: ['horário', 'horario', 'funciona', 'aberto', 'fecha'],\n    response: '🕐 **Horários:**\\n\\n📍 Vieiralves: Seg-Sex 8h-21h | Sáb 8h-12h\\n📍 São José: Seg-Sex 8h-21h | Sáb 8h-12h'\n  },\n  localizacao: {\n    patterns: ['endereço', 'endereco', 'fica', 'onde'],\n    response: '📍 **Unidades:**\\n\\n🏥 Vieiralves: Rua Rio Içá, 850 | (92) 3584-2864\\n🏥 São José: Av. Acácias, 123 | (92) 3584-2865'\n  },\n  convenios: {\n    patterns: ['convênio', 'convenio', 'plano'],\n    response: '🏥 **Convênios:**\\n\\n✅ Bradesco\\n✅ SulAmérica\\n✅ Mediservice\\n✅ Unimed\\n✅ Amil\\n\\nAtendemos particular!'\n  }\n};\n\nfor (const [key, fallback] of Object.entries(fallbacks)) {\n  if (fallback.patterns.some(p => message.includes(p))) {\n    return {\n      json: {\n        ...$json,\n        usedFallback: true,\n        response: fallback.response,\n        confidence: 0.95\n      }\n    };\n  }\n}\n\nreturn {\n  json: {\n    ...$json,\n    usedFallback: false\n  }\n};"
+      },
+      "id": "try-fallback",
+      "name": "⚡ Fallback Simples",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1450, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.usedFallback}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "has-fallback",
+      "name": "✅ Tem Fallback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 600]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "={{$('Mesclar Contexto').first().json.systemPrompt}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 400
+        }
+      },
+      "id": "gpt-info",
+      "name": "💬 GPT: Informação",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1850, 650],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const baseContext = $('Mesclar Contexto').first().json;\nconst phone = baseContext.phone;\nconst patientExists = baseContext.patient && baseContext.patient.id;\n\nreturn {\n  json: {\n    ...baseContext,\n    patientExists,\n    needsRegistration: !patientExists || !baseContext.patient.registrationComplete,\n    nextStep: patientExists ? 'select_procedure' : 'collect_patient_data'\n  }\n};"
+      },
+      "id": "check-patient",
+      "name": "👤 Verificar Paciente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1450, 900]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.patientExists}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "patient-exists",
+      "name": "✅ Paciente Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 900]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Colete dados do paciente um campo por vez:\\n- Nome completo\\n- CPF (000.000.000-00)\\n- Data nascimento (DD/MM/AAAA)\\n- Telefone\\n- E-mail\\n- CEP\\n- Número\\n- Convênio (opcional)"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 250
+        }
+      },
+      "id": "gpt-collect-data",
+      "name": "📝 GPT: Coletar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1850, 1000],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/patients",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({name: $json.collectedData.name, cpf: $json.collectedData.cpf, phone: $json.phone, email: $json.collectedData.email, birthDate: $json.collectedData.birthDate, address: $json.collectedData.address, insuranceCompany: $json.collectedData.insurance})}}"
+      },
+      "id": "create-patient",
+      "name": "💾 Criar Paciente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2050, 1000]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Ajude a selecionar:\\n1. Procedimento\\n2. Unidade (SEMPRE perguntar!)\\n3. Data\\n4. Turno\\n\\nProcedimentos disponíveis: {{$json.clinic.procedures}}\\nUnidades: Vieiralves e São José"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 400
+        }
+      },
+      "id": "gpt-schedule",
+      "name": "🩺 GPT: Agendar",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1850, 800],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/appointments/check-availability",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({procedureId: $json.selectedProcedure.id, clinicId: $json.selectedClinic.id, date: $json.selectedDate, time: $json.selectedTime})}}"
+      },
+      "id": "check-availability",
+      "name": "🕐 Verificar Disponibilidade",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2050, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.available}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "is-available",
+      "name": "✅ Disponível?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2250, 800]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/appointments",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({patientId: $json.patient.id, procedureId: $json.selectedProcedure.id, clinicId: $json.selectedClinic.id, date: $json.selectedDate, time: $json.selectedTime, status: 'PENDING_CONFIRMATION'})}}"
+      },
+      "id": "create-appointment",
+      "name": "✨ Criar Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2450, 750]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Horário indisponível. Ofereça alternativas: {{$json.alternatives}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 350
+        }
+      },
+      "id": "gpt-alternatives",
+      "name": "🔄 GPT: Alternativas",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [2450, 850],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/notifications/send",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({type: 'appointment_confirmation', to: $json.patient.phone, data: $json})}}"
+      },
+      "id": "send-notification",
+      "name": "📨 Enviar Notificações",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2650, 750]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Ajude a cancelar agendamento: {{$json.appointment}}"
+            },
+            {
+              "role": "user",
+              "content": "={{$json.message}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 300
+        }
+      },
+      "id": "gpt-cancel",
+      "name": "❌ GPT: Cancelar",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1450, 1200],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/appointments/={{$json.appointmentId}}",
+        "method": "PATCH",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({status: 'CANCELLED', cancelledBy: 'patient', cancellationReason: $json.reason || 'Via bot'})}}"
+      },
+      "id": "cancel-appointment",
+      "name": "❌ Cancelar Agendamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1650, 1200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "Crie resumo da conversa para o atendente:\\n\\nHistórico: {{$json.history}}\\nMotivo: {{$json.transferReason}}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.5,
+          "maxTokens": 500
+        }
+      },
+      "id": "gpt-transfer-summary",
+      "name": "📝 GPT: Resumo Transferência",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [1450, 1500],
+      "credentials": {
+        "openAiApi": {
+          "id": "1"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/api/conversations/={{$json.conversationId}}",
+        "method": "PATCH",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.ZORAHAPP_API_TOKEN}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({queue: 'PRINCIPAL', status: 'WAITING', priority: $json.priority || 'NORMAL', transferredBy: 'bot', transferReason: $json.summary})}}"
+      },
+      "id": "transfer-to-queue",
+      "name": "🔄 Transferir para Fila",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1650, 1500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const startNode = $('Mesclar Contexto').first().json;\nconst gptResponse = $json;\n\nreturn {\n  json: {\n    conversationId: startNode.conversationId,\n    message: gptResponse.response || gptResponse.message || gptResponse.choices?.[0]?.message?.content || 'Resposta processada',\n    intent: gptResponse.intent || 'CONVERSA_LIVRE',\n    action: gptResponse.action || 'continue',\n    confidence: gptResponse.confidence || 0.9,\n    entities: gptResponse.entities || {},\n    context: {\n      updated: true,\n      timestamp: new Date().toISOString()\n    },\n    success: true\n  }\n};"
+      },
+      "id": "format-response",
+      "name": "📦 Formatar Resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2850, 1000]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.ZORAHAPP_API_URL}}/webhook/n8n-response",
+        "method": "POST",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-N8N-Workflow-ID",
+              "value": "={{$workflow.id}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}"
+      },
+      "id": "send-to-system",
+      "name": "🔙 Enviar ao Sistema",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3050, 1000]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}"
+      },
+      "id": "webhook-response",
+      "name": "✅ Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 1000]
+    }
+  ],
+  "connections": {
+    "Webhook: Receber Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Extrair Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Dados": {
+      "main": [
+        [
+          {
+            "node": "Carregar Contexto",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Dados da Clínica",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Carregar Contexto": {
+      "main": [
+        [
+          {
+            "node": "Mesclar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dados da Clínica": {
+      "main": [
+        [
+          {
+            "node": "Mesclar Contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mesclar Contexto": {
+      "main": [
+        [
+          {
+            "node": "GPT: Classificar Intenção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Classificar Intenção": {
+      "main": [
+        [
+          {
+            "node": "INFORMAÇÃO?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "AGENDAR?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "CANCELAR?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RECLAMAÇÃO?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INFORMAÇÃO?": {
+      "main": [
+        [
+          {
+            "node": "Fallback Simples",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Simples": {
+      "main": [
+        [
+          {
+            "node": "Tem Fallback?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Fallback?": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GPT: Informação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Informação": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AGENDAR?": {
+      "main": [
+        [
+          {
+            "node": "Verificar Paciente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Paciente": {
+      "main": [
+        [
+          {
+            "node": "Paciente Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paciente Existe?": {
+      "main": [
+        [
+          {
+            "node": "GPT: Agendar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GPT: Coletar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Coletar Dados": {
+      "main": [
+        [
+          {
+            "node": "Criar Paciente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Paciente": {
+      "main": [
+        [
+          {
+            "node": "GPT: Agendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Agendar": {
+      "main": [
+        [
+          {
+            "node": "Verificar Disponibilidade",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Disponibilidade": {
+      "main": [
+        [
+          {
+            "node": "Disponível?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disponível?": {
+      "main": [
+        [
+          {
+            "node": "Criar Agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GPT: Alternativas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Enviar Notificações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Alternativas": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar Notificações": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CANCELAR?": {
+      "main": [
+        [
+          {
+            "node": "GPT: Cancelar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Cancelar": {
+      "main": [
+        [
+          {
+            "node": "Cancelar Agendamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar Agendamento": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RECLAMAÇÃO?": {
+      "main": [
+        [
+          {
+            "node": "GPT: Resumo Transferência",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT: Resumo Transferência": {
+      "main": [
+        [
+          {
+            "node": "Transferir para Fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transferir para Fila": {
+      "main": [
+        [
+          {
+            "node": "Formatar Resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar Resposta": {
+      "main": [
+        [
+          {
+            "node": "Enviar ao Sistema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar ao Sistema": {
+      "main": [
+        [
+          {
+            "node": "Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "zorahbot-complete-unified",
+  "meta": {
+    "instanceId": "zorahapp-n8n"
+  },
+  "tags": ["bot", "intelligence", "unified", "complete"]
+}
