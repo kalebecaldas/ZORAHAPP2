@@ -41,6 +41,7 @@ import botOptimizationRoutes from './routes/botOptimization.js' // ✅ Dashboard
 import rulesRoutes from './routes/rules.js' // ✅ Sistema de Regras do Bot
 import webhooksRoutes from './routes/webhooks.js' // ✅ Sistema de Webhooks
 import docsRoutes from './routes/docs.js' // ✅ Documentação Pública
+import webhookN8NRoutes from './routes/webhook-n8n.js' // ✅ Webhook para N8N responder
 import { authMiddleware } from './utils/auth.js'
 import { workflowEngine } from './services/workflowEngine.js'
 
@@ -180,7 +181,8 @@ app.use('/api/analytics', authenticatedLimiter, analyticsRoutes) // ✅ Analytic
 app.use('/api/settings/system', authenticatedLimiter, systemSettingsRoutes) // ✅ Configurações do sistema
 app.use('/api/bot-optimization', authenticatedLimiter, botOptimizationRoutes) // ✅ Dashboard de Otimizações
 app.use('/api/rules', authenticatedLimiter, rulesRoutes) // ✅ Sistema de Regras do Bot
-app.use('/api/webhooks', authenticatedLimiter, webhooksRoutes) // ✅ Sistema de Webhooks para Integrações
+app.use('/api/webhooks', authenticatedLimiter, authMiddleware, webhooksRoutes) // ✅ Sistema de Webhooks para Integrações
+app.use('/webhook', webhookN8NRoutes) // ✅ Webhook para N8N responder (público)
 app.use('/api', authenticatedLimiter, aliasRoutes)
 
 // Debug auth endpoint
