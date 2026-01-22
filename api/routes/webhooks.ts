@@ -70,10 +70,18 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
+    console.log('📥 Recebendo requisição para criar webhook:', {
+      body: req.body,
+      hasName: !!req.body.name,
+      hasUrl: !!req.body.url,
+      events: req.body.events
+    })
+    
     const { name, description, url, events, metadata } = req.body
     
     // Validações
     if (!name || !url) {
+      console.log('❌ Validação falhou: nome ou URL faltando', { name, url })
       return res.status(400).json({ 
         success: false,
         error: 'Nome e URL são obrigatórios' 
@@ -83,7 +91,9 @@ router.post('/', async (req: Request, res: Response) => {
     // Validar formato da URL
     try {
       new URL(url)
-    } catch {
+      console.log('✅ URL válida:', url)
+    } catch (urlError) {
+      console.log('❌ URL inválida:', url, urlError)
       return res.status(400).json({ 
         success: false,
         error: 'URL inválida. Use formato completo: https://exemplo.com/webhook' 
@@ -103,6 +113,7 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
     
+    console.log('✅ Validações passaram, criando webhook...')
     const subscription = await WebhookService.createSubscription({
       name,
       description,
@@ -111,6 +122,7 @@ router.post('/', async (req: Request, res: Response) => {
       metadata
     })
     
+    console.log('✅ Webhook criado com sucesso:', subscription.id)
     res.status(201).json({ 
       success: true, 
       data: subscription,
