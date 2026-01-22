@@ -215,7 +215,11 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
         data: {
           conversationId,
           phoneNumber: conversation.phone,
-          messageText: `🤖 Bot transferiu conversa:\n\n**Motivo:** ${entities?.transferReason || 'Paciente solicitou atendimento humano'}\n\n**Última intenção:** ${intent}\n**Histórico:** Paciente estava em conversa com bot N8N`,
+          messageText: `🤖 Bot transferiu conversa:
+
+Motivo: ${entities?.transferReason || req.body.queueName || 'Paciente solicitou atendimento'}
+Última intenção: ${intent}
+Histórico: Paciente estava em conversa com bot N8N`,
           messageType: 'SYSTEM',
           direction: 'SENT',
           from: 'SYSTEM', // Usar maiúsculo para consistência
@@ -257,11 +261,11 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
             conversationId,
             phoneNumber: conversation.phone,
             messageText: `✅ **Agendamento criado via Bot N8N**\n\n` +
-              `**Procedimento:** ${entities.procedimento || 'N/A'}\n` +
-              `**Unidade:** ${entities.clinica || 'N/A'}\n` +
-              `**Data:** ${entities.data || 'N/A'}\n` +
-              `**Horário:** ${entities.horario || 'N/A'}\n` +
-              `**Convênio:** ${entities.convenio || 'Particular'}`,
+              `Procedimento: ${entities.procedimento || 'N/A'}\n` +
+              `Unidade: ${entities.clinica || 'N/A'}\n` +
+              `Data: ${entities.data || 'N/A'}\n` +
+              `Horário: ${entities.horario || 'N/A'}\n` +
+              `Convênio: ${entities.convenio || 'Particular'}`,
             messageType: 'SYSTEM',
             direction: 'SENT',
             from: 'SYSTEM', // Usar maiúsculo para consistência
