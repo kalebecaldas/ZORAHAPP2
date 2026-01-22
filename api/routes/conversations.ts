@@ -2055,6 +2055,38 @@ export async function processIncomingMessage(
 
       switch (decision.type) {
         case 'TRANSFER_TO_HUMAN':
+          // ✅ Verificar se conversa ainda está em BOT_QUEUE antes de transferir
+          // Se já foi assumida, não transferir
+          const convBeforeTransfer = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            select: { status: true, assignedToId: true }
+          })
+
+          if (convBeforeTransfer?.status === 'EM_ATENDIMENTO' && convBeforeTransfer.assignedToId) {
+            console.log(`⚠️ Conversa ${conversation.id} já está EM_ATENDIMENTO. Não transferindo para PRINCIPAL.`)
+            // Apenas enviar a resposta do bot sem mudar status
+            try {
+              await whatsappService.sendTextMessage(phone, decision.response)
+            } catch (sendError) {
+              console.warn('⚠️ Erro ao enviar via WhatsApp (modo dev/teste):', sendError instanceof Error ? sendError.message : sendError)
+            }
+
+            // Salvar mensagem no banco
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                phoneNumber: phone,
+                messageText: decision.response,
+                direction: 'SENT',
+                from: 'BOT',
+                timestamp: new Date()
+              }
+            })
+
+            console.log(`✅ Resposta do bot enviada sem alterar status (conversa já com atendente)`)
+            break // Sair do switch sem transferir
+          }
+
           // Transferir para fila de humanos
           console.log(`👤 Transferindo para fila: ${decision.queue}`)
           console.log(`📋 [DEBUG TRANSFER] decision.initialData recebido:`, JSON.stringify(decision.initialData, null, 2))

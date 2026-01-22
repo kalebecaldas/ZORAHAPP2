@@ -61,12 +61,25 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
     // 1. Buscar conversa
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: { patient: true }
+      include: { patient: true, assignedTo: true }
     })
 
     if (!conversation) {
       console.error('❌ Conversa não encontrada:', conversationId)
       return res.status(404).json({ error: 'Conversa não encontrada' })
+    }
+
+    // ✅ VERIFICAR SE CONVERSA JÁ FOI ASSUMIDA POR ATENDENTE
+    // Se conversa está EM_ATENDIMENTO, ignorar resposta do bot para evitar conflitos
+    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
+      console.log(`⚠️ Conversa ${conversationId} já está EM_ATENDIMENTO com agente ${conversation.assignedTo?.name}. Ignorando resposta do bot.`)
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: 'Conversa já assumida por atendente',
+        conversationId,
+        assignedTo: conversation.assignedTo?.name
+      })
     }
 
     // 2. Enviar mensagem ao WhatsApp
@@ -201,53 +214,65 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
         requiresTransfer: req.body.requiresTransfer
       })
 
-      await prisma.conversation.update({
+      // ✅ Verificar se conversa não está EM_ATENDIMENTO antes de transferir
+      // Se já estiver com atendente, não transferir de volta para PRINCIPAL
+      const currentConv = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        data: {
-          status: 'PRINCIPAL',
-          assignedToId: null,
-          awaitingInput: true
-        }
+        select: { status: true, assignedToId: true }
       })
 
-      // Criar mensagem de sistema para o atendente
-      const systemMessage = await prisma.message.create({
-        data: {
-          conversationId,
-          phoneNumber: conversation.phone,
-          messageText: `🤖 Bot transferiu conversa:
+      if (currentConv?.status === 'EM_ATENDIMENTO' && currentConv.assignedToId) {
+        console.log('⚠️ Conversa já está EM_ATENDIMENTO. Não transferindo para PRINCIPAL.')
+        // Continuar processamento sem transferir
+      } else {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            status: 'PRINCIPAL',
+            assignedToId: null,
+            awaitingInput: true
+          }
+        })
+
+        // Criar mensagem de sistema para o atendente (somente se transferiu)
+        const systemMessage = await prisma.message.create({
+          data: {
+            conversationId,
+            phoneNumber: conversation.phone,
+            messageText: `🤖 Bot transferiu conversa:
 
 Motivo: ${entities?.transferReason || req.body.queueName || 'Paciente solicitou atendimento'}
 Última intenção: ${intent}
 Histórico: Paciente estava em conversa com bot N8N`,
-          messageType: 'SYSTEM',
-          direction: 'SENT',
-          from: 'SYSTEM', // Usar maiúsculo para consistência
-          systemMessageType: 'TRANSFERRED_TO_QUEUE',
-          metadata: {
-            type: 'system',
-            action: 'transfer',
-            source: 'n8n',
-            transferReason: entities?.transferReason || 'Paciente solicitou atendimento humano'
+            messageType: 'SYSTEM',
+            direction: 'SENT',
+            from: 'SYSTEM', // Usar maiúsculo para consistência
+            systemMessageType: 'TRANSFERRED_TO_QUEUE',
+            metadata: {
+              type: 'system',
+              action: 'transfer',
+              source: 'n8n',
+              transferReason: entities?.transferReason || 'Paciente solicitou atendimento humano'
+            }
           }
-        }
-      })
+        })
 
-      try {
-        const realtime = getRealtime()
-        if (realtime && realtime.io) {
-          realtime.io.to(`conv:${conversationId}`).emit('new_message', systemMessage)
-          realtime.io.emit('conversation:updated', {
-            id: conversationId,
-            status: 'PRINCIPAL',
-            reason: 'transfer_human'
-          })
+        try {
+          const realtime = getRealtime()
+          if (realtime && realtime.io) {
+            realtime.io.to(`conv:${conversationId}`).emit('new_message', systemMessage)
+            realtime.io.emit('conversation:updated', {
+              id: conversationId,
+              status: 'PRINCIPAL',
+              reason: 'transfer_human'
+            })
+          }
+        } catch (error) {
+          console.warn('⚠️ Socket.IO não disponível:', error)
         }
-      } catch (error) {
-        console.warn('⚠️ Socket.IO não disponível:', error)
+
+        console.log('✅ Conversa transferida para fila PRINCIPAL')
       }
-
-      console.log('✅ Conversa transferida para fila PRINCIPAL')
     }
 
     // 7. Se agendamento foi criado
@@ -288,27 +313,37 @@ Histórico: Paciente estava em conversa com bot N8N`,
           console.warn('⚠️ Socket.IO não disponível:', error)
         }
 
-        // Transferir para fila para confirmação
-        await prisma.conversation.update({
+        // ✅ Verificar se conversa não está EM_ATENDIMENTO antes de transferir
+        const currentConv = await prisma.conversation.findUnique({
           where: { id: conversationId },
-          data: {
-            status: 'PRINCIPAL',
-            assignedToId: null,
-            awaitingInput: true
-          }
+          select: { status: true, assignedToId: true }
         })
 
-        try {
-          const realtime = getRealtime()
-          if (realtime && realtime.io) {
-            realtime.io.emit('conversation:updated', {
-              id: conversationId,
+        if (currentConv?.status === 'EM_ATENDIMENTO' && currentConv.assignedToId) {
+          console.log('⚠️ Conversa já está EM_ATENDIMENTO. Não transferindo para PRINCIPAL após agendamento.')
+        } else {
+          // Transferir para fila para confirmação
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: {
               status: 'PRINCIPAL',
-              reason: 'appointment_created'
-            })
+              assignedToId: null,
+              awaitingInput: true
+            }
+          })
+
+          try {
+            const realtime = getRealtime()
+            if (realtime && realtime.io) {
+              realtime.io.emit('conversation:updated', {
+                id: conversationId,
+                status: 'PRINCIPAL',
+                reason: 'appointment_created'
+              })
+            }
+          } catch (error) {
+            console.warn('⚠️ Socket.IO não disponível:', error)
           }
-        } catch (error) {
-          console.warn('⚠️ Socket.IO não disponível:', error)
         }
       }
     }

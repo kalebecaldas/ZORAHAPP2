@@ -66,7 +66,7 @@ async function checkInactiveConversations(timeoutMinutes: number) {
             console.log(`⏰ [Monitor] Verificando ${inactiveConversations.length} conversas inativas (timeout: ${timeoutMinutes}min)`)
             inactiveConversations.forEach(conv => {
                 const lastActivity = conv.lastUserActivity || conv.lastTimestamp
-                const minutesSinceActivity = lastActivity 
+                const minutesSinceActivity = lastActivity
                     ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60))
                     : 'N/A'
                 console.log(`  - ${conv.phone}: ${minutesSinceActivity}min desde última atividade (agente: ${conv.assignedTo?.name})`)
@@ -81,6 +81,30 @@ async function checkInactiveConversations(timeoutMinutes: number) {
         console.log(`⏰ Encontradas ${inactiveConversations.length} conversas inativas`)
 
         for (const conversation of inactiveConversations) {
+            // ✅ Recarregar conversa para verificar status atual
+            // Evitar race condition: conversa pode ter sido modificada entre busca e update
+            const currentConv = await prisma.conversation.findUnique({
+                where: { id: conversation.id },
+                select: { status: true, assignedToId: true, lastUserActivity: true }
+            })
+
+            // Verificar se conversa ainda está EM_ATENDIMENTO e inativa
+            if (!currentConv || currentConv.status !== 'EM_ATENDIMENTO' || !currentConv.assignedToId) {
+                console.log(`⏭️ Conversa ${conversation.phone} não está mais EM_ATENDIMENTO, pulando...`)
+                continue
+            }
+
+            // Verificar novamente se realmente está inativa (pode ter recebido mensagem recente)
+            const now = new Date()
+            const timeoutDate = new Date()
+            timeoutDate.setMinutes(timeoutDate.getMinutes() - timeoutMinutes)
+            const lastActivity = currentConv.lastUserActivity || conversation.lastTimestamp
+            
+            if (lastActivity && new Date(lastActivity) >= timeoutDate) {
+                console.log(`⏭️ Conversa ${conversation.phone} recebeu atividade recente, pulando...`)
+                continue
+            }
+
             // Retornar para fila PRINCIPAL
             await prisma.conversation.update({
                 where: { id: conversation.id },
