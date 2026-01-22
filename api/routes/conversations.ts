@@ -963,6 +963,11 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
     // Emit real-time update (safe in case realtime not initialized)
     try {
       const realtime = getRealtime()
+      // #region agent log
+      const fs = require('fs');
+      const logPath = '/Users/kalebecaldas/Documents/cursor_projects/ZORAHAPP2-1/.cursor/debug.log';
+      fs.appendFileSync(logPath, JSON.stringify({ location: 'conversations.ts:965', message: 'BACKEND_EMIT_EVENTS_START', data: { action, conversationId: updatedConversation.id, status: updatedConversation.status, assignedToId: updatedConversation.assignedToId, phone: updatedConversation.phone }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) + '\n');
+      // #endregion
       // ✅ Emitir eventos para atualizar frontend
       realtime.io.to(`conv:${phone}`).emit('conversation_updated', updatedConversation)
       realtime.io.emit('queue_updated', { action, conversation: updatedConversation })
@@ -979,6 +984,9 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         updateEvent.reason = 'conversation_reopened'
       }
       realtime.io.emit('conversation:updated', updateEvent)
+      // #region agent log
+      fs.appendFileSync(logPath, JSON.stringify({ location: 'conversations.ts:982', message: 'BACKEND_EMIT_EVENTS_END', data: { action, conversationId: updatedConversation.id, updateEvent }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) + '\n');
+      // #endregion
       console.log(`📡 Eventos emitidos para conversa ${action}: ${updatedConversation.id}`)
     } catch (emitError) {
       console.warn('Realtime not initialized, skipping emit:', emitError instanceof Error ? emitError.message : emitError)
