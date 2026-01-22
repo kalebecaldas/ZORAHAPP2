@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { api } from '../lib/utils'
-import { 
-  Webhook, 
-  Plus, 
-  Trash2, 
-  Power, 
-  PowerOff, 
-  Eye, 
+import {
+  Webhook,
+  Plus,
+  Trash2,
+  Power,
+  PowerOff,
+  Eye,
   BarChart3,
   TestTube,
   Copy,
@@ -177,7 +177,7 @@ export default function WebhooksManagement() {
             Notifique parceiros externos sobre eventos importantes
           </p>
         </div>
-        
+
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -242,18 +242,18 @@ export default function WebhooksManagement() {
                       </span>
                     )}
                   </div>
-                  
+
                   {webhook.description && (
                     <p className="text-gray-600 text-sm mb-2">{webhook.description}</p>
                   )}
-                  
+
                   <div className="space-y-1 text-sm">
                     <div className="flex items-center gap-2">
                       <ExternalLink className="w-4 h-4 text-gray-400" />
                       <span className="text-gray-600">URL:</span>
                       <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">{webhook.url}</code>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600">Token:</span>
                       <code className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">
@@ -271,7 +271,7 @@ export default function WebhooksManagement() {
                         )}
                       </button>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600">Eventos:</span>
                       {webhook.events.map((event) => (
@@ -280,7 +280,7 @@ export default function WebhooksManagement() {
                         </span>
                       ))}
                     </div>
-                    
+
                     <div className="flex items-center gap-4 text-xs text-gray-500 mt-2">
                       <span>Criado: {formatDate(webhook.createdAt)}</span>
                       {webhook.lastTriggeredAt && (
@@ -328,11 +328,10 @@ export default function WebhooksManagement() {
 
                   <button
                     onClick={() => toggleWebhook(webhook.id, webhook.isActive)}
-                    className={`p-2 rounded transition-colors ${
-                      webhook.isActive
-                        ? 'text-orange-600 hover:bg-orange-50'
-                        : 'text-green-600 hover:bg-green-50'
-                    }`}
+                    className={`p-2 rounded transition-colors ${webhook.isActive
+                      ? 'text-orange-600 hover:bg-orange-50'
+                      : 'text-green-600 hover:bg-green-50'
+                      }`}
                     title={webhook.isActive ? 'Desativar' : 'Ativar'}
                   >
                     {webhook.isActive ? (
@@ -399,12 +398,12 @@ export default function WebhooksManagement() {
 // Create Webhook Modal
 // Eventos disponíveis no sistema
 const AVAILABLE_EVENTS = [
-  { id: 'received_message', label: 'Nova mensagem recebida', description: 'Quando paciente envia mensagem' },
-  { id: 'started_chat', label: 'Conversa iniciada', description: 'Nova conversa criada' },
-  { id: 'agent_entered', label: 'Agente assumiu', description: 'Agente entra na conversa' },
-  { id: 'closed_chat', label: 'Conversa finalizada', description: 'Atendimento encerrado' },
-  { id: 'created_patient', label: 'Paciente cadastrado', description: 'Novo contato criado' },
-  { id: 'left_queue', label: 'Saiu da fila', description: 'Chat sai da fila' },
+  { id: 'first_message', label: 'Nova mensagem recebida', description: 'Quando paciente envia mensagem' },
+  { id: 'conversation_started', label: 'Conversa iniciada', description: 'Nova conversa criada' },
+  { id: 'agent_assigned', label: 'Agente assumiu', description: 'Agente entra na conversa' },
+  { id: 'conversation_closed', label: 'Conversa finalizada', description: 'Atendimento encerrado' },
+  { id: 'patient_registered', label: 'Paciente cadastrado', description: 'Novo contato criado' },
+  { id: 'appointment_created', label: 'Agendamento criado', description: 'Novo agendamento realizado' },
 ]
 
 function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
@@ -412,14 +411,14 @@ function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     name: '',
     description: '',
     url: '',
-    events: ['received_message', 'started_chat']
+    events: ['first_message', 'conversation_closed']
   })
   const [creating, setCreating] = useState(false)
   const [createdWebhook, setCreatedWebhook] = useState<Webhook | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       setCreating(true)
       const response = await api.post('/api/webhooks', formData)
@@ -438,7 +437,7 @@ function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuc
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-lg max-w-2xl w-full p-6">
           <h3 className="text-xl font-bold text-gray-900 mb-4">🎉 Webhook Criado com Sucesso!</h3>
-          
+
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
             <p className="text-sm text-yellow-900 font-semibold mb-2">
               ⚠️ IMPORTANTE: Guarde o token com segurança! Ele não poderá ser recuperado depois.
@@ -492,7 +491,7 @@ function CreateWebhookModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg max-w-2xl w-full p-6">
         <h3 className="text-xl font-bold text-gray-900 mb-4">Criar Novo Webhook</h3>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
@@ -602,9 +601,8 @@ function LogsModal({ webhook, logs, onClose }: { webhook: Webhook; logs: Webhook
               {logs.map((log) => (
                 <div
                   key={log.id}
-                  className={`p-4 rounded-lg border ${
-                    log.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                  }`}
+                  className={`p-4 rounded-lg border ${log.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                    }`}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -615,11 +613,10 @@ function LogsModal({ webhook, logs, onClose }: { webhook: Webhook; logs: Webhook
                       )}
                       <span className="font-medium text-gray-900">{log.eventType}</span>
                       {log.statusCode && (
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          log.statusCode >= 200 && log.statusCode < 300
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${log.statusCode >= 200 && log.statusCode < 300
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                          }`}>
                           {log.statusCode}
                         </span>
                       )}
@@ -631,7 +628,7 @@ function LogsModal({ webhook, logs, onClose }: { webhook: Webhook; logs: Webhook
                       {new Date(log.createdAt).toLocaleString('pt-BR')}
                     </span>
                   </div>
-                  
+
                   {log.error && (
                     <p className="text-sm text-red-700 mt-2">{log.error}</p>
                   )}
