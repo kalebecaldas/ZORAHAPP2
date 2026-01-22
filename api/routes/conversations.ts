@@ -268,7 +268,7 @@ router.get('/:id/context', async (req: Request, res: Response): Promise<void> =>
         content: msg.messageText || '',
         timestamp: msg.timestamp?.toISOString() || new Date().toISOString()
       })),
-      currentIntent: conversation.currentIntent || null,
+      currentIntent: (conversation as any).currentIntent || null,
       workflowContext: (conversation.workflowContext as any) || {},
       patient: conversation.patient ? {
         id: conversation.patient.id,
@@ -789,6 +789,12 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           // Buscar eventos acumulados durante a conversa
           const events = await getWebhookEvents(conversation.id)
 
+          // Buscar dados do paciente se necessário
+          const conversationWithPatient = await prisma.conversation.findUnique({
+            where: { id: conversation.id },
+            include: { patient: true }
+          })
+
           // Buscar total de mensagens
           const messageCount = await prisma.message.count({
             where: { conversationId: conversation.id }
@@ -810,7 +816,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
               email: req.user?.email || null
             },
             patientId: conversation.patientId,
-            patientName: conversation.patient?.name || null,
+            patientName: conversationWithPatient?.patient?.name || null,
             events: events, // ✅ Eventos acumulados durante a conversa
             metrics: {
               duration,
@@ -822,7 +828,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           })
 
           console.log(`📤 Webhook consolidado disparado com ${events.length} eventos para ${conversation.phone}`)
-          
+
           // Limpar eventos após envio bem-sucedido
           await clearWebhookEvents(conversation.id)
         } catch (webhookError) {
@@ -2010,10 +2016,10 @@ export async function processIncomingMessage(
           message: text,
           phone: phone,
           conversationId: conversation.id,
-          patient: conversation.patient ? {
-            id: conversation.patient.id,
-            name: conversation.patient.name,
-            phone: conversation.patient.phone
+          patient: (conversation as any).patient ? {
+            id: (conversation as any).patient.id,
+            name: (conversation as any).patient.name,
+            phone: (conversation as any).patient.phone
           } : undefined,
           context: n8nContext  // ✅ Context com selectedUnit e appointmentFlow
         })

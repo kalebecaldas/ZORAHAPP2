@@ -196,12 +196,12 @@ app.get('/api/clinic/data', async (req: Request, res: Response) => {
       insuranceCompanies: insuranceCompanies.map(i => ({
         id: i.id,
         name: i.name,
-        code: i.code
+        code: (i as any).code || i.id
       })),
       units: locations.map(l => ({
         id: l.id,
         name: l.name,
-        code: l.code || l.id
+        code: (l as any).code || l.id
       }))
     }
 

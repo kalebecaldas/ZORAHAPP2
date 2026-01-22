@@ -172,7 +172,7 @@ export class N8NBotService {
     error?: Error | null
   ): Promise<any> {
     try {
-      const response = await intelligentBotService.processMessage(
+      const response = await (intelligentBotService as any).processMessage(
         data.message,
         data.phone,
         data.conversationId,

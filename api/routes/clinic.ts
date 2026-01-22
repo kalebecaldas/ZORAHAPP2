@@ -413,12 +413,12 @@ router.get('/data', async (req: Request, res: Response): Promise<void> => {
       insuranceCompanies: insuranceCompanies.map(i => ({
         id: i.id,
         name: i.name,
-        code: i.code
+        code: (i as any).code || i.id
       })),
       units: locations.map(l => ({
         id: l.id,
         name: l.name,
-        code: l.code || l.id
+        code: (l as any).code || l.id
       }))
     }
 
