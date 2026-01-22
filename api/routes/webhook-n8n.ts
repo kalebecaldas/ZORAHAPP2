@@ -183,9 +183,23 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
       // Não falha o processamento se Socket.IO não estiver disponível
     }
 
-    // 6. Ações especiais baseadas no intent
-    if (action === 'transfer_human' || intent === 'FALAR_ATENDENTE') {
-      console.log('👤 Transferindo para humano...')
+    // 6. Ações especiais baseadas no intent ou action
+    // ✅ Suporta múltiplos formatos de transferência
+    const shouldTransfer =
+      action === 'transfer_human' ||
+      action === 'TRANSFER_TO_QUEUE' ||
+      intent === 'FALAR_ATENDENTE' ||
+      intent === 'AGENDAR' ||
+      (req.body.requiresQueueTransfer === true) ||
+      (req.body.requiresTransfer === true)
+
+    if (shouldTransfer) {
+      console.log('👤 Transferindo para fila principal...', {
+        action,
+        intent,
+        requiresQueueTransfer: req.body.requiresQueueTransfer,
+        requiresTransfer: req.body.requiresTransfer
+      })
 
       await prisma.conversation.update({
         where: { id: conversationId },
