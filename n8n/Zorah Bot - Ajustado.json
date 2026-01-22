@@ -1,0 +1,930 @@
+{
+  "name": "ZoraH Bot - Complete Multi-Agent System",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst data = $json.body || $json;\nconst conversationId = data.conversationId || '';\n\nif (!conversationId) throw new Error('conversationId ausente');\n\nconst sessionId = crypto.createHash('md5').update(conversationId).digest('hex');\n\nreturn [{\n  json: {\n    chatInput: data.message || '',\n    phone: data.phone || '',\n    conversationId,\n    sessionId,\n    patient: data.patient || {},\n    context: data.context || {},\n    appointmentFlow: data.context?.appointmentFlow || null,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "96e1f999-3fe5-4531-aebb-2b153a36e19d",
+      "name": "Extract Data1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3184,
+        2048
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "={{ `Você é **Zorah**, o classificador de intenções do IAAM.\n\n## MISSÃO PRINCIPAL:\nSEMPRE perguntar a UNIDADE primeiro (se não informada), depois classificar a intenção.\n\n## UNIDADES DISPONÍVEIS:\n- Vieiralves\n- São José\n\n## FLUXO OBRIGATÓRIO:\n\n1. **VERIFICAR UNIDADE:**\n   - Se a mensagem NÃO menciona unidade específica → PERGUNTAR: \"Qual unidade você prefere? Vieiralves ou São José?\"\n   - Se já mencionou unidade → CONTINUAR\n\n2. **CLASSIFICAR INTENÇÃO:**\n   - **INFORMACAO** - Perguntas sobre procedimentos, valores, convênios, localização, horários, cumprimentos\n   - **AGENDAR** - APENAS se EXPLICITAMENTE mencionar: \"agendar\", \"marcar\", \"reservar\" (confiança mínima: 0.9)\n   - **FALAR_ATENDENTE** - Quer falar com humano\n   - **PEDIR_UNIDADE** - Quando precisar perguntar unidade primeiro\n\n## REGRAS:\n- SEMPRE perguntar unidade PRIMEIRO (exceto se já mencionada)\n- Cumprimentos = INFORMACAO (mas perguntar unidade depois)\n- Dúvida? = INFORMACAO\n- Só AGENDAR com palavras-chave EXPLÍCITAS\n\n## RESPOSTA (JSON):\n{\n  \"intent\": \"INFORMACAO|AGENDAR|FALAR_ATENDENTE|PEDIR_UNIDADE\",\n  \"confidence\": 0.95,\n  \"unit\": \"Vieiralves|São José|null\",\n  \"response\": \"sua resposta ao paciente\",\n  \"needsUnit\": true|false\n}` }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -3008,
+        2048
+      ],
+      "id": "adf4ac45-5f4d-404c-abb7-288814192b95",
+      "name": "Intent Classifier Agent1"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -3104,
+        2288
+      ],
+      "id": "12d08add-443a-42ee-84ee-00ae3ab7fea1",
+      "name": "Gemini Intent Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "u6LqYmP5hc5nmBjY",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Data1').item.json.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -2944,
+        2304
+      ],
+      "id": "ff83b238-de99-4ba0-aa88-479d2cd59cb8",
+      "name": "Postgres Memory Intent1",
+      "credentials": {
+        "postgres": {
+          "id": "H9gXAAtqPOhWpc8g",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "INFORMACAO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    },
+                    "id": "280e5524-67da-44aa-b679-c7c0a7f5c07b"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "information"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "AGENDAR",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    },
+                    "id": "9dad8235-8754-4b5b-af9e-f0ea6caaea2d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "appointment"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "FALAR_ATENDENTE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    },
+                    "id": "89cfd907-7ba0-411b-aa2d-0077dc814d34"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "transfer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "6ff9bc80-40c8-4a0b-adff-5efaf6118bc9",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "PEDIR_UNIDADE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pedir unidade"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e78097d2-1017-4ce6-8df0-d6208e8a971f",
+      "name": "Intent Router1",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -2432,
+        2032
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "={{ `Você é **Zorah**, assistente de informações do IAAM.\n\n## UNIDADE SELECIONADA:\n${$json.unit ? `Unidade: ${$json.unit}` : 'Unidade não selecionada ainda'}\n\n## REGRAS:\n1. **Se $json.intent === \"PEDIR_UNIDADE\" ou não tem unidade:**\n   → PERGUNTAR: \"Qual unidade você prefere? Vieiralves ou São José?\"\n\n2. **Se tem unidade selecionada:**\n   → Use a tool específica da unidade:\n   - Se unidade = \"Vieiralves\" → use tool \"Base de Informações da Unidade Vieiralves\"\n   - Se unidade = \"São José\" → use tool \"Base de Informações da Unidade São José\"\n   → Responda com informações ESPECÍFICAS daquela unidade\n\n3. **Seja amigável e clara 😊**\n4. **Use as informações da clínica da unidade selecionada**\n5. **Mantenha contexto (memória)**\n6. **Convide para agendar quando relevante**\n7. **Traga sempre informações completas, mas compactas**\n8. **Sempre formate as respostas da melhor forma possível**\n9. **Sempre analise qual tipo de informação o paciente quer, entregue somente o necessário**\n\n## EXEMPLOS:\n- Sem unidade: \"Olá! 😊 Para melhor atendê-lo, qual unidade você prefere? Vieiralves ou São José?\"\n- Com unidade: \"Ótimo! Na unidade ${$json.unit}, temos... [informações específicas]\"` }}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1824,
+        1696
+      ],
+      "id": "3c00309c-42c4-47f3-a6e0-baf7e8984bc5",
+      "name": "Information Agent1"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1984,
+        2000
+      ],
+      "id": "ca2df8bf-e823-4083-b66b-38302efdb290",
+      "name": "Gemini Information Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "u6LqYmP5hc5nmBjY",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -1840,
+        2000
+      ],
+      "id": "4e566501-0c7b-4b3e-97db-5255f6e58e4c",
+      "name": "Postgres Memory Information1",
+      "credentials": {
+        "postgres": {
+          "id": "H9gXAAtqPOhWpc8g",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentResponse = $json;\n\n// Fonte correta no n8n\nconst extractData = $items('Extract Data1')[0]?.json || {};\n\n// Função segura para extrair texto do Agent\nfunction extractText(res) {\n  if (!res) return null;\n  if (typeof res === 'string') return res;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output && typeof res.output.text === 'string') return res.output.text;\n  if (typeof res.text === 'string') return res.text;\n  return null;\n}\n\n// conversationId seguro\nconst conversationId =\n  agentResponse.conversationId ||\n  extractData.conversationId ||\n  '';\n\nif (!conversationId) {\n  throw new Error('conversationId ausente no Parse Information');\n}\n\n// texto seguro\nconst responseText =\n  extractText(agentResponse) ||\n  'Desculpe, não consegui processar.';\n\nreturn [{\n  json: {\n    conversationId,\n    message: responseText,\n    intent: 'INFORMACAO',\n    action: 'RESPOND',\n    success: true\n  }\n}];\n"
+      },
+      "id": "36725d79-ebfb-4215-b4d7-1e74b957f9e8",
+      "name": "Parse Information Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -944,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://c418bf5c73a2.ngrok-free.app/api/patients",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "search",
+              "value": "={{ $('Extract Data1').item.json.phone }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "74ff4aea-c806-4fc2-a057-165eec27c544",
+      "name": "Check Patient1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1952,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst extractData = $items('Extract Data1')[0]?.json || {};\nconst mergeContext = $items('Merge Context1')[0]?.json || {};\nconst patientResponse = $items('Check Patient1')[0]?.json || {};\nconst patients = patientResponse.patients || [];\n\nconst phone = extractData.phone || '';\nconst normalizedPhone = phone.replace(/\\D/g, '');\nconst foundPatient = patients.find(p => p.phone.replace(/\\D/g, '') === normalizedPhone);\n\nlet appointmentContext = '**CONTEXTO:**\\n\\n';\nappointmentContext += foundPatient\n  ? `✅ Paciente: ${foundPatient.name}\\nPule dados pessoais.\\n\\n`\n  : '⚠️ NÃO cadastrado\\nColete: nome, CPF, data nascimento.\\n\\n';\n\nappointmentContext += mergeContext.clinicInfo || '';\n\nreturn [{\n  json: {\n    chatInput: extractData.chatInput || '',\n    conversationId: extractData.conversationId,\n    sessionId: extractData.sessionId,\n    appointmentContext,\n    patientExists: !!foundPatient,\n    patient: foundPatient || null,\n    clinicData: mergeContext.clinicDataRaw || {},\n    appointmentFlow: extractData.appointmentFlow || {\n      step: foundPatient ? 'collect_procedure' : 'collect_patient_data',\n      phone,\n      patientId: foundPatient?.id || null,\n      collectedData: {}\n    }\n  }\n}];\n"
+      },
+      "id": "22cf6258-434e-4218-8e05-6a4225332cd2",
+      "name": "Prepare Appointment Input1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1776,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const agentResponse = $json;\nconst prepareData = $items('Prepare Appointment Input1')[0]?.json || {};\n\nlet responseText =\n  agentResponse.output?.text ||\n  agentResponse.output ||\n  agentResponse.text ||\n  'Erro ao processar.';\n\nlet collectedData = {};\nlet isComplete = false;\n\nconst match = responseText.match(/\\{[\\s\\S]*?\\}/);\nif (match) {\n  try {\n    const parsed = JSON.parse(match[0]);\n    collectedData = parsed.collectedData || {};\n    isComplete = parsed.isComplete || false;\n    responseText = parsed.response || responseText;\n  } catch {}\n}\n\nconst hasAll =\n  collectedData.procedimento &&\n  collectedData.unidade &&\n  (collectedData.convenio || collectedData.isParticular) &&\n  collectedData.data &&\n  collectedData.horario;\n\nif (hasAll) isComplete = true;\n\nreturn [{\n  json: {\n    conversationId: prepareData.conversationId,\n    message: responseText,\n    intent: 'AGENDAR',\n    action: isComplete ? 'CREATE_APPOINTMENT' : 'COLLECTING_DATA',\n    appointmentFlow: {\n      step: isComplete ? 'ready' : 'collecting',\n      phone: prepareData.appointmentFlow?.phone || '',\n      collectedData,\n      isComplete,\n      patientId: prepareData.patient?.id || null\n    },\n    clinicData: prepareData.clinicData,\n    patient: prepareData.patient,\n    success: true\n  }\n}];\n"
+      },
+      "id": "6cdb71eb-86dd-4ab7-bfe3-daad6ec74a13",
+      "name": "Parse Appointment Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1328,
+        2176
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst collectedData = data.appointmentFlow?.collectedData || {};\nconst clinicData = data.clinicData || {};\nconst patient = data.patient || {};\n\nconst procedureName = collectedData.procedimento || '';\nconst procedure = clinicData.procedures?.find(p => \n  p.name.toLowerCase().includes(procedureName.toLowerCase())\n);\nif (!procedure) throw new Error(`Procedimento não encontrado`);\n\nconst unitName = collectedData.unidade || '';\nconst unit = clinicData.units?.find(u => \n  u.name.toLowerCase().includes(unitName.toLowerCase())\n);\nif (!unit) throw new Error(`Unidade não encontrada`);\n\nlet dateFormatted = null;\nif (collectedData.data) {\n  const parts = collectedData.data.split('/');\n  if (parts.length === 3) dateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;\n}\n\nlet timeFormatted = collectedData.horario || '09:00';\nif (!timeFormatted.includes(':')) {\n  const turno = timeFormatted.toLowerCase();\n  if (turno.includes('manhã')) timeFormatted = '09:00';\n  else if (turno.includes('tarde')) timeFormatted = '14:00';\n  else if (turno.includes('noite')) timeFormatted = '18:00';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    appointmentData: {\n      patientPhone: data.appointmentFlow.phone,\n      patientName: patient.name || collectedData.nome || 'Paciente',\n      procedureId: procedure.id,\n      date: dateFormatted,\n      timeSlot: timeFormatted,\n      locationId: unit.id,\n      insuranceId: collectedData.convenio || null,\n      conversationId: data.conversationId,\n      notes: `Bot N8N. ${collectedData.isParticular ? 'Particular' : 'Convênio'}`\n    }\n  }\n}];"
+      },
+      "id": "3a7bde79-53e7-4d9d-afcc-c52a61972a3b",
+      "name": "Validate Appointment Data1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        2240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://c418bf5c73a2.ngrok-free.app/api/appointments",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.appointmentData }}",
+        "options": {}
+      },
+      "id": "63901542-7da8-421f-a86c-7ee536ea5ba0",
+      "name": "Create Appointment1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -880,
+        2192
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst response = $items('Create Appointment1')[0]?.json || {};\n\nif (response.success) {\n  return [{\n    json: {\n      conversationId: data.conversationId,\n      message: '✅ **Agendamento confirmado!**\\n\\nObrigado! 😊',\n      intent: 'AGENDAR',\n      action: 'APPOINTMENT_CREATED',\n      success: true\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: 'Erro. Transferindo para atendente. 😊',\n    intent: 'AGENDAR',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true\n  }\n}];\n"
+      },
+      "id": "ecc5a939-76ae-4729-8a10-816b7b9a7121",
+      "name": "Process Appointment Result1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -736,
+        2144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://dacf001ceb58.ngrok-free.app/webhook/n8n-response",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  conversationId: $json.conversationId,\n  message: $json.message,\n  intent: $json.intent,\n  action: $json.action,\n  aiProvider: $json.aiProvider,\n  appointmentFlow: $json.appointmentFlow\n} }}",
+        "options": {}
+      },
+      "id": "c9b7f8d4-60c7-4178-9344-87110d828e54",
+      "name": "Send to System1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        96,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\n// Função helper\nconst pick = (...v) => v.find(x => x !== undefined && x !== null && x !== '');\n\n// Fontes — FORMA SUPORTADA PELO n8n\nconst extractData = $items('Extract Data1')[0]?.json || {};\nconst parseIntent = $items('Parse Intent Response1')[0]?.json || {};\nconst data = $json;\n\n// conversationId\nconst conversationId = pick(\n  data.conversationId,\n  parseIntent.conversationId,\n  extractData.conversationId\n);\n\nif (!conversationId) {\n  throw new Error('conversationId ausente');\n}\n\n// sessionId\nlet sessionId = pick(\n  data.sessionId,\n  parseIntent.sessionId,\n  extractData.sessionId\n);\n\nif (!sessionId) {\n  sessionId = crypto.createHash('md5').update(conversationId).digest('hex');\n}\n\n// chatInput\nconst chatInput = pick(\n  extractData.chatInput,\n  data.chatInput,\n  parseIntent.chatInput,\n  extractData.originalMessage,\n  data.originalMessage\n);\n\nif (!chatInput) {\n  throw new Error('chatInput ausente');\n}\n\n// Obter intent e unidade do Parse Intent Response\nconst intent = pick(parseIntent.intent, data.intent, 'INFORMACAO');\nconst unit = pick(parseIntent.unit, data.unit);\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    chatInput,\n    intent,\n    unit: unit || null,\n    needsUnit: parseIntent.needsUnit || false,\n    clinicInfo: '',\n    clinicDataRaw: {},\n    success: true\n  }\n}];"
+      },
+      "id": "0c1f4f2d-0101-4bd8-a43c-9e5f74ad4059",
+      "name": "Prepare Information Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        1840
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.appointmentFlow?.isComplete }}",
+              "value2": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f90f17e4-4a67-4bc6-aa61-a9b909047876",
+      "name": "Is Appointment Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        2352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Transferindo para atendente. Aguarde! 😊',\n    intent: 'FALAR_ATENDENTE',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true,\n    success: true\n  }\n}];"
+      },
+      "id": "13d1e44e-0257-46d2-8c54-8a6eda5f3167",
+      "name": "Handler Transfer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1488,
+        2656
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\nif (!data.message) throw new Error('message obrigatório');\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: data.message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "a2e676da-700b-42bb-b2bf-5d7d53892b0a",
+      "name": "Format Final Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "3c19798f-b470-4a0a-8106-df2ff421e886",
+      "name": "Response4",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        288,
+        2080
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\n// Obter dados do Extract Data1 (preservar contexto)\nconst extractData = $items('Extract Data1')[0]?.json || {};\n\n// Obter dados do input atual (Agent Response)\nlet agentResponse = {};\ntry {\n  if ($input && $input.first) {\n    agentResponse = $input.first().json || {};\n  } else if ($json) {\n    agentResponse = $json;\n  } else if ($input && $input.item) {\n    agentResponse = $input.item.json || {};\n  }\n} catch (e) {\n  agentResponse = $json || {};\n}\n\n// Função segura para extrair texto do Agent\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (res.output?.text) return res.output.text;\n  if (typeof res.output === 'string') return res.output;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\n// Extrair resposta textual\nlet responseText = extractText(agentResponse);\n\n// Limpar resposta (remover prefixos como \"json\\n\")\nif (typeof responseText === 'string') {\n  responseText = responseText.replace(/^json\\s*\\n?/i, '').trim();\n}\n\n// Obter dados do contexto (priorizar Extract Data1)\nconst conversationId = extractData.conversationId || agentResponse.conversationId || agentResponse.sessionId || '';\nconst chatInput = extractData.chatInput || agentResponse.chatInput || agentResponse.originalMessage || '';\n\n// Calcular sessionId se necessário\nlet sessionId = extractData.sessionId || agentResponse.sessionId || '';\nif (!sessionId && conversationId) {\n  sessionId = crypto.createHash('md5').update(conversationId).digest('hex');\n}\n\n// Valores padrão\nlet intent = 'INFORMACAO';\nlet confidence = 0.5;\nlet reasoning = '';\nlet unit = null;\nlet needsUnit = false;\n\n// Tentar parsear JSON da resposta\nlet parsedResponse = null;\nif (responseText) {\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*?\\}/);\n  if (jsonMatch) {\n    try {\n      const parsed = JSON.parse(jsonMatch[0]);\n      intent = parsed.intent || intent;\n      confidence = parsed.confidence || confidence;\n      reasoning = parsed.reasoning || '';\n      unit = parsed.unit || null;\n      needsUnit = parsed.needsUnit !== undefined ? parsed.needsUnit : false;\n      // Extrair o campo 'response' do JSON parseado\n      parsedResponse = parsed.response || null;\n    } catch (e) {\n      // Ignorar erro de parse\n    }\n  }\n}\n\n// Tentar extrair intent diretamente do objeto (se já estiver parseado)\nif (agentResponse.intent) {\n  intent = agentResponse.intent;\n  confidence = agentResponse.confidence || confidence;\n  unit = agentResponse.unit || null;\n}\n\n// Extrair unidade da mensagem original se mencionada\nif (!unit && chatInput) {\n  const lowerInput = chatInput.toLowerCase();\n  const units = ['vieiralves', 'são josé', 'sao jose', 'sao jose'];\n  \n  for (const u of units) {\n    if (lowerInput.includes(u)) {\n      if (u.includes('sao jose') || u.includes('são josé')) {\n        unit = 'São José';\n      } else if (u.includes('vieiralves')) {\n        unit = 'Vieiralves';\n      }\n      break;\n    }\n  }\n}\n\n// Fallback: detecção por palavras-chave\nif (intent === 'INFORMACAO' && chatInput) {\n  const lowerInput = chatInput.toLowerCase();\n  \n  const agendarKeywords = ['agendar', 'marcar', 'reservar', 'preciso de horário', 'quero horário', 'fazer consulta'];\n  if (agendarKeywords.some(k => lowerInput.includes(k))) {\n    intent = 'AGENDAR';\n    confidence = 0.9;\n  } else if (lowerInput.includes('atendente') || lowerInput.includes('humano') || lowerInput.includes('falar com')) {\n    intent = 'FALAR_ATENDENTE';\n    confidence = 0.95;\n  }\n}\n\n// Garantir que intent seja válido\nconst validIntents = ['INFORMACAO', 'AGENDAR', 'FALAR_ATENDENTE', 'PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) {\n  intent = 'INFORMACAO';\n}\n\n// Se precisa de unidade e não tem, definir PEDIR_UNIDADE\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent = 'PEDIR_UNIDADE';\n}\n\n// Retornar resultado formatado (PRESERVAR todos os dados do Extract Data1)\nreturn [{\n  json: {\n    conversationId: conversationId,\n    sessionId: sessionId,\n    intent: intent,\n    confidence: confidence,\n    reasoning: reasoning,\n    unit: unit,\n    needsUnit: needsUnit,\n    response: parsedResponse || responseText, // Usar apenas o texto da resposta, não o JSON completo\n    originalMessage: chatInput,\n    chatInput: chatInput,\n    phone: extractData.phone || agentResponse.phone || '',\n    patient: extractData.patient || agentResponse.patient || {},\n    context: extractData.context || agentResponse.context || {},\n    appointmentFlow: extractData.appointmentFlow || agentResponse.appointmentFlow || null,\n    clinicInfo: agentResponse.clinicInfo || '',\n    clinicDataRaw: agentResponse.clinicDataRaw || {},\n    success: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2640,
+        2048
+      ],
+      "id": "59ee46d3-e4a1-4297-99c8-6a4787ca963b",
+      "name": "Parse Intent Response1"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        -1472,
+        2368
+      ],
+      "id": "8fdd47ed-6fa9-4268-b9d3-e4b314e04f2e",
+      "name": "Postgres Memory Appointment1",
+      "credentials": {
+        "postgres": {
+          "id": "H9gXAAtqPOhWpc8g",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        -1632,
+        2368
+      ],
+      "id": "de2c9718-ba08-4d3d-9c1f-34fc05a181d4",
+      "name": "Gemini Appointment Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "u6LqYmP5hc5nmBjY",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "={{`Você é **Zorah**, especialista em agendamentos do IAAM.\n\n## CONTEXTO:\n${$json.appointmentContext}\n\n## COLETAR (uma pergunta por vez):\n1. Nome, CPF, data nascimento (se não cadastrado)\n2. Procedimento, unidade, convênio/particular, data, horário\n\n## RESPOSTA JSON:\n{\"response\": \"pergunta\", \"collectedData\": {\"nome\": null, \"cpf\": null, \"procedimento\": null, ...}, \"isComplete\": false}`}}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -1616,
+        2176
+      ],
+      "id": "ad303d75-9065-45ba-8ee1-f198fab5c353",
+      "name": "Appointment Agent1"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Base de Informações da Unidade Vieiralves",
+        "url": "https://dacf001ceb58.ngrok-free.app/api/clinic/data/vieiralves",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        -1696,
+        2000
+      ],
+      "id": "a7c9b7cb-ca15-408e-85b3-c7486684f98d",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zorahbot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4b61f192-a945-4617-b009-db9387edc7a8",
+      "name": "Webhook Start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -3360,
+        2048
+      ],
+      "webhookId": "d152cfe1-4e45-4c68-af81-e69e6d4fa2f6"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Base de Informações da Unidade São José",
+        "url": "https://dacf001ceb58.ngrok-free.app/api/clinic/data/sao-jose",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        -1552,
+        2000
+      ],
+      "id": "3f4fe5c2-213e-4961-b536-c4fc6a881e71",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\n\n// O Parse Intent Response coloca a resposta do Agent em 'response'\n// Se o response contém JSON, extrair apenas o campo 'response' do JSON\nlet message = null;\n\n// Primeiro, tentar usar o campo 'response' diretamente\nif (data.response) {\n  // Se response é string, pode conter JSON\n  if (typeof data.response === 'string') {\n    // Tentar parsear se for JSON\n    try {\n      const parsed = JSON.parse(data.response);\n      // Se parseou, pegar o campo 'response' do JSON\n      if (parsed.response) {\n        message = parsed.response;\n      }\n    } catch (e) {\n      // Não é JSON válido, usar como está\n      message = data.response;\n    }\n  } else {\n    message = data.response;\n  }\n}\n\n// Se não encontrou, tentar message\nif (!message && data.message) {\n  message = data.message;\n}\n\n  // Limpar prefixos como \"json\\n\" ou markdown code blocks\n  if (message && typeof message === 'string') {\n    message = message.replace(/^json\\s*\\n?/i, '').trim();\n    // Remover markdown code blocks (usando String.fromCharCode para backticks)\n    const backtick = String.fromCharCode(96);\n    const codeBlockPattern = new RegExp('^' + backtick + backtick + backtick + 'json\\s*\\n?', 'i');\n    message = message.replace(codeBlockPattern, '').trim();\n    const codeBlockStart = new RegExp('^' + backtick + backtick + backtick + '\\s*\\n?', 'i');\n    message = message.replace(codeBlockStart, '').trim();\n    const codeBlockEnd = new RegExp(backtick + backtick + backtick + '\\s*$', 'i');\n    message = message.replace(codeBlockEnd, '').trim();\n  }\n\n// Fallback se ainda não tiver mensagem\nif (!message || message.trim() === '') {\n  message = 'Qual unidade você prefere? Vieiralves ou São José? 😊';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "format-ask-unit-response-new",
+      "name": "Format Ask Unit Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        2176
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Data1": {
+      "main": [
+        [
+          {
+            "node": "Intent Classifier Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Classifier Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Intent Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Intent Classifier Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Memory Intent1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Intent Classifier Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Intent Router1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Information Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Patient1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handler Transfer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Ask Unit Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Information Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse Information Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Information Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Information Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Memory Information1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Information Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Information Response1": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Patient1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Appointment Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Appointment Input1": {
+      "main": [
+        [
+          {
+            "node": "Appointment Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Appointment Response1": {
+      "main": [
+        [
+          {
+            "node": "Is Appointment Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Appointment Data1": {
+      "main": [
+        [
+          {
+            "node": "Create Appointment1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Appointment1": {
+      "main": [
+        [
+          {
+            "node": "Process Appointment Result1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Appointment Result1": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to System1": {
+      "main": [
+        [
+          {
+            "node": "Response4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Information Input": {
+      "main": [
+        [
+          {
+            "node": "Information Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Appointment Complete?": {
+      "main": [
+        [
+          {
+            "node": "Validate Appointment Data1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handler Transfer": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Final Response": {
+      "main": [
+        [
+          {
+            "node": "Send to System1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent Response1": {
+      "main": [
+        [
+          {
+            "node": "Intent Router1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Memory Appointment1": {
+      "ai_memory": [
+        [
+          {
+            "node": "Appointment Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Appointment Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Appointment Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Appointment Agent1": {
+      "main": [
+        [
+          {
+            "node": "Parse Appointment Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "ai_tool": [
+        [
+          {
+            "node": "Information Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Start": {
+      "main": [
+        [
+          {
+            "node": "Extract Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "Information Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Ask Unit Response": {
+      "main": [
+        [
+          {
+            "node": "Format Final Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "9533ffc1-000e-4f4c-8ced-9d1f7e9a63e6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5b105df77e781b669665abdc37a7b4ef359bca880b5ffd0a3d44e19f5f31eba3"
+  },
+  "id": "5xTy00n8X2mmwJ7z",
+  "tags": []
+}

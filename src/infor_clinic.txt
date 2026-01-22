@@ -241,7 +241,7 @@ Tudo já está pronto para colocar no seu sistema, documentação ou no BOT.
 
 # 🟦 **CONVÊNIOS COM DESCONTO**
 
-Esses convênios não têm tabela própria, mas **aplicam desconto (%) sobre os valores particulares**:
+Esses convênios não têm tabela própria, mas aplicam desconto 50% de desconto sobre os valores particulares**:
 
 * ADEPOL
 * BEM CARE

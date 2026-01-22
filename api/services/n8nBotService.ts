@@ -16,6 +16,15 @@ export class N8NBotService {
     this.timeout = parseInt(process.env.N8N_TIMEOUT || '30000')
     this.fallbackEnabled = process.env.N8N_FALLBACK_ENABLED !== 'false'
     this.retries = parseInt(process.env.N8N_RETRIES || '2')
+
+    // Debug: Log configuração na inicialização
+    console.log('🔍 N8N Bot Service inicializado:', {
+      enabled: this.isEnabled(),
+      webhookUrl: this.n8nWebhookUrl ? `${this.n8nWebhookUrl.substring(0, 50)}...` : 'não configurado',
+      timeout: this.timeout,
+      retries: this.retries,
+      fallbackEnabled: this.fallbackEnabled
+    })
   }
 
   /**
@@ -45,8 +54,15 @@ export class N8NBotService {
     // Se N8N não estiver configurado, usa fallback
     if (!this.isEnabled()) {
       console.log('⚠️ N8N não configurado, usando fallback')
+      console.log('🔍 DEBUG: N8N_WEBHOOK_URL =', process.env.N8N_WEBHOOK_URL || 'não definido')
       return this.useFallback(data)
     }
+
+    console.log('🔄 Tentando processar com N8N...', {
+      webhookUrl: this.n8nWebhookUrl,
+      conversationId: data.conversationId,
+      messageLength: data.message.length
+    })
 
     let lastError: Error | null = null
 
@@ -55,15 +71,28 @@ export class N8NBotService {
       try {
         console.log(`🔄 Enviando para N8N (tentativa ${attempt}/${this.retries})...`)
 
+        console.log(`📤 Enviando POST para: ${this.n8nWebhookUrl}`)
+
+        // Mesclar context passado com workflowContext se existir
+        const context = {
+          ...(data.context || {}),
+          // ✅ Inclui selectedUnit e appointmentFlow do workflowContext
+          selectedUnit: data.context?.selectedUnit || null,
+          appointmentFlow: data.context?.appointmentFlow || null
+        }
+
+        const payload = {
+          message: data.message,
+          phone: data.phone,
+          conversationId: data.conversationId,
+          patient: data.patient || {},
+          context: context  // ✅ Context com selectedUnit e appointmentFlow
+        }
+        console.log('📦 Payload:', JSON.stringify(payload, null, 2))
+
         const response = await axios.post(
           this.n8nWebhookUrl,
-          {
-            message: data.message,
-            phone: data.phone,
-            conversationId: data.conversationId,
-            patient: data.patient || {},
-            context: data.context || {}
-          },
+          payload,
           {
             timeout: this.timeout,
             headers: {
@@ -73,6 +102,11 @@ export class N8NBotService {
             }
           }
         )
+
+        console.log('✅ Resposta do N8N recebida:', {
+          status: response.status,
+          data: response.data
+        })
 
         console.log('✅ Resposta do N8N recebida')
 
@@ -85,7 +119,19 @@ export class N8NBotService {
         }
       } catch (error) {
         lastError = error as Error
-        console.error(`❌ Erro N8N (tentativa ${attempt}):`, this.getErrorMessage(error))
+        const errorMsg = this.getErrorMessage(error)
+        console.error(`❌ Erro N8N (tentativa ${attempt}/${this.retries}):`, errorMsg)
+        if (axios.isAxiosError(error)) {
+          console.error('🔍 Detalhes do erro:', {
+            code: error.code,
+            message: error.message,
+            response: error.response ? {
+              status: error.response.status,
+              data: error.response.data
+            } : 'sem resposta',
+            url: this.n8nWebhookUrl
+          })
+        }
 
         // Se não for a última tentativa, aguarda antes de retry
         if (attempt < this.retries) {

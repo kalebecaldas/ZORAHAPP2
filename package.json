@@ -27,6 +27,7 @@
     "start:dev": "./scripts/start-server.sh",
     "start:win": "scripts\\start-server.bat",
     "start:node": "node scripts/start-server.js",
+    "test:n8n": "tsx scripts/test-n8n-webhook.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",

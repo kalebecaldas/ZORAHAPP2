@@ -101,10 +101,13 @@ app.use(cors({
     'http://localhost:4002',
     'http://localhost:5173',
     'http://localhost:5174',
+    'https://n8nserver.iaamazonas.com.br',
+    /^https:\/\/.*\.ngrok-free\.app$/,
+    /^https:\/\/.*\.ngrok\.io$/,
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'ngrok-skip-browser-warning']
 }))
 
 // Logging
@@ -172,6 +175,147 @@ app.use('/api/appointments', authenticatedLimiter, appointmentsRoutes)
 app.use('/api/test', testRoutes) // Test routes without rate limiting
 app.use('/api/cobertura', authenticatedLimiter, coverageRoutes)
 app.use('/api/permissions', authenticatedLimiter, permissionsRoutes)
+// Rota pública para N8N buscar dados da clínica (sem autenticação)
+app.get('/api/clinic/data', async (req: Request, res: Response) => {
+  try {
+    const { prismaClinicDataService } = await import('./services/prismaClinicDataService.js')
+    const procedures = await prismaClinicDataService.getProcedures()
+    const insuranceCompanies = await prismaClinicDataService.getInsuranceCompanies()
+    const locations = await prismaClinicDataService.getLocations()
+
+    const formattedData = {
+      procedures: procedures.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        basePrice: p.basePrice,
+        duration: p.duration,
+        categories: p.categories || [],
+        packages: (p as any).packages || [] // Incluir pacotes quando disponíveis
+      })),
+      insuranceCompanies: insuranceCompanies.map(i => ({
+        id: i.id,
+        name: i.name,
+        code: i.code
+      })),
+      units: locations.map(l => ({
+        id: l.id,
+        name: l.name,
+        code: l.code || l.id
+      }))
+    }
+
+    res.json(formattedData)
+  } catch (error) {
+    console.error('Erro ao buscar dados da clínica:', error)
+    res.status(500).json({ error: 'Erro ao buscar dados da clínica' })
+  }
+})
+
+// Rota pública para buscar dados da clínica Vieiralves (sem autenticação)
+app.get('/api/clinic/data/vieiralves', async (req: Request, res: Response) => {
+  try {
+    const { prismaClinicDataService } = await import('./services/prismaClinicDataService.js')
+    const prisma = (await import('./prisma/client.js')).default
+    const clinicCode = 'VIEIRALVES'
+
+    // Buscar informações da unidade diretamente pelo código
+    const clinic = await prisma.clinic.findUnique({
+      where: { code: clinicCode },
+      select: { id: true, code: true, name: true, displayName: true }
+    })
+
+    if (!clinic) {
+      return res.status(404).json({ error: 'Unidade Vieiralves não encontrada' })
+    }
+
+    // Buscar procedimentos e convênios específicos desta unidade
+    const procedures = await prismaClinicDataService.getProceduresByClinic(clinicCode)
+    const insuranceCompanies = await prismaClinicDataService.getInsurancesByClinic(clinicCode)
+
+    const units = [{
+      id: clinic.code,
+      name: clinic.displayName || clinic.name,
+      code: clinic.code
+    }]
+
+    const formattedData = {
+      procedures: procedures.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        basePrice: (p as any).price || (p as any).basePrice,
+        duration: p.duration,
+        categories: [], // Pode ser preenchido se necessário
+        packages: (p as any).packages || [] // Incluir pacotes quando disponíveis
+      })),
+      insuranceCompanies: insuranceCompanies.map(i => ({
+        id: i.id,
+        name: i.name,
+        code: i.id
+      })),
+      units: units
+    }
+
+    res.json(formattedData)
+  } catch (error) {
+    console.error('Erro ao buscar dados da clínica Vieiralves:', error)
+    res.status(500).json({ error: 'Erro ao buscar dados da clínica Vieiralves' })
+  }
+})
+
+// Rota pública para buscar dados da clínica São José (sem autenticação)
+app.get('/api/clinic/data/sao-jose', async (req: Request, res: Response) => {
+  try {
+    const { prismaClinicDataService } = await import('./services/prismaClinicDataService.js')
+    const prisma = (await import('./prisma/client.js')).default
+    const clinicCode = 'SAO_JOSE'
+
+    // Buscar informações da unidade diretamente pelo código
+    const clinic = await prisma.clinic.findUnique({
+      where: { code: clinicCode },
+      select: { id: true, code: true, name: true, displayName: true }
+    })
+
+    if (!clinic) {
+      return res.status(404).json({ error: 'Unidade São José não encontrada' })
+    }
+
+    // Buscar procedimentos e convênios específicos desta unidade
+    const procedures = await prismaClinicDataService.getProceduresByClinic(clinicCode)
+    const insuranceCompanies = await prismaClinicDataService.getInsurancesByClinic(clinicCode)
+
+    const units = [{
+      id: clinic.code,
+      name: clinic.displayName || clinic.name,
+      code: clinic.code
+    }]
+
+    const formattedData = {
+      procedures: procedures.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        basePrice: (p as any).price || (p as any).basePrice,
+        duration: p.duration,
+        categories: [], // Pode ser preenchido se necessário
+        packages: (p as any).packages || [] // Incluir pacotes quando disponíveis
+      })),
+      insuranceCompanies: insuranceCompanies.map(i => ({
+        id: i.id,
+        name: i.name,
+        code: i.id
+      })),
+      units: units
+    }
+
+    res.json(formattedData)
+  } catch (error) {
+    console.error('Erro ao buscar dados da clínica São José:', error)
+    res.status(500).json({ error: 'Erro ao buscar dados da clínica São José' })
+  }
+})
+
 app.use('/api/clinic', authenticatedLimiter, clinicRoutes)
 app.use('/api/messages', authenticatedLimiter, messagesRoutes)
 app.use('/api/templates', authenticatedLimiter, templatesRoutes)

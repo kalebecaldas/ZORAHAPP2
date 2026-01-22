@@ -821,10 +821,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
             }
           })
 
-          console.log(`📤 Webhook consolidado disparado com ${events.length} eventos para ${conversation.phone}`)
-          
-          // Limpar eventos após envio bem-sucedido
-          await clearWebhookEvents(conversation.id)
+          console.log(`📤 Webhook "conversation_closed" disparado para ${conversation.phone}`)
         } catch (webhookError) {
           console.error('⚠️ Erro ao disparar webhook (não bloqueia fluxo):', webhookError)
         }

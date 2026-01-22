@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
 import { authMiddleware, authorize } from '../utils/auth.js'
+import { prismaClinicDataService } from '../services/prismaClinicDataService.js'
 
 const router = Router()
 
@@ -385,6 +386,46 @@ router.post('/:clinicId/insurance/:insuranceCode/procedure/:procedureCode/price'
   } catch (error) {
     console.error('Erro ao definir preço:', error)
     res.status(500).json({ error: 'Erro ao definir preço' })
+  }
+})
+
+/**
+ * GET /api/clinic/data
+ * Retorna dados consolidados da clínica para uso no N8N (procedimentos, convênios, unidades)
+ * Este endpoint é usado pelo workflow N8N para carregar contexto
+ */
+router.get('/data', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const procedures = await prismaClinicDataService.getProcedures()
+    const insuranceCompanies = await prismaClinicDataService.getInsuranceCompanies()
+    const locations = await prismaClinicDataService.getLocations()
+
+    // Formatar dados para o formato esperado pelo N8N
+    const formattedData = {
+      procedures: procedures.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        basePrice: p.basePrice,
+        duration: p.duration,
+        categories: p.categories || []
+      })),
+      insuranceCompanies: insuranceCompanies.map(i => ({
+        id: i.id,
+        name: i.name,
+        code: i.code
+      })),
+      units: locations.map(l => ({
+        id: l.id,
+        name: l.name,
+        code: l.code || l.id
+      }))
+    }
+
+    res.json(formattedData)
+  } catch (error) {
+    console.error('Erro ao buscar dados da clínica:', error)
+    res.status(500).json({ error: 'Erro ao buscar dados da clínica' })
   }
 })
 

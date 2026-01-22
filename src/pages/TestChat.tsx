@@ -38,7 +38,7 @@ export function TestChat() {
   const checkIfNearBottom = (): boolean => {
     const container = messagesContainerRef.current
     if (!container) return true
-    
+
     const threshold = 100 // 100px de margem
     const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
     return distanceFromBottom <= threshold
@@ -58,7 +58,7 @@ export function TestChat() {
   // Auto-scroll inteligente: só se o usuário estiver próximo do final
   React.useEffect(() => {
     if (messages.length === 0) return
-    
+
     // Se o usuário está rolando manualmente, não fazer auto-scroll
     if (isUserScrollingRef.current) {
       isUserScrollingRef.current = false
@@ -82,7 +82,7 @@ export function TestChat() {
     const handleScroll = () => {
       isUserScrollingRef.current = true
       shouldAutoScrollRef.current = checkIfNearBottom()
-      
+
       // Resetar flag após um tempo sem scroll
       clearTimeout(scrollTimeout)
       scrollTimeout = setTimeout(() => {
@@ -413,16 +413,15 @@ export function TestChat() {
                 {messages.map((m) => {
                   // Verificar se é mensagem de encerramento
                   const isClosingMessage = m.metadata?.isClosingMessage === true
-                  
+
                   return (
                     <li key={m.id} className={`flex ${m.direction === 'RECEIVED' ? 'justify-start' : 'justify-end'}`}>
-                      <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${
-                        isClosingMessage
+                      <div className={`max-w-[75%] px-4 py-3 rounded-2xl text-sm shadow ${isClosingMessage
                           ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white border-2 border-purple-300'
-                          : m.direction === 'RECEIVED' 
-                            ? 'bg-gray-100 text-gray-900' 
+                          : m.direction === 'RECEIVED'
+                            ? 'bg-gray-100 text-gray-900'
                             : (m.from === 'BOT' ? 'bg-indigo-600 text-white' : 'bg-blue-600 text-white')
-                      }`}>
+                        }`}>
                         {isClosingMessage && (
                           <div className="text-xs opacity-90 mb-1 flex items-center gap-1">
                             <span>✨</span>

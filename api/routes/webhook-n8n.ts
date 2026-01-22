@@ -1,9 +1,29 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
-import { whatsAppService } from '../services/whatsapp.js'
-import { getRealtime } from '../services/realtime.js'
+import { WhatsAppService } from '../services/whatsapp.js'
+import { getRealtime } from '../realtime.js'
 
 const router = Router()
+
+// Middleware de logging para debug
+router.use((req, res, next) => {
+  console.log('🔍 [N8N Webhook] Requisição recebida:', {
+    method: req.method,
+    path: req.path,
+    headers: {
+      'content-type': req.headers['content-type'],
+      'user-agent': req.headers['user-agent']
+    },
+    bodySize: JSON.stringify(req.body).length
+  })
+  next()
+})
+
+// WhatsApp service instance
+const whatsappService = new WhatsAppService(
+  process.env.META_ACCESS_TOKEN || '',
+  process.env.META_PHONE_NUMBER_ID || ''
+)
 
 /**
  * Endpoint para receber respostas do N8N
@@ -11,6 +31,8 @@ const router = Router()
  */
 router.post('/n8n-response', async (req: Request, res: Response) => {
   try {
+    console.log('📨 Body completo recebido:', JSON.stringify(req.body, null, 2))
+
     const {
       conversationId,
       message,
@@ -22,6 +44,7 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
 
     console.log('📨 Resposta do N8N recebida:', {
       conversationId,
+      message: message?.substring(0, 50) + '...',
       intent,
       action,
       aiProvider
@@ -29,6 +52,7 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
 
     // Validação básica
     if (!conversationId || !message) {
+      console.error('❌ Validação falhou:', { conversationId: !!conversationId, message: !!message })
       return res.status(400).json({
         error: 'conversationId e message são obrigatórios'
       })
@@ -47,7 +71,7 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
 
     // 2. Enviar mensagem ao WhatsApp
     try {
-      await whatsAppService.sendMessage(conversation.phone, message)
+      await whatsappService.sendTextMessage(conversation.phone, message)
       console.log('✅ Mensagem enviada ao WhatsApp')
     } catch (error) {
       console.error('❌ Erro ao enviar WhatsApp:', error)
@@ -55,50 +79,108 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
     }
 
     // 3. Salvar mensagem no histórico
-    const savedMessage = await prisma.message.create({
-      data: {
+    let savedMessage
+    try {
+      console.log('💾 Tentando salvar mensagem:', {
         conversationId,
-        from: 'bot',
-        content: message,
-        metadata: {
-          intent,
-          entities,
-          aiProvider: aiProvider || 'n8n',
-          source: 'n8n',
-          timestamp: new Date().toISOString()
-        }
-      }
-    })
+        phoneNumber: conversation.phone,
+        messageLength: message.length,
+        messageType: 'TEXT',
+        direction: 'SENT',
+        from: 'BOT'
+      })
 
-    console.log('💾 Mensagem salva no banco:', savedMessage.id)
+      savedMessage = await prisma.message.create({
+        data: {
+          conversationId,
+          phoneNumber: conversation.phone,
+          messageText: message,
+          messageType: 'TEXT',
+          direction: 'SENT',
+          from: 'BOT', // Usar maiúsculo para consistência
+          metadata: {
+            intent,
+            entities: entities || {},
+            aiProvider: aiProvider || 'n8n',
+            source: 'n8n',
+            timestamp: new Date().toISOString()
+          }
+        }
+      })
+
+      console.log('💾 Mensagem salva no banco:', savedMessage.id)
+    } catch (dbError: any) {
+      console.error('❌ Erro ao salvar mensagem no banco:', dbError)
+      console.error('❌ Detalhes do erro:', {
+        message: dbError.message,
+        code: dbError.code,
+        meta: dbError.meta
+      })
+      throw dbError
+    }
 
     // 4. Atualizar contexto da conversa
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        currentIntent: intent,
-        workflowContext: entities || {},
-        lastTimestamp: new Date(),
-        metadata: {
-          ...(conversation.metadata as any || {}),
-          lastAiProvider: aiProvider,
-          lastIntent: intent
-        }
+    try {
+      console.log('🔄 Atualizando contexto da conversa...')
+
+      // Preparar workflowContext com appointmentFlow e selectedUnit
+      const workflowContext: any = {
+        ...(conversation.workflowContext as any || {}),
+        lastAiProvider: aiProvider,
+        lastIntent: intent,
+        entities: entities || {}
       }
-    })
+
+      // ✅ SALVAR selectedUnit se existir
+      if (req.body.selectedUnit) {
+        workflowContext.selectedUnit = req.body.selectedUnit
+        console.log('💾 Salvando selectedUnit no contexto:', {
+          id: req.body.selectedUnit.id,
+          name: req.body.selectedUnit.name
+        })
+      }
+
+      // Se tem appointmentFlow na requisição, salvar no contexto
+      if (req.body.appointmentFlow) {
+        workflowContext.appointmentFlow = req.body.appointmentFlow
+        console.log('💾 Salvando appointmentFlow no contexto:', req.body.appointmentFlow.step)
+      }
+
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          workflowContext: workflowContext,
+          lastTimestamp: new Date(),
+          channelMetadata: {
+            ...(conversation.channelMetadata as any || {}),
+            lastAiProvider: aiProvider,
+            lastIntent: intent
+          }
+        }
+      })
+      console.log('✅ Contexto da conversa atualizado')
+    } catch (updateError: any) {
+      console.error('❌ Erro ao atualizar contexto da conversa:', updateError)
+      // Não falha o processamento se a atualização falhar
+    }
 
     // 5. Notificar frontend via Socket.IO
-    const io = getRealtime()
-    if (io) {
-      io.to(conversationId).emit('new_message', {
-        id: savedMessage.id,
-        conversationId,
-        from: 'bot',
-        content: message,
-        timestamp: savedMessage.timestamp,
-        metadata: savedMessage.metadata
-      })
-      console.log('📡 Mensagem enviada via Socket.IO')
+    try {
+      const realtime = getRealtime()
+      if (realtime && realtime.io) {
+        realtime.io.to(`conv:${conversationId}`).emit('new_message', {
+          id: savedMessage.id,
+          conversationId,
+          from: 'bot',
+          content: message,
+          timestamp: savedMessage.timestamp,
+          metadata: savedMessage.metadata
+        })
+        console.log('📡 Mensagem enviada via Socket.IO')
+      }
+    } catch (error) {
+      console.warn('⚠️ Socket.IO não disponível (modo dev/teste):', error)
+      // Não falha o processamento se Socket.IO não estiver disponível
     }
 
     // 6. Ações especiais baseadas no intent
@@ -108,9 +190,9 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
       await prisma.conversation.update({
         where: { id: conversationId },
         data: {
-          queue: 'PRINCIPAL',
-          status: 'WAITING',
-          priority: 'NORMAL'
+          status: 'PRINCIPAL',
+          assignedToId: null,
+          awaitingInput: true
         }
       })
 
@@ -118,23 +200,33 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
       const systemMessage = await prisma.message.create({
         data: {
           conversationId,
-          from: 'system',
-          content: `🤖 Bot transferiu conversa:\n\n**Motivo:** ${entities?.transferReason || 'Paciente solicitou atendimento humano'}\n\n**Última intenção:** ${intent}\n**Histórico:** Paciente estava em conversa com bot N8N`,
+          phoneNumber: conversation.phone,
+          messageText: `🤖 Bot transferiu conversa:\n\n**Motivo:** ${entities?.transferReason || 'Paciente solicitou atendimento humano'}\n\n**Última intenção:** ${intent}\n**Histórico:** Paciente estava em conversa com bot N8N`,
+          messageType: 'SYSTEM',
+          direction: 'SENT',
+          from: 'SYSTEM', // Usar maiúsculo para consistência
+          systemMessageType: 'TRANSFERRED_TO_QUEUE',
           metadata: {
             type: 'system',
             action: 'transfer',
-            source: 'n8n'
+            source: 'n8n',
+            transferReason: entities?.transferReason || 'Paciente solicitou atendimento humano'
           }
         }
       })
 
-      if (io) {
-        io.to(conversationId).emit('new_message', systemMessage)
-        io.emit('conversation_updated', {
-          id: conversationId,
-          queue: 'PRINCIPAL',
-          status: 'WAITING'
-        })
+      try {
+        const realtime = getRealtime()
+        if (realtime && realtime.io) {
+          realtime.io.to(`conv:${conversationId}`).emit('new_message', systemMessage)
+          realtime.io.emit('conversation:updated', {
+            id: conversationId,
+            status: 'PRINCIPAL',
+            reason: 'transfer_human'
+          })
+        }
+      } catch (error) {
+        console.warn('⚠️ Socket.IO não disponível:', error)
       }
 
       console.log('✅ Conversa transferida para fila PRINCIPAL')
@@ -149,13 +241,17 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
         const summaryMessage = await prisma.message.create({
           data: {
             conversationId,
-            from: 'system',
-            content: `✅ **Agendamento criado via Bot N8N**\n\n` +
+            phoneNumber: conversation.phone,
+            messageText: `✅ **Agendamento criado via Bot N8N**\n\n` +
               `**Procedimento:** ${entities.procedimento || 'N/A'}\n` +
               `**Unidade:** ${entities.clinica || 'N/A'}\n` +
               `**Data:** ${entities.data || 'N/A'}\n` +
               `**Horário:** ${entities.horario || 'N/A'}\n` +
               `**Convênio:** ${entities.convenio || 'Particular'}`,
+            messageType: 'SYSTEM',
+            direction: 'SENT',
+            from: 'SYSTEM', // Usar maiúsculo para consistência
+            systemMessageType: 'APPOINTMENT_CREATED',
             metadata: {
               type: 'system',
               action: 'appointment_created',
@@ -165,42 +261,76 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
           }
         })
 
-        if (io) {
-          io.to(conversationId).emit('new_message', summaryMessage)
+        try {
+          const realtime = getRealtime()
+          if (realtime && realtime.io) {
+            realtime.io.to(`conv:${conversationId}`).emit('new_message', summaryMessage)
+          }
+        } catch (error) {
+          console.warn('⚠️ Socket.IO não disponível:', error)
         }
 
         // Transferir para fila para confirmação
         await prisma.conversation.update({
           where: { id: conversationId },
           data: {
-            queue: 'PRINCIPAL',
-            status: 'WAITING',
-            priority: 'HIGH'
+            status: 'PRINCIPAL',
+            assignedToId: null,
+            awaitingInput: true
           }
         })
 
-        if (io) {
-          io.emit('conversation_updated', {
-            id: conversationId,
-            queue: 'PRINCIPAL',
-            status: 'WAITING',
-            priority: 'HIGH'
-          })
+        try {
+          const realtime = getRealtime()
+          if (realtime && realtime.io) {
+            realtime.io.emit('conversation:updated', {
+              id: conversationId,
+              status: 'PRINCIPAL',
+              reason: 'appointment_created'
+            })
+          }
+        } catch (error) {
+          console.warn('⚠️ Socket.IO não disponível:', error)
         }
       }
     }
 
+    console.log('✅ Processamento concluído com sucesso')
     res.json({
       success: true,
-      messageId: savedMessage.id,
+      messageId: savedMessage?.id || 'unknown',
       conversationId,
       delivered: true
     })
   } catch (error: any) {
     console.error('❌ Erro ao processar resposta N8N:', error)
+    console.error('❌ Tipo do erro:', error.name || typeof error)
+    console.error('❌ Mensagem do erro:', error.message)
+    console.error('❌ Stack trace:', error.stack)
+    console.error('❌ Body recebido:', JSON.stringify(req.body, null, 2))
+
+    // Se for erro de validação do Prisma, retornar erro mais específico
+    if (error.code === 'P2002') {
+      return res.status(400).json({
+        error: 'Erro de validação',
+        details: 'Registro duplicado',
+        code: error.code
+      })
+    }
+
+    if (error.code === 'P2025') {
+      return res.status(404).json({
+        error: 'Registro não encontrado',
+        details: error.meta?.cause || 'O registro solicitado não existe',
+        code: error.code
+      })
+    }
+
     res.status(500).json({
       error: 'Erro ao processar resposta',
-      details: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Erro interno do servidor',
+      type: error.name || 'UnknownError',
+      code: error.code || 'UNKNOWN'
     })
   }
 })
@@ -213,6 +343,21 @@ router.get('/n8n-health', async (req: Request, res: Response) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'zorahapp-n8n-webhook'
+  })
+})
+
+/**
+ * Endpoint de teste para N8N verificar se consegue enviar dados
+ */
+router.post('/n8n-test', async (req: Request, res: Response) => {
+  console.log('🧪 [TEST] N8N test endpoint chamado')
+  console.log('🧪 [TEST] Body recebido:', JSON.stringify(req.body, null, 2))
+
+  res.json({
+    success: true,
+    message: 'Endpoint de teste funcionando!',
+    received: req.body,
+    timestamp: new Date().toISOString()
   })
 })
 
