@@ -138,9 +138,6 @@ const ConversationsPage: React.FC = () => {
     // Fetch conversations
     // ✅ Fetch active conversations (for counts and active queues)
     const fetchConversations = async () => {
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:140', message: 'FETCH_CONVERSATIONS_START', data: { activeQueue, userId: user?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-        // #endregion
         try {
             // ✅ Buscar conversas ativas E conversas atribuídas ao usuário (mesmo se expiradas)
             // Isso garante que conversas expiradas apareçam em "MINHAS_CONVERSAS"
@@ -166,15 +163,8 @@ const ConversationsPage: React.FC = () => {
             });
 
             const convs = Array.from(conversationsMap.values());
-            // #region agent log
-            const convsWithStatus = convs.map((c: any) => ({ id: c.id, status: c.status, assignedToId: c.assignedToId }));
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:166', message: 'FETCH_CONVERSATIONS_END', data: { conversationsCount: convs.length, conversations: convsWithStatus, activeQueue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-            // #endregion
             setConversations(convs);
         } catch (error) {
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:169', message: 'FETCH_CONVERSATIONS_ERROR', data: { error: error instanceof Error ? error.message : String(error) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-            // #endregion
             console.error('Error fetching conversations:', error);
             toast.error('Erro ao carregar conversas');
         } finally {
@@ -238,11 +228,6 @@ const ConversationsPage: React.FC = () => {
                     status: m.direction === 'SENT' ? 'SENT' : 'PENDING',
                     metadata: m.metadata
                 };
-                // #region agent log
-                if (m.metadata?.isClosingMessage) {
-                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:227', message: 'CLOSING MESSAGE FOUND in fetchMessages', data: { messageId: m.id, direction: m.direction, from: m.from, metadata: m.metadata, mappedSender: mapped.sender, mappedDirection: mapped.direction }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                }
-                // #endregion
                 return mapped;
             });
             setMessages(msgs);
@@ -371,9 +356,6 @@ const ConversationsPage: React.FC = () => {
 
     // Assume conversation
     const handleAssume = async (conversation: Conversation) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:363', message: 'HANDLE_ASSUME_START', data: { conversationId: conversation.id, phone: conversation.phone, currentStatus: conversation.status, currentAssignedToId: conversation.assignedToId, activeQueue, userId: user?.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-        // #endregion
         try {
             const response = await api.post('/api/conversations/actions', {
                 action: 'take',
@@ -384,20 +366,10 @@ const ConversationsPage: React.FC = () => {
 
             const updatedConv = response.data;
 
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:377', message: 'HANDLE_ASSUME_RESPONSE', data: { conversationId: updatedConv.id, newStatus: updatedConv.status, newAssignedToId: updatedConv.assignedToId, responseData: updatedConv }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-            // #endregion
-
             // ✅ Atualizar estado local imediatamente com dados da resposta
-            setConversations(prev => {
-                const before = prev.find(c => c.id === updatedConv.id);
-                const after = prev.map(c => c.id === updatedConv.id ? updatedConv : c);
-                const afterConv = after.find(c => c.id === updatedConv.id);
-                // #region agent log
-                fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:385', message: 'HANDLE_ASSUME_UPDATE_STATE', data: { conversationId: updatedConv.id, beforeStatus: before?.status, beforeAssignedToId: before?.assignedToId, afterStatus: afterConv?.status, afterAssignedToId: afterConv?.assignedToId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-                // #endregion
-                return after;
-            });
+            setConversations(prev =>
+                prev.map(c => c.id === updatedConv.id ? updatedConv : c)
+            );
 
             // ✅ Atualizar selectedConversation se for a conversa atual
             if (selectedConversation?.id === conversation.id) {
@@ -409,24 +381,14 @@ const ConversationsPage: React.FC = () => {
             // ✅ Mudar para aba "MINHAS_CONVERSAS" automaticamente
             setActiveQueue('MINHAS_CONVERSAS');
 
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:395', message: 'HANDLE_ASSUME_SET_QUEUE', data: { conversationId: updatedConv.id, newActiveQueue: 'MINHAS_CONVERSAS' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-            // #endregion
-
             toast.success('Conversa assumida com sucesso!');
 
             // ✅ Recarregar conversas após delay para sincronizar
             setTimeout(() => {
-                // #region agent log
-                fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:400', message: 'HANDLE_ASSUME_FETCH_START', data: { conversationId: updatedConv.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                // #endregion
                 fetchConversations();
             }, 300);
 
         } catch (error: any) {
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:405', message: 'HANDLE_ASSUME_ERROR', data: { conversationId: conversation.id, error: error?.message, responseData: error?.response?.data }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-            // #endregion
             console.error('Error assuming conversation:', error);
             toast.error(error?.response?.data?.error || 'Erro ao assumir conversa');
         }
@@ -515,9 +477,6 @@ const ConversationsPage: React.FC = () => {
 
     // Reopen conversation
     const handleReopen = async (conversation: Conversation) => {
-        // #region agent log
-        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:458', message: 'handleReopen ENTRY', data: { conversationId: conversation.id, phone: conversation.phone, closedCountBefore: closedConversations.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) }).catch(() => { });
-        // #endregion
         try {
             await api.post('/api/conversations/actions', {
                 action: 'reopen',
@@ -529,9 +488,6 @@ const ConversationsPage: React.FC = () => {
             // O evento Socket.IO já vai remover quando receber conversation_reopened
 
             toast.success('Conversa reaberta com sucesso');
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:475', message: 'handleReopen CALLING fetchConversations', data: { conversationId: conversation.id }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
-            // #endregion
             fetchConversations(); // Recarregar todas as conversas
             if (selectedConversation?.id === conversation.id) {
                 setSelectedConversation(null);
@@ -955,23 +911,13 @@ const ConversationsPage: React.FC = () => {
             else if (data.conversationId && data.status === 'PRINCIPAL' && data.reason === 'conversation_reopened') {
                 console.log('🔄 [GLOBAL] conversation:updated - Conversa reaberta:', data);
 
-                // #region agent log
-                fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:891', message: 'Socket.IO conversation_reopened EVENT', data: { conversationId: data.conversationId, closedCountBefore: closedConversations.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                // #endregion
-
                 // ✅ Remover da lista de encerradas (se estiver lá) - apenas uma vez
                 setClosedConversations(prev => {
                     const exists = prev.find(c => c.id === data.conversationId);
                     if (!exists) {
-                        // #region agent log
-                        fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:896', message: 'Socket.IO SKIP - already removed', data: { conversationId: data.conversationId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                        // #endregion
                         return prev; // Já foi removida, não remover novamente
                     }
                     const filtered = prev.filter(c => c.id !== data.conversationId);
-                    // #region agent log
-                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:900', message: 'Socket.IO AFTER filter', data: { conversationId: data.conversationId, closedCountBefore: prev.length, closedCountAfter: filtered.length }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                    // #endregion
                     return filtered;
                 });
                 setClosedTotal(prev => Math.max(0, prev - 1));
@@ -1174,35 +1120,24 @@ const ConversationsPage: React.FC = () => {
             // ✅ Processar atualizações gerais de conversas (sem reason específico)
             else if (data.conversationId && data.status && data.status !== 'FECHADA' && !data.reason) {
                 console.log('🔄 [GLOBAL] conversation:updated - Atualização geral:', data);
-                // #region agent log
-                fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1142', message: 'SOCKET_CONVERSATION_UPDATED_GENERAL', data: { conversationId: data.conversationId, status: data.status, assignedToId: data.assignedToId, activeQueue, reason: data.reason }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
-                // #endregion
                 // Atualizar conversa existente na lista
-                setConversations(prev => {
-                    const before = prev.find(c => c.id === data.conversationId || c.phone === data.phone);
-                    const after = prev.map(c => {
-                        if (c.id === data.conversationId || c.phone === data.phone) {
-                            const updated = {
-                                ...c,
-                                ...(data.status && { status: data.status }),
-                                ...(data.lastMessage && { lastMessage: data.lastMessage }),
-                                ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
-                                ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
-                                ...(data.assignedTo && { assignedTo: data.assignedTo }),
-                                ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
-                                ...(data.sessionExpiryTime && { sessionExpiryTime: data.sessionExpiryTime }),
-                                ...(data.sessionStatus && { sessionStatus: data.sessionStatus }),
-                                ...(data.lastUserActivity && { lastUserActivity: data.lastUserActivity })
-                            };
-                            // #region agent log
-                            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1158', message: 'SOCKET_UPDATE_CONVERSATION', data: { conversationId: data.conversationId, beforeStatus: before?.status, beforeAssignedToId: before?.assignedToId, afterStatus: updated.status, afterAssignedToId: updated.assignedToId, activeQueue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'C' }) }).catch(() => { });
-                            // #endregion
-                            return updated;
-                        }
-                        return c;
-                    });
-                    return after;
-                });
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId || c.phone === data.phone) {
+                        return {
+                            ...c,
+                            ...(data.status && { status: data.status }),
+                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
+                            ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                            ...(data.assignedTo && { assignedTo: data.assignedTo }),
+                            ...(data.unreadCount !== undefined && { unreadCount: data.unreadCount }),
+                            ...(data.sessionExpiryTime && { sessionExpiryTime: data.sessionExpiryTime }),
+                            ...(data.sessionStatus && { sessionStatus: data.sessionStatus }),
+                            ...(data.lastUserActivity && { lastUserActivity: data.lastUserActivity })
+                        };
+                    }
+                    return c;
+                }));
 
                 // Se for a conversa selecionada, atualizar também
                 if (selectedConversation?.id === data.conversationId || selectedConversation?.phone === data.phone) {
@@ -1509,17 +1444,11 @@ const ConversationsPage: React.FC = () => {
 
         const onConversationUpdated = (updated: any) => {
             console.log('🔄 Conversation updated event received:', updated);
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1500', message: 'SOCKET_CONVERSATION_UPDATED', data: { updatedId: updated?.id, updatedPhone: updated?.phone, updatedStatus: updated?.status, updatedAssignedToId: updated?.assignedToId, selectedId: selectedConversation?.id, selectedPhone: selectedConversation?.phone, activeQueue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'D' }) }).catch(() => { });
-            // #endregion
             if (updated?.phone === selectedConversation.phone || updated?.id === selectedConversation.id) {
                 // Avoid loops: refresh only if lastTimestamp changed
                 const changed = !!updated?.lastTimestamp && updated.lastTimestamp !== selectedConversation.lastTimestamp;
                 if (changed) {
                     console.log('✅ Conversation update matches (changed), refreshing...');
-                    // #region agent log
-                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1508', message: 'SOCKET_FETCH_CONVERSATIONS', data: { conversationId: updated?.id, reason: 'timestamp_changed' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'B' }) }).catch(() => { });
-                    // #endregion
                     fetchMessages(selectedConversation.phone);
                     fetchConversations();
                 } else {
@@ -1604,9 +1533,6 @@ const ConversationsPage: React.FC = () => {
 
         socket.on('conversation:updated', (data) => {
             console.log('🔄 [conversation:updated] Evento recebido:', data);
-            // #region agent log
-            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1589', message: 'SOCKET_CONVERSATION_UPDATED_DIRECT', data: { conversationId: data.conversationId, status: data.status, assignedToId: data.assignedToId, phone: data.phone, selectedId: selectedConversation?.id, activeQueue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
-            // #endregion
 
             // ✅ Se a conversa foi encerrada e é a selecionada, limpar seleção
             if (data.status === 'FECHADA' && selectedConversation &&
@@ -1635,9 +1561,6 @@ const ConversationsPage: React.FC = () => {
                         ...(data.lastMessage && { lastMessage: data.lastMessage }),
                         ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp })
                     };
-                    // #region agent log
-                    fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1619', message: 'SOCKET_UPDATE_SELECTED', data: { conversationId: data.conversationId, beforeStatus: prev.status, beforeAssignedToId: prev.assignedToId, afterStatus: updated.status, afterAssignedToId: updated.assignedToId }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
-                    // #endregion
                     console.log('✅ selectedConversation atualizado:', updated.id, updated.status);
                     return updated;
                 });
@@ -1645,27 +1568,19 @@ const ConversationsPage: React.FC = () => {
 
             // ✅ ATUALIZAR CARD NA LISTA se houver lastMessage ou lastTimestamp no evento
             if (data.lastMessage || data.lastTimestamp) {
-                setConversations(prev => {
-                    const before = prev.find(c => c.id === data.conversationId || c.phone === data.phone);
-                    const after = prev.map(c => {
-                        if (c.id === data.conversationId || c.phone === data.phone) {
-                            const updated = {
-                                ...c,
-                                ...(data.lastMessage && { lastMessage: data.lastMessage }),
-                                ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
-                                ...(data.status && { status: data.status }),
-                                ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
-                                ...(data.assignedTo && { assignedTo: data.assignedTo })
-                            };
-                            // #region agent log
-                            fetch('http://127.0.0.1:7246/ingest/66ca0116-31ec-44b0-a99a-003bb5ba1c50', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'ConversationsNew.tsx:1638', message: 'SOCKET_UPDATE_CARD', data: { conversationId: data.conversationId, beforeStatus: before?.status, beforeAssignedToId: before?.assignedToId, afterStatus: updated.status, afterAssignedToId: updated.assignedToId, activeQueue }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) }).catch(() => { });
-                            // #endregion
-                            return updated;
+                setConversations(prev => prev.map(c => {
+                    if (c.id === data.conversationId || c.phone === data.phone) {
+                        return {
+                            ...c,
+                            ...(data.lastMessage && { lastMessage: data.lastMessage }),
+                            ...(data.lastTimestamp && { lastTimestamp: data.lastTimestamp }),
+                            ...(data.status && { status: data.status }),
+                            ...(data.assignedToId !== undefined && { assignedToId: data.assignedToId }),
+                            ...(data.assignedTo && { assignedTo: data.assignedTo })
                         }
-                        return c;
-                    });
-                    return after;
-                });
+                    }
+                    return c
+                }))
             }
 
             // Atualizar conversa localmente se tivermos os dados

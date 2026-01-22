@@ -61,6 +61,18 @@ async function checkInactiveConversations(timeoutMinutes: number) {
             }
         })
 
+        // Log para debug: mostrar quantas conversas foram encontradas e o timeout usado
+        if (inactiveConversations.length > 0) {
+            console.log(`⏰ [Monitor] Verificando ${inactiveConversations.length} conversas inativas (timeout: ${timeoutMinutes}min)`)
+            inactiveConversations.forEach(conv => {
+                const lastActivity = conv.lastUserActivity || conv.lastTimestamp
+                const minutesSinceActivity = lastActivity 
+                    ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60))
+                    : 'N/A'
+                console.log(`  - ${conv.phone}: ${minutesSinceActivity}min desde última atividade (agente: ${conv.assignedTo?.name})`)
+            })
+        }
+
         // #region agent log
         if (inactiveConversations.length === 0) {
             return

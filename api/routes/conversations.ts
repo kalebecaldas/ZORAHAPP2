@@ -660,9 +660,14 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           res.status(409).json({ error: 'Conversa já está atribuída a outro atendente. Use Solicitar conversa.' })
           return
         }
+        // ✅ Atualizar lastUserActivity para evitar que o monitor de inatividade
+        // retorne a conversa imediatamente após assumir
+        // Isso garante que o atendente tenha o tempo completo do timeout para responder
+        const now = new Date()
         updateData = {
           status: 'EM_ATENDIMENTO',
-          assignedToId: assigneeId
+          assignedToId: assigneeId,
+          lastUserActivity: now // ✅ Resetar timer de inatividade ao assumir
         }
         actionDescription = 'Conversa assumida'
         // Cancel bot timeout if conversation was in bot queue
@@ -739,12 +744,6 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
                 metadata: { isClosingMessage: true }
               }
             })
-
-            // #region agent log
-            const fs = require('fs');
-            const logPath = '/Users/kalebecaldas/Documents/cursor_projects/ZORAHAPP2-1/.cursor/debug.log';
-            fs.appendFileSync(logPath, JSON.stringify({ location: 'conversations.ts:670', message: 'CLOSING MESSAGE SAVED', data: { messageId: closingMsg.id, direction: closingMsg.direction, from: closingMsg.from, metadata: closingMsg.metadata }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'A' }) + '\n');
-            // #endregion
 
             console.log(`✅ Mensagem de encerramento salva no histórico: ${closingMsg.id}`)
 
@@ -963,11 +962,6 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
     // Emit real-time update (safe in case realtime not initialized)
     try {
       const realtime = getRealtime()
-      // #region agent log
-      const fs = require('fs');
-      const logPath = '/Users/kalebecaldas/Documents/cursor_projects/ZORAHAPP2-1/.cursor/debug.log';
-      fs.appendFileSync(logPath, JSON.stringify({ location: 'conversations.ts:965', message: 'BACKEND_EMIT_EVENTS_START', data: { action, conversationId: updatedConversation.id, status: updatedConversation.status, assignedToId: updatedConversation.assignedToId, phone: updatedConversation.phone }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) + '\n');
-      // #endregion
       // ✅ Emitir eventos para atualizar frontend
       realtime.io.to(`conv:${phone}`).emit('conversation_updated', updatedConversation)
       realtime.io.emit('queue_updated', { action, conversation: updatedConversation })
@@ -984,9 +978,6 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         updateEvent.reason = 'conversation_reopened'
       }
       realtime.io.emit('conversation:updated', updateEvent)
-      // #region agent log
-      fs.appendFileSync(logPath, JSON.stringify({ location: 'conversations.ts:982', message: 'BACKEND_EMIT_EVENTS_END', data: { action, conversationId: updatedConversation.id, updateEvent }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'E' }) + '\n');
-      // #endregion
       console.log(`📡 Eventos emitidos para conversa ${action}: ${updatedConversation.id}`)
     } catch (emitError) {
       console.warn('Realtime not initialized, skipping emit:', emitError instanceof Error ? emitError.message : emitError)
