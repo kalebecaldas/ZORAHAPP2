@@ -219,7 +219,6 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
         {/* Ranking de Atendentes */}
         <ChartContainer
           title="🏆 Ranking de Atendentes"
-          subtitle="Ordenado por taxa de conversão"
           action={
             <Link to="/users" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
               Ver todos <ArrowUpRight className="h-4 w-4" />
@@ -232,7 +231,6 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
         {/* Performance Comparativa */}
         <ChartContainer
           title="📊 Conversão por Atendente"
-          subtitle="Comparativo da equipe"
         >
           <TeamPerformanceChart
             data={agents}
@@ -297,7 +295,6 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
       {/* Tempo de Resposta Comparativo */}
       <ChartContainer
         title="⏱️ Tempo de Resposta por Atendente"
-        subtitle="Menor é melhor"
       >
         <TeamPerformanceChart
           data={agents}

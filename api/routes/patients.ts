@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express'
+import { Prisma } from '@prisma/client'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
 
@@ -17,9 +18,9 @@ router.get('/', patientsAuth, async (req: Request, res: Response): Promise<void>
 
     const where = search ? {
       OR: [
-        { name: { contains: String(search), mode: 'insensitive' } },
-        { phone: { contains: String(search), mode: 'insensitive' } },
-        { cpf: { contains: String(search), mode: 'insensitive' } },
+        { name: { contains: String(search), mode: Prisma.QueryMode.insensitive } },
+        { phone: { contains: String(search), mode: Prisma.QueryMode.insensitive } },
+        { cpf: { contains: String(search), mode: Prisma.QueryMode.insensitive } },
       ]
     } : {}
 
