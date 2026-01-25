@@ -59,6 +59,15 @@ dotenv.config()
 const app: express.Application = express()
 
 /**
+ * ✅ IMPORTANTE: Trust proxy para Railway, Heroku, etc.
+ * Necessário para express-rate-limit funcionar corretamente com X-Forwarded-For
+ * Ver: https://expressjs.com/en/guide/behind-proxies.html
+ */
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1) // Trust first proxy (Railway, Heroku, etc.)
+}
+
+/**
  * Health check - DEVE ser a primeira rota para garantir que sempre funcione
  * Mesmo se outros middlewares falharem, o health check deve responder
  */
