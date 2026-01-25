@@ -43,17 +43,18 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Handle auth errors
+// Handle auth errors (ex.: token inválido após reinício do servidor)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Only redirect to login on 401 if the error hasn't been handled by the component
-    // This prevents redirects when fetching conversations that might have auth issues
     if (isBrowser && error.response?.status === 401 && !error._handled) {
       const currentPath = window.location.pathname;
-      // Don't redirect if we're on conversations page - let the component handle it
       if (!currentPath.includes('/conversations')) {
+        // Limpar token e estado persistido do auth. Se só remover o token,
+        // o Zustand reidrata user/token do 'auth-storage' no reload e o usuário
+        // continua "logado" → redireciona para dashboard → novo 401 → loop.
         localStorage.removeItem('token');
+        localStorage.removeItem('auth-storage');
         window.location.href = '/login';
       }
     }

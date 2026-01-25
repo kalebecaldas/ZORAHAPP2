@@ -266,6 +266,171 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
 })
 
 /**
+ * 📊 GET /api/analytics/agents/me
+ * Estatísticas pessoais do atendente logado
+ */
+router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const userId = req.user?.id
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' })
+            return
+        }
+
+        const { period = '7d' } = req.query
+        const days = period === '30d' ? 30 : 7
+        const startDate = new Date()
+        startDate.setDate(startDate.getDate() - days)
+
+        // Buscar conversas do usuário
+        const myConversations = await prisma.conversation.findMany({
+            where: {
+                assignedToId: userId,
+                createdAt: { gte: startDate }
+            },
+            include: {
+                patient: {
+                    include: {
+                        appointments: {
+                            where: { createdAt: { gte: startDate } }
+                        }
+                    }
+                }
+            }
+        })
+
+        // Calcular métricas pessoais
+        const closed = myConversations.filter(c => c.status === 'FECHADA')
+        const withAppointment = myConversations.filter(c =>
+            c.patient?.appointments && c.patient.appointments.length > 0
+        )
+
+        const avgResponseTime = myConversations.reduce((sum, c) => {
+            const duration = (new Date(c.updatedAt).getTime() -
+                new Date(c.createdAt).getTime()) / 1000 / 60
+            return sum + duration
+        }, 0) / (myConversations.length || 1)
+
+        // Buscar todos os atendentes para comparação
+        const allAgents = await prisma.user.findMany({
+            where: { role: 'ATENDENTE' },
+            include: {
+                conversations: {
+                    where: { createdAt: { gte: startDate } },
+                    include: {
+                        patient: {
+                            include: {
+                                appointments: {
+                                    where: { createdAt: { gte: startDate } }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        // Calcular média da equipe
+        let teamTotalResponseTime = 0
+        let teamTotalConversations = 0
+        let teamTotalClosed = 0
+        let teamTotalWithAppointment = 0
+
+        allAgents.forEach(agent => {
+            const conversations = agent.conversations
+            teamTotalConversations += conversations.length
+
+            conversations.forEach(c => {
+                if (c.status === 'FECHADA') teamTotalClosed++
+                if (c.patient?.appointments && c.patient.appointments.length > 0) teamTotalWithAppointment++
+
+                const duration = (new Date(c.updatedAt).getTime() -
+                    new Date(c.createdAt).getTime()) / 1000 / 60
+                teamTotalResponseTime += duration
+            })
+        })
+
+        const teamAvgResponseTime = teamTotalConversations > 0
+            ? teamTotalResponseTime / teamTotalConversations
+            : 0
+
+        const teamAvgConversionRate = teamTotalConversations > 0
+            ? (teamTotalWithAppointment / teamTotalConversations) * 100
+            : 0
+
+        const teamAvgCloseRate = teamTotalConversations > 0
+            ? (teamTotalClosed / teamTotalConversations) * 100
+            : 0
+
+        // Calcular rank (posição do usuário)
+        const agentStats = allAgents.map(agent => {
+            const conversations = agent.conversations
+            const agentClosed = conversations.filter(c => c.status === 'FECHADA')
+            const agentWithAppointment = conversations.filter(c =>
+                c.patient?.appointments && c.patient.appointments.length > 0
+            )
+
+            const agentAvgResponseTime = conversations.reduce((sum, c) => {
+                const duration = (new Date(c.updatedAt).getTime() -
+                    new Date(c.createdAt).getTime()) / 1000 / 60
+                return sum + duration
+            }, 0) / (conversations.length || 1)
+
+            const conversionRate = conversations.length > 0
+                ? (agentWithAppointment.length / conversations.length) * 100
+                : 0
+
+            return {
+                userId: agent.id,
+                conversionRate
+            }
+        })
+
+        // Ordenar por taxa de conversão
+        const sortedAgents = agentStats.sort((a, b) => b.conversionRate - a.conversionRate)
+        const myRank = sortedAgents.findIndex(a => a.userId === userId) + 1
+
+        // Conversas ativas agora (não encerradas)
+        const activeConversations = await prisma.conversation.count({
+            where: {
+                assignedToId: userId,
+                status: { not: 'FECHADA' }
+            }
+        })
+
+        res.json({
+            personal: {
+                totalConversations: myConversations.length,
+                closedConversations: closed.length,
+                withAppointment: withAppointment.length,
+                conversionRate: myConversations.length > 0
+                    ? (withAppointment.length / myConversations.length) * 100
+                    : 0,
+                avgResponseTimeMinutes: Math.round(avgResponseTime),
+                closeRate: myConversations.length > 0
+                    ? (closed.length / myConversations.length) * 100
+                    : 0,
+                activeNow: activeConversations
+            },
+            comparison: {
+                teamAvgResponseTime: Math.round(teamAvgResponseTime),
+                teamAvgConversionRate: Math.round(teamAvgConversionRate * 10) / 10,
+                teamAvgCloseRate: Math.round(teamAvgCloseRate * 10) / 10,
+                performanceDelta: avgResponseTime - teamAvgResponseTime,
+                isAboveAverage: avgResponseTime < teamAvgResponseTime
+            },
+            rank: {
+                position: myRank,
+                total: allAgents.length
+            }
+        })
+    } catch (error) {
+        console.error('Error fetching personal stats:', error)
+        res.status(500).json({ error: 'Internal server error' })
+    }
+})
+
+/**
  * 📊 GET /api/analytics/roi
  * ROI do sistema (economia de tempo e custo)
  */

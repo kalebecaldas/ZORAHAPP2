@@ -12,14 +12,14 @@ const patientsAuth = process.env.NODE_ENV === 'development'
 // Get all patients
 router.get('/', patientsAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { page = 1, limit = 20, search = '' } = req.query
+    const { page = 1, limit = 15, search = '' } = req.query
     const skip = (Number(page) - 1) * Number(limit)
 
     const where = search ? {
       OR: [
-        { name: { contains: String(search) } },
-        { phone: { contains: String(search) } },
-        { cpf: { contains: String(search) } },
+        { name: { contains: String(search), mode: 'insensitive' } },
+        { phone: { contains: String(search), mode: 'insensitive' } },
+        { cpf: { contains: String(search), mode: 'insensitive' } },
       ]
     } : {}
 
@@ -28,7 +28,7 @@ router.get('/', patientsAuth, async (req: Request, res: Response): Promise<void>
         where,
         skip,
         take: Number(limit),
-        orderBy: { createdAt: 'desc' },
+        orderBy: { name: 'asc' },
         include: {
           conversations: {
             take: 1,

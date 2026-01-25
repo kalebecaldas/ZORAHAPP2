@@ -13,10 +13,10 @@ const readAuth = process.env.NODE_ENV === 'development'
 
 router.get('/', readAuth, async (req: Request, res: Response): Promise<void> => {
   const defaults = {
-    MASTER: { users: true, settings: true, workflows: true, patients: true, conversations: true, stats: true },
-    ADMIN: { users: true, settings: true, workflows: true, patients: true, conversations: true, stats: true },
-    SUPERVISOR: { users: false, settings: false, workflows: false, patients: true, conversations: true, stats: true },
-    ATENDENTE: { users: false, settings: false, workflows: false, patients: false, conversations: true, stats: false }
+    MASTER: { users: true, settings: true, workflows: true, patients: true, conversations: true, stats: true, aiConfig: true, test: true },
+    ADMIN: { users: true, settings: true, workflows: true, patients: true, conversations: true, stats: true, aiConfig: true, test: true },
+    SUPERVISOR: { users: false, settings: false, workflows: false, patients: true, conversations: true, stats: true, aiConfig: false, test: false },
+    ATENDENTE: { users: false, settings: false, workflows: false, patients: false, conversations: true, stats: false, aiConfig: false, test: false }
   }
   try {
     const latest = await prisma.auditLog.findFirst({

@@ -11,17 +11,18 @@ import {
   Workflow,
   LogOut,
   Bot,
-  Brain,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/utils';
 import { useSystemBranding } from '../services/systemBrandingService';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { hasPermission } = usePermissions();
   const [pendingCount, setPendingCount] = useState(0);
   const branding = useSystemBranding();
 
@@ -69,16 +70,15 @@ const Sidebar: React.FC = () => {
   }, []);
 
   const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/conversations', icon: MessageSquare, label: 'Conversas' },
-    { path: '/patients', icon: Users, label: 'Pacientes' },
-    // { path: '/workflows', icon: Workflow, label: 'Workflows' }, // Temporariamente desabilitado
-    { path: '/stats', icon: BarChart3, label: 'Estatísticas' },
-    ...(user && (String(user.role) === 'MASTER' || String(user.role) === 'ADMIN') ? [{ path: '/users', icon: UserCog, label: 'Usuários' }] : []),
-    { path: '/settings', icon: Settings, label: 'Configurações' },
-    { path: '/ai-config', icon: Brain, label: 'Configuração da IA' },
-    { path: '/test', icon: Bot, label: 'Teste' },
-  ];
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', permission: null },
+    { path: '/conversations', icon: MessageSquare, label: 'Conversas', permission: 'conversations' },
+    { path: '/patients', icon: Users, label: 'Pacientes', permission: 'patients' },
+    // { path: '/workflows', icon: Workflow, label: 'Workflows', permission: 'workflows' }, // Temporariamente desabilitado
+    { path: '/stats', icon: BarChart3, label: 'Estatísticas', permission: 'stats' },
+    { path: '/users', icon: UserCog, label: 'Usuários', permission: 'users' },
+    { path: '/settings', icon: Settings, label: 'Configurações', permission: 'settings' },
+    { path: '/test', icon: Bot, label: 'Teste', permission: 'test' },
+  ].filter(item => !item.permission || hasPermission(item.permission as any));
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path);
 

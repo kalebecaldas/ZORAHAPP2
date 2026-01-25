@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { 
   User, 
   Phone, 
@@ -10,11 +10,13 @@ import {
   Filter,
   Download,
   Upload,
-  History
+  History,
+  X
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { toast } from 'sonner';
 import ConversationHistoryModal from '../components/ConversationHistoryModal';
+import { PatientTableSkeleton } from '../components/PatientTableSkeleton';
 
 interface Patient {
   id: string;
@@ -36,8 +38,10 @@ interface Patient {
 const Patients: React.FC = () => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedPatientForHistory, setSelectedPatientForHistory] = useState<Patient | null>(null);
@@ -54,13 +58,25 @@ const Patients: React.FC = () => {
     birthDate: '',
     address: ''
   });
+  
+  // Estados dos filtros
+  const [filters, setFilters] = useState({
+    insuranceCompany: '',
+    hasEmail: '',
+    hasBirthDate: '',
+    minInteractions: '',
+    sortBy: 'name' // 'name', 'createdAt', 'interactionsCount'
+  });
+  
+  // Convênios únicos para o filtro
+  const [availableInsurances, setAvailableInsurances] = useState<string[]>([]);
 
   const fetchPatients = async (page: number = 1, search: string = '') => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: '20',
+        limit: '15',
         ...(search && { search })
       });
       
@@ -92,7 +108,19 @@ const Patients: React.FC = () => {
       
       console.log(`🔍 fetchPatients - Mapped patients:`, list.map(p => ({ name: p.name, phone: p.phone, insurance: p.insuranceCompany })));
       
-      setPatients(list);
+      // Ordenar por nome alfabeticamente
+      const sortedList = list.sort((a, b) => 
+        a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' })
+      );
+      
+      setPatients(sortedList);
+      
+      // Extrair convênios únicos para o filtro (apenas se não houver pesquisa)
+      // Durante pesquisa, não atualizamos a lista de convênios para não perder contexto
+      if (!search) {
+        const insurances = [...new Set(list.map(p => p.insuranceCompany).filter(Boolean))] as string[];
+        setAvailableInsurances(insurances.sort());
+      }
       
       // Update pagination info
       if (response.data?.pagination) {
@@ -108,22 +136,36 @@ const Patients: React.FC = () => {
     }
   };
 
+  // Debounce search - sempre reseta para página 1 quando pesquisa muda
   useEffect(() => {
-    fetchPatients(currentPage, searchTerm);
-  }, [currentPage]);
+    // Se pesquisa foi limpa, desativar loading imediatamente
+    if (!searchTerm.trim()) {
+      setIsSearching(false);
+      return;
+    }
 
-  // Debounce search
-  useEffect(() => {
+    // Ativar loading imediatamente quando há mudança na pesquisa
+    setIsSearching(true);
+
     const timer = setTimeout(() => {
       if (currentPage === 1) {
-        fetchPatients(1, searchTerm);
+        fetchPatients(1, searchTerm).finally(() => {
+          setIsSearching(false);
+        });
       } else {
         setCurrentPage(1);
       }
     }, 500);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [searchTerm]);
+
+  // Quando mudar de página, manter a pesquisa ativa
+  useEffect(() => {
+    fetchPatients(currentPage, searchTerm);
+  }, [currentPage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +191,7 @@ const Patients: React.FC = () => {
         birthDate: '',
         address: ''
       });
-      fetchPatients();
+      fetchPatients(currentPage, searchTerm);
     } catch (error) {
       console.error('Error saving patient:', error);
       toast.error('Erro ao salvar paciente');
@@ -176,7 +218,7 @@ const Patients: React.FC = () => {
       try {
         await api.delete(`/api/patients/${patientId}`);
         toast.success('Paciente excluído com sucesso');
-        fetchPatients();
+        fetchPatients(currentPage, searchTerm);
       } catch (error) {
         console.error('Error deleting patient:', error);
         toast.error('Erro ao excluir paciente');
@@ -184,8 +226,55 @@ const Patients: React.FC = () => {
     }
   };
 
-  // No need for local filtering - search is done on backend via API
-  const filteredPatients = patients;
+  // Aplicar filtros localmente
+  const filteredPatients = patients.filter(patient => {
+    // Filtro por convênio
+    if (filters.insuranceCompany && patient.insuranceCompany !== filters.insuranceCompany) {
+      return false;
+    }
+    
+    // Filtro por ter email
+    if (filters.hasEmail === 'yes' && !patient.email) {
+      return false;
+    }
+    if (filters.hasEmail === 'no' && patient.email) {
+      return false;
+    }
+    
+    // Filtro por ter data de nascimento
+    if (filters.hasBirthDate === 'yes' && !patient.birthDate) {
+      return false;
+    }
+    if (filters.hasBirthDate === 'no' && patient.birthDate) {
+      return false;
+    }
+    
+    // Filtro por número mínimo de interações
+    if (filters.minInteractions && patient.interactionsCount < parseInt(filters.minInteractions)) {
+      return false;
+    }
+    
+    return true;
+  }).sort((a, b) => {
+    // Ordenação
+    switch (filters.sortBy) {
+      case 'name':
+        return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+      case 'createdAt':
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      case 'interactionsCount':
+        return b.interactionsCount - a.interactionsCount;
+      default:
+        return a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' });
+    }
+  });
+  
+  const activeFiltersCount = [
+    filters.insuranceCompany,
+    filters.hasEmail,
+    filters.hasBirthDate,
+    filters.minInteractions
+  ].filter(Boolean).length;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
@@ -237,9 +326,19 @@ const Patients: React.FC = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button 
+            onClick={() => setShowFilterModal(true)}
+            className={`flex items-center space-x-2 px-4 py-2 border rounded-lg hover:bg-gray-50 relative ${
+              activeFiltersCount > 0 ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300'
+            }`}
+          >
             <Filter className="h-4 w-4" />
             <span>Filtrar</span>
+            {activeFiltersCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                {activeFiltersCount}
+              </span>
+            )}
           </button>
           <button className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
             <Download className="h-4 w-4" />
@@ -254,10 +353,15 @@ const Patients: React.FC = () => {
 
       {/* Patients Table */}
       <div className="bg-white rounded-lg shadow-sm border">
-        {loading ? (
+        {loading || isSearching ? (
+          <PatientTableSkeleton rows={15} />
+        ) : filteredPatients.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-500">Carregando pacientes...</p>
+            <p className="text-gray-500">
+              {searchTerm 
+                ? `Nenhum paciente encontrado para "${searchTerm}"`
+                : 'Nenhum paciente cadastrado'}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -358,10 +462,15 @@ const Patients: React.FC = () => {
         )}
         
         {/* Pagination */}
-        {!loading && totalPages > 1 && (
+        {!loading && !isSearching && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
             <div className="text-sm text-gray-700">
-              Mostrando {((currentPage - 1) * 20) + 1} a {Math.min(currentPage * 20, totalPatients)} de {totalPatients} pacientes
+              Mostrando {((currentPage - 1) * 15) + 1} a {Math.min(currentPage * 15, totalPatients)} de {totalPatients} paciente{totalPatients !== 1 ? 's' : ''}
+              {searchTerm && (
+                <span className="text-gray-500 ml-2">
+                  (filtrado por: "{searchTerm}")
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <button
@@ -505,17 +614,180 @@ const Patients: React.FC = () => {
         </div>
       )}
 
-      {/* History Modal */}
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Filtros Avançados</h3>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Ordenação */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Ordenar por
+                </label>
+                <select
+                  value={filters.sortBy}
+                  onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="name">Nome (A-Z)</option>
+                  <option value="createdAt">Mais Recentes</option>
+                  <option value="interactionsCount">Mais Interações</option>
+                </select>
+              </div>
+
+              {/* Filtro por Convênio */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Convênio
+                </label>
+                <select
+                  value={filters.insuranceCompany}
+                  onChange={(e) => setFilters({ ...filters, insuranceCompany: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Todos os convênios</option>
+                  <option value="Particular">Particular</option>
+                  {availableInsurances.filter(ins => ins !== 'Particular').map(insurance => (
+                    <option key={insurance} value={insurance}>{insurance}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Email */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Possui Email?
+                </label>
+                <select
+                  value={filters.hasEmail}
+                  onChange={(e) => setFilters({ ...filters, hasEmail: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Todos</option>
+                  <option value="yes">Sim, tem email</option>
+                  <option value="no">Não tem email</option>
+                </select>
+              </div>
+
+              {/* Filtro por Data de Nascimento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Possui Data de Nascimento?
+                </label>
+                <select
+                  value={filters.hasBirthDate}
+                  onChange={(e) => setFilters({ ...filters, hasBirthDate: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Todos</option>
+                  <option value="yes">Sim, tem data</option>
+                  <option value="no">Não tem data</option>
+                </select>
+              </div>
+
+              {/* Filtro por Número Mínimo de Interações */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Número Mínimo de Interações
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Ex: 5"
+                  value={filters.minInteractions}
+                  onChange={(e) => setFilters({ ...filters, minInteractions: e.target.value })}
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              {/* Resumo dos filtros ativos */}
+              {activeFiltersCount > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                  <p className="text-sm text-blue-800 font-medium mb-2">
+                    {activeFiltersCount} filtro{activeFiltersCount > 1 ? 's' : ''} ativo{activeFiltersCount > 1 ? 's' : ''}:
+                  </p>
+                  <div className="space-y-1">
+                    {filters.insuranceCompany && (
+                      <p className="text-xs text-blue-700">• Convênio: {filters.insuranceCompany}</p>
+                    )}
+                    {filters.hasEmail && (
+                      <p className="text-xs text-blue-700">• Email: {filters.hasEmail === 'yes' ? 'Com email' : 'Sem email'}</p>
+                    )}
+                    {filters.hasBirthDate && (
+                      <p className="text-xs text-blue-700">• Data de Nascimento: {filters.hasBirthDate === 'yes' ? 'Com data' : 'Sem data'}</p>
+                    )}
+                    {filters.minInteractions && (
+                      <p className="text-xs text-blue-700">• Mínimo de {filters.minInteractions} interações</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between mt-6 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setFilters({
+                    insuranceCompany: '',
+                    hasEmail: '',
+                    hasBirthDate: '',
+                    minInteractions: '',
+                    sortBy: 'name'
+                  });
+                }}
+                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900"
+              >
+                Limpar Filtros
+              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Fechar
+                </button>
+                <button
+                  onClick={() => setShowFilterModal(false)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Aplicar Filtros
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* History Modal - Lazy Loaded */}
       {showHistoryModal && selectedPatientForHistory && (
-        <ConversationHistoryModal
-          patientId={selectedPatientForHistory.id}
-          patientPhone={selectedPatientForHistory.phone}
-          patientName={selectedPatientForHistory.name}
-          onClose={() => {
-            setShowHistoryModal(false);
-            setSelectedPatientForHistory(null);
-          }}
-        />
+        <Suspense fallback={
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+            <div className="bg-white rounded-lg p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-500">Carregando histórico...</p>
+            </div>
+          </div>
+        }>
+          <ConversationHistoryModal
+            patientId={selectedPatientForHistory.id}
+            patientPhone={selectedPatientForHistory.phone}
+            patientName={selectedPatientForHistory.name}
+            onClose={() => {
+              setShowHistoryModal(false);
+              setSelectedPatientForHistory(null);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

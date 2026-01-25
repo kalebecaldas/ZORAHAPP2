@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from 'sonner';
 import { useAuth } from "./hooks/useAuth";
+import { usePermissions } from "./hooks/usePermissions";
 import Sidebar from "./components/Sidebar";
 import { Login } from "./pages/Login";
 import DashboardIntelligent from "./pages/DashboardIntelligent";
@@ -14,9 +15,27 @@ import { Users } from "./pages/Users";
 import { TestChat } from "./pages/TestChat";
 import AIConfig from "./pages/AIConfig";
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children, permission }: { children: React.ReactNode; permission?: string }) {
   const { user } = useAuth();
-  return user ? <>{children}</> : <Navigate to="/login" />;
+  const { hasPermission, loading } = usePermissions();
+  
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+  
+  if (permission && !hasPermission(permission as any)) {
+    return <Navigate to="/dashboard" />;
+  }
+  
+  return <>{children}</>;
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -49,52 +68,52 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="/conversations" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="conversations">
           <ConversationsNew />
         </ProtectedRoute>
       } />
       <Route path="/conversations/:phone" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="conversations">
           <ConversationsNew />
         </ProtectedRoute>
       } />
       <Route path="/patients" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="patients">
           <Patients />
         </ProtectedRoute>
       } />
       <Route path="/workflows" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="workflows">
           <Workflows />
         </ProtectedRoute>
       } />
       <Route path="/workflows/editor/:id" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="workflows">
           <WorkflowEditor />
         </ProtectedRoute>
       } />
       <Route path="/stats" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="stats">
           <Stats />
         </ProtectedRoute>
       } />
       <Route path="/settings" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="settings">
           <Settings />
         </ProtectedRoute>
       } />
       <Route path="/users" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="users">
           <Users />
         </ProtectedRoute>
       } />
       <Route path="/test" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="test">
           <TestChat />
         </ProtectedRoute>
       } />
       <Route path="/ai-config" element={
-        <ProtectedRoute>
+        <ProtectedRoute permission="aiConfig">
           <AIConfig />
         </ProtectedRoute>
       } />

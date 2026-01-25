@@ -539,6 +539,174 @@ router.post('/clinic-data', authMiddleware, async (req: Request, res: Response):
       }
     }
 
+    // Processar procedimentos
+    if (procedures && Array.isArray(procedures)) {
+      console.log(`💉 Processando ${procedures.length} procedimentos...`)
+      
+      for (const proc of procedures) {
+        // 1. Normalizar código do procedimento
+        const procedureCode = proc.id.toUpperCase().replace(/-/g, '_')
+        
+        console.log(`  📝 Processando: ${proc.name} (${procedureCode})`)
+        
+        // 2. Atualizar/criar Procedure base
+        await prisma.procedure.upsert({
+          where: { code: procedureCode },
+          update: {
+            name: proc.name,
+            description: proc.description || '',
+            duration: proc.duration || 30,
+            categories: ['Fisioterapia']
+          },
+          create: {
+            code: procedureCode,
+            name: proc.name,
+            description: proc.description || '',
+            duration: proc.duration || 30,
+            basePrice: 0, // será definido por unidade
+            requiresEvaluation: false,
+            categories: ['Fisioterapia']
+          }
+        })
+        
+        // 3. Processar cada unidade (preços e pacotes)
+        for (const unitCode of proc.availableUnits || []) {
+          const clinic = await prisma.clinic.findUnique({ where: { code: unitCode } })
+          if (!clinic) {
+            console.warn(`    ⚠️  Unidade não encontrada: ${unitCode}`)
+            continue
+          }
+          
+          // 3.1. Vincular procedimento à clínica
+          await prisma.clinicProcedure.upsert({
+            where: {
+              clinicId_procedureCode: {
+                clinicId: clinic.id,
+                procedureCode: procedureCode
+              }
+            },
+            update: { isActive: true },
+            create: {
+              clinicId: clinic.id,
+              procedureCode: procedureCode,
+              isActive: true
+            }
+          })
+          
+          // 3.2. Criar/atualizar preço PARTICULAR
+          const price = proc.prices?.[unitCode]
+          const packages = proc.packages?.[unitCode] || []
+          
+          if (price !== null && price !== undefined) {
+            const finalPrice = typeof price === 'number' ? price : parseFloat(String(price)) || 0
+            
+            await prisma.clinicInsuranceProcedure.upsert({
+              where: {
+                clinicId_insuranceCode_procedureCode: {
+                  clinicId: clinic.id,
+                  insuranceCode: 'PARTICULAR',
+                  procedureCode: procedureCode
+                }
+              },
+              update: {
+                price: finalPrice,
+                hasPackage: packages.length > 0,
+                packageInfo: packages.length > 0 ? JSON.stringify(packages) : null,
+                isActive: true
+              },
+              create: {
+                clinicId: clinic.id,
+                insuranceCode: 'PARTICULAR',
+                procedureCode: procedureCode,
+                price: finalPrice,
+                hasPackage: packages.length > 0,
+                packageInfo: packages.length > 0 ? JSON.stringify(packages) : null,
+                isActive: true
+              }
+            })
+            
+            console.log(`    ✅ Preço ${unitCode}: R$ ${finalPrice}`)
+          }
+        }
+        
+        // 4. Vincular convênios (criar ClinicInsuranceProcedure)
+        for (const convenioName of proc.convenios || []) {
+          // Verificar se convênio existe
+          const insurance = await prisma.insuranceCompany.findFirst({
+            where: { 
+              OR: [
+                { displayName: convenioName },
+                { name: { contains: convenioName, mode: 'insensitive' } }
+              ]
+            }
+          })
+          
+          if (!insurance) {
+            console.warn(`    ⚠️  Convênio não encontrado: ${convenioName}`)
+            continue
+          }
+          
+          // Para cada unidade onde o procedimento está disponível
+          for (const unitCode of proc.availableUnits || []) {
+            const clinic = await prisma.clinic.findUnique({ where: { code: unitCode } })
+            if (!clinic) continue
+            
+            // Criar vínculo convênio + procedimento + clínica
+            await prisma.clinicInsuranceProcedure.upsert({
+              where: {
+                clinicId_insuranceCode_procedureCode: {
+                  clinicId: clinic.id,
+                  insuranceCode: insurance.code,
+                  procedureCode: procedureCode
+                }
+              },
+              update: { isActive: true },
+              create: {
+                clinicId: clinic.id,
+                insuranceCode: insurance.code,
+                procedureCode: procedureCode,
+                price: 0, // Convênios não têm preço direto (coberto pelo plano)
+                isActive: true
+              }
+            })
+          }
+        }
+        
+        // 5. Desativar convênios que foram removidos deste procedimento
+        const currentInsuranceDisplayNames = proc.convenios || []
+        
+        for (const unitCode of proc.availableUnits || []) {
+          const clinic = await prisma.clinic.findUnique({ where: { code: unitCode } })
+          if (!clinic) continue
+          
+          // Buscar todos os vínculos existentes (exceto PARTICULAR)
+          const existing = await prisma.clinicInsuranceProcedure.findMany({
+            where: {
+              clinicId: clinic.id,
+              procedureCode: procedureCode,
+              insuranceCode: { not: 'PARTICULAR' }
+            },
+            include: {
+              insurance: true
+            }
+          })
+          
+          // Desativar os que não estão mais na lista
+          for (const record of existing) {
+            if (!currentInsuranceDisplayNames.includes(record.insurance.displayName)) {
+              await prisma.clinicInsuranceProcedure.update({
+                where: { id: record.id },
+                data: { isActive: false }
+              })
+              console.log(`    🔴 Desativado convênio: ${record.insurance.displayName}`)
+            }
+          }
+        }
+      }
+      
+      console.log(`✅ ${procedures.length} procedimentos processados`)
+    }
+
     // Log da alteração
     await prisma.auditLog.create({
       data: {

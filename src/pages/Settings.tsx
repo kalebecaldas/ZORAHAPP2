@@ -4,11 +4,11 @@ import { toast } from 'sonner';
 import {
   Save, Plus, Trash2, Edit2, X, Check,
   Settings as SettingsIcon, Building2, FileText,
-  MessageSquare, Bot, LayoutTemplate, ChevronDown, ChevronUp, AlertCircle,
-  Monitor, Upload, Image as ImageIcon
+  ChevronDown, ChevronUp, AlertCircle,
+  Monitor, Upload, Image as ImageIcon, Webhook
 } from 'lucide-react';
-import { TemplateManager } from '../components/TemplateManager';
 import SystemSettingsTab from '../components/settings/SystemSettingsTab';
+import WebhooksManagement from '../components/WebhooksManagement';
 
 interface Unit {
   id: string;
@@ -44,20 +44,10 @@ interface ClinicData {
 
 export const Settings = () => {
   const [activeTab, setActiveTab] = useState('geral');
+  const [clinicSubTab, setClinicSubTab] = useState<'convenios' | 'procedimentos'>('convenios');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [clinicData, setClinicData] = useState<ClinicData | null>(null);
-
-  // System settings (Chat+Bot)
-  const [systemSettings, setSystemSettings] = useState<any>({
-    openaiApiKey: '',
-    whatsappToken: '',
-    metaAppId: '',
-    metaAppSecret: '',
-    metaPhoneNumberId: '',
-    metaBusinessAccountId: '',
-    webhookUrl: ''
-  });
 
   // System branding settings
   const [systemBranding, setSystemBranding] = useState({
@@ -72,25 +62,12 @@ export const Settings = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [clinicRes, settingsRes, brandingRes] = await Promise.all([
+      const [clinicRes, brandingRes] = await Promise.all([
         api.get('/api/settings/clinic-data'),
-        api.get('/api/settings'),
         api.get('/api/settings/system-branding').catch(() => ({ data: null })) // Optional, may not exist
       ]);
 
       setClinicData(clinicRes.data);
-
-      // Map system settings
-      const s = settingsRes.data || {};
-      setSystemSettings({
-        openaiApiKey: s.ai?.openaiApiKeyMasked || '',
-        whatsappToken: '', // Token usually not returned for security
-        metaAppId: '',
-        metaAppSecret: '',
-        metaPhoneNumberId: s.whatsapp?.phoneNumberId || '',
-        metaBusinessAccountId: '',
-        webhookUrl: ''
-      });
 
       // Map system branding
       if (brandingRes.data) {
@@ -116,30 +93,6 @@ export const Settings = () => {
     } catch (error) {
       console.error('Error saving clinic data:', error);
       toast.error('Erro ao salvar dados da clínica');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveSystemSettings = async () => {
-    try {
-      setSaving(true);
-      const payload: any = {
-        ai: { openaiApiKey: systemSettings.openaiApiKey },
-        whatsapp: {
-          token: systemSettings.whatsappToken,
-          appId: systemSettings.metaAppId,
-          appSecret: systemSettings.metaAppSecret,
-          phoneNumberId: systemSettings.metaPhoneNumberId,
-          businessAccountId: systemSettings.metaBusinessAccountId,
-          webhookUrl: systemSettings.webhookUrl
-        }
-      };
-      await api.put('/api/settings', payload);
-      toast.success('Configurações do sistema salvas');
-    } catch (error) {
-      console.error('Error saving system settings:', error);
-      toast.error('Erro ao salvar configurações do sistema');
     } finally {
       setSaving(false);
     }
@@ -283,11 +236,9 @@ export const Settings = () => {
         <nav className="w-full lg:w-64 flex-shrink-0 space-y-1">
           {[
             { id: 'geral', label: 'Geral', icon: Building2 },
-            { id: 'convenios', label: 'Convênios', icon: FileText },
-            { id: 'procedimentos', label: 'Procedimentos', icon: FileText },
-            { id: 'chatbot', label: 'Chat + Bot', icon: Bot },
-            { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+            { id: 'clinica', label: 'Clínica', icon: Building2 },
             { id: 'configuracoes', label: 'Configurações', icon: SettingsIcon },
+            { id: 'webhooks', label: 'Webhooks', icon: Webhook },
             { id: 'sistema', label: 'Branding', icon: Monitor },
           ].map((item) => (
             <button
@@ -470,212 +421,157 @@ export const Settings = () => {
             </div>
           )}
 
-          {activeTab === 'convenios' && (
-            <div className="p-6 space-y-8">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Convênios</h2>
-                <button onClick={handleSaveClinicData} disabled={saving} className="btn-primary flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  <Save className="w-4 h-4" /> Salvar
+          {activeTab === 'clinica' && (
+            <div className="p-6 space-y-6">
+              {/* Header com título */}
+              <div className="flex justify-between items-center border-b pb-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Gestão da Clínica</h2>
+                  <p className="text-sm text-gray-500">Gerencie convênios e procedimentos</p>
+                </div>
+                <button 
+                  onClick={handleSaveClinicData} 
+                  disabled={saving} 
+                  className="btn-primary flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" /> {saving ? 'Salvando...' : 'Salvar Tudo'}
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Regular Insurance */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-gray-900">Convênios (Lista Padrão)</h3>
-                    <button
-                      onClick={() => setClinicData({ ...clinicData, insurance: [...clinicData.insurance, 'NOVO CONVÊNIO'] })}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" /> Adicionar
-                    </button>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-[500px] overflow-y-auto">
-                    {clinicData.insurance.map((ins, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={ins}
-                          onChange={(e) => {
-                            const newIns = [...clinicData.insurance];
-                            newIns[idx] = e.target.value;
-                            setClinicData({ ...clinicData, insurance: newIns });
-                          }}
-                          className="flex-1 border rounded px-3 py-2 text-sm"
-                        />
-                        <button
-                          onClick={() => {
-                            const newIns = [...clinicData.insurance];
-                            newIns.splice(idx, 1);
-                            setClinicData({ ...clinicData, insurance: newIns });
-                          }}
-                          className="text-red-500 hover:text-red-700 px-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Discount Insurance */}
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-gray-900">Convênios com Desconto</h3>
-                    <button
-                      onClick={() => setClinicData({ ...clinicData, discountInsurance: [...clinicData.discountInsurance, 'NOVO CONVÊNIO'] })}
-                      className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                    >
-                      <Plus className="w-4 h-4" /> Adicionar
-                    </button>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-[500px] overflow-y-auto">
-                    {clinicData.discountInsurance.map((ins, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <input
-                          type="text"
-                          value={ins}
-                          onChange={(e) => {
-                            const newIns = [...clinicData.discountInsurance];
-                            newIns[idx] = e.target.value;
-                            setClinicData({ ...clinicData, discountInsurance: newIns });
-                          }}
-                          className="flex-1 border rounded px-3 py-2 text-sm"
-                        />
-                        <button
-                          onClick={() => {
-                            const newIns = [...clinicData.discountInsurance];
-                            newIns.splice(idx, 1);
-                            setClinicData({ ...clinicData, discountInsurance: newIns });
-                          }}
-                          className="text-red-500 hover:text-red-700 px-2"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'procedimentos' && (
-            <ProceduresEditor
-              clinicData={clinicData}
-              setClinicData={setClinicData}
-              onSave={handleSaveClinicData}
-              saving={saving}
-            />
-          )}
-
-          {activeTab === 'chatbot' && (
-            <div className="p-6 space-y-8">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Configurações do Chat & Bot</h2>
-                <button onClick={handleSaveSystemSettings} disabled={saving} className="btn-primary flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
-                  <Save className="w-4 h-4" /> Salvar
+              {/* Sub-abas horizontais */}
+              <div className="flex gap-2 border-b">
+                <button
+                  onClick={() => setClinicSubTab('convenios')}
+                  className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                    clinicSubTab === 'convenios'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Convênios
+                </button>
+                <button
+                  onClick={() => setClinicSubTab('procedimentos')}
+                  className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+                    clinicSubTab === 'procedimentos'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Procedimentos
                 </button>
               </div>
 
-              <div className="space-y-6">
-                <div className="bg-gray-50 p-4 rounded-lg border">
-                  <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                    <Bot className="w-5 h-5 text-purple-600" /> Inteligência Artificial (OpenAI)
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
-                      <input
-                        type="password"
-                        value={systemSettings.openaiApiKey}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, openaiApiKey: e.target.value })}
-                        placeholder="sk-..."
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Deixe em branco para manter a chave atual.</p>
-                    </div>
-                  </div>
-                </div>
+              {/* Conteúdo das sub-abas */}
+              <div className="mt-4">
+                {clinicSubTab === 'convenios' && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Regular Insurance */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-medium text-gray-900">Convênios (Lista Padrão)</h3>
+                          <button
+                            onClick={() => setClinicData({ ...clinicData!, insurance: [...clinicData!.insurance, 'NOVO CONVÊNIO'] })}
+                            className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                          >
+                            <Plus className="w-4 h-4" /> Adicionar
+                          </button>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-[500px] overflow-y-auto">
+                          {clinicData!.insurance.map((ins, idx) => (
+                            <div key={idx} className="flex gap-2">
+                              <input
+                                type="text"
+                                value={ins}
+                                onChange={(e) => {
+                                  const newIns = [...clinicData!.insurance];
+                                  newIns[idx] = e.target.value;
+                                  setClinicData({ ...clinicData!, insurance: newIns });
+                                }}
+                                className="flex-1 border rounded px-3 py-2 text-sm"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newIns = [...clinicData!.insurance];
+                                  newIns.splice(idx, 1);
+                                  setClinicData({ ...clinicData!, insurance: newIns });
+                                }}
+                                className="text-red-500 hover:text-red-700 px-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
 
-                <div className="bg-gray-50 p-4 rounded-lg border">
-                  <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-green-600" /> WhatsApp (Meta Cloud API)
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Access Token</label>
-                      <input
-                        type="password"
-                        value={systemSettings.whatsappToken}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, whatsappToken: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number ID</label>
-                      <input
-                        type="text"
-                        value={systemSettings.metaPhoneNumberId}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, metaPhoneNumberId: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Business Account ID</label>
-                      <input
-                        type="text"
-                        value={systemSettings.metaBusinessAccountId}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, metaBusinessAccountId: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">App ID</label>
-                      <input
-                        type="text"
-                        value={systemSettings.metaAppId}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, metaAppId: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">App Secret</label>
-                      <input
-                        type="password"
-                        value={systemSettings.metaAppSecret}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, metaAppSecret: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Webhook URL</label>
-                      <input
-                        type="text"
-                        value={systemSettings.webhookUrl}
-                        onChange={(e) => setSystemSettings({ ...systemSettings, webhookUrl: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 bg-gray-100"
-                        readOnly
-                      />
+                      {/* Discount Insurance */}
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-medium text-gray-900">Convênios com Desconto</h3>
+                          <button
+                            onClick={() => setClinicData({ ...clinicData!, discountInsurance: [...clinicData!.discountInsurance, 'NOVO CONVÊNIO'] })}
+                            className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                          >
+                            <Plus className="w-4 h-4" /> Adicionar
+                          </button>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-2 max-h-[500px] overflow-y-auto">
+                          {clinicData!.discountInsurance.map((ins, idx) => (
+                            <div key={idx} className="flex gap-2">
+                              <input
+                                type="text"
+                                value={ins}
+                                onChange={(e) => {
+                                  const newIns = [...clinicData!.discountInsurance];
+                                  newIns[idx] = e.target.value;
+                                  setClinicData({ ...clinicData!, discountInsurance: newIns });
+                                }}
+                                className="flex-1 border rounded px-3 py-2 text-sm"
+                              />
+                              <button
+                                onClick={() => {
+                                  const newIns = [...clinicData!.discountInsurance];
+                                  newIns.splice(idx, 1);
+                                  setClinicData({ ...clinicData!, discountInsurance: newIns });
+                                }}
+                                className="text-red-500 hover:text-red-700 px-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
+
+                {clinicSubTab === 'procedimentos' && (
+                  <div className="space-y-6">
+                    <ProceduresEditor 
+                      clinicData={clinicData!}
+                      setClinicData={setClinicData}
+                      onSave={handleSaveClinicData}
+                      saving={saving}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {activeTab === 'templates' && (
-            <div className="p-6">
-              <TemplateManager />
-            </div>
-          )}
-
 
           {/* Tab Configurações */}
           {activeTab === 'configuracoes' && (
             <div className="p-6">
               <SystemSettingsTab />
+            </div>
+          )}
+
+          {activeTab === 'webhooks' && (
+            <div className="p-6">
+              <WebhooksManagement />
             </div>
           )}
 
@@ -854,10 +750,10 @@ const ProceduresEditor = ({ clinicData, setClinicData, onSave, saving }: {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">Procedimentos</h2>
+          <h3 className="text-md font-semibold">Lista de Procedimentos</h3>
           <div className="relative">
             <input
               type="text"
@@ -868,14 +764,9 @@ const ProceduresEditor = ({ clinicData, setClinicData, onSave, saving }: {
             />
           </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleAddProcedure} className="flex items-center gap-1 px-3 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 text-sm">
-            <Plus className="w-4 h-4" /> Adicionar
-          </button>
-          <button onClick={onSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm">
-            <Save className="w-4 h-4" /> Salvar
-          </button>
-        </div>
+        <button onClick={handleAddProcedure} className="flex items-center gap-1 px-3 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 text-sm">
+          <Plus className="w-4 h-4" /> Adicionar Procedimento
+        </button>
       </div>
 
       <div className="space-y-4">
