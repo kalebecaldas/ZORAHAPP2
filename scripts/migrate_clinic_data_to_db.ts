@@ -133,7 +133,7 @@ async function migrateClinicData() {
                 name: 'Fisioterapia Ortopédica',
                 description: 'Tratamento de lesões musculoesqueléticas, pós-operatório e reabilitação ortopédica',
                 basePrice: 90.00,
-                duration: 50,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -141,7 +141,7 @@ async function migrateClinicData() {
                 name: 'Fisioterapia Neurológica',
                 description: 'Reabilitação de pacientes com doenças neurológicas (AVC, Parkinson, etc)',
                 basePrice: 100.00,
-                duration: 50,
+                duration: 40,
                 requiresEvaluation: false
             },
             {
@@ -149,7 +149,7 @@ async function migrateClinicData() {
                 name: 'Fisioterapia Respiratória',
                 description: 'Tratamento de doenças respiratórias e reabilitação pulmonar',
                 basePrice: 100.00,
-                duration: 50,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -157,7 +157,7 @@ async function migrateClinicData() {
                 name: 'Fisioterapia Pélvica',
                 description: 'Tratamento de disfunções do assoalho pélvico',
                 basePrice: 220.00,
-                duration: 50,
+                duration: 40,
                 requiresEvaluation: true
             },
             {
@@ -165,7 +165,7 @@ async function migrateClinicData() {
                 name: 'Acupuntura',
                 description: 'Tratamento através de técnicas de medicina chinesa',
                 basePrice: 180.00,
-                duration: 50,
+                duration: 30,
                 requiresEvaluation: true
             },
             {
@@ -173,7 +173,7 @@ async function migrateClinicData() {
                 name: 'RPG',
                 description: 'Reeducação Postural Global',
                 basePrice: 120.00,
-                duration: 50,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -189,7 +189,7 @@ async function migrateClinicData() {
                 name: 'Quiropraxia',
                 description: 'Ajustes quiropráticos para alívio de dores',
                 basePrice: 120.00,
-                duration: 40,
+                duration: 60,
                 requiresEvaluation: false
             },
             {
@@ -205,7 +205,7 @@ async function migrateClinicData() {
                 name: 'Avaliação Fisioterapia Pélvica',
                 description: 'Avaliação inicial para fisioterapia pélvica',
                 basePrice: 250.00,
-                duration: 60,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -213,7 +213,7 @@ async function migrateClinicData() {
                 name: 'Avaliação Acupuntura',
                 description: 'Avaliação inicial para acupuntura',
                 basePrice: 200.00,
-                duration: 60,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -221,7 +221,7 @@ async function migrateClinicData() {
                 name: 'Infiltração de ponto gatilho e Agulhamento a seco',
                 description: 'Técnica para alívio de dores musculares',
                 basePrice: 150.00,
-                duration: 40,
+                duration: 30,
                 requiresEvaluation: false
             },
             {
@@ -245,7 +245,7 @@ async function migrateClinicData() {
                 name: 'Fisioterapia Pós-operatória',
                 description: 'Reabilitação após cirurgias',
                 basePrice: 60.00,
-                duration: 50,
+                duration: 30,
                 requiresEvaluation: false
             },
             {

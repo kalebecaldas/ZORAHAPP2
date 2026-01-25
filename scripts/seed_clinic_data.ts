@@ -94,21 +94,21 @@ async function seedClinicData() {
         console.log('💉 Criando procedimentos...')
 
         const procedures = [
-            { code: 'FISIO_ORTOPEDICA', name: 'Fisioterapia Ortopédica', description: 'Tratamento de lesões musculoesqueléticas, pós-operatório e reabilitação ortopédica', basePrice: 90.00, duration: 50, requiresEvaluation: false },
-            { code: 'FISIO_NEUROLOGICA', name: 'Fisioterapia Neurológica', description: 'Reabilitação de pacientes com doenças neurológicas (AVC, Parkinson, etc)', basePrice: 100.00, duration: 50, requiresEvaluation: false },
-            { code: 'FISIO_RESPIRATORIA', name: 'Fisioterapia Respiratória', description: 'Tratamento de doenças respiratórias e reabilitação pulmonar', basePrice: 100.00, duration: 50, requiresEvaluation: false },
-            { code: 'FISIO_PELVICA', name: 'Fisioterapia Pélvica', description: 'Tratamento de disfunções do assoalho pélvico', basePrice: 220.00, duration: 60, requiresEvaluation: true },
-            { code: 'ACUPUNTURA', name: 'Acupuntura', description: 'Tratamento através de técnicas de medicina chinesa', basePrice: 180.00, duration: 45, requiresEvaluation: true },
-            { code: 'RPG', name: 'RPG', description: 'Reeducação Postural Global', basePrice: 120.00, duration: 60, requiresEvaluation: false },
-            { code: 'PILATES', name: 'Pilates', description: 'Exercícios de fortalecimento e alongamento', basePrice: 70.00, duration: 30, requiresEvaluation: false },
-            { code: 'QUIROPRAXIA', name: 'Quiropraxia', description: 'Ajustes quiropráticos para alívio de dores', basePrice: 120.00, duration: 40, requiresEvaluation: false },
+            { code: 'FISIO_ORTOPEDICA', name: 'Fisioterapia Ortopédica', description: 'Tratamento de lesões musculoesqueléticas, pós-operatório e reabilitação ortopédica', basePrice: 90.00, duration: 30, requiresEvaluation: false },
+            { code: 'FISIO_NEUROLOGICA', name: 'Fisioterapia Neurológica', description: 'Reabilitação de pacientes com doenças neurológicas (AVC, Parkinson, etc)', basePrice: 100.00, duration: 40, requiresEvaluation: false },
+            { code: 'FISIO_RESPIRATORIA', name: 'Fisioterapia Respiratória', description: 'Tratamento de doenças respiratórias e reabilitação pulmonar', basePrice: 100.00, duration: 30, requiresEvaluation: false },
+            { code: 'FISIO_PELVICA', name: 'Fisioterapia Pélvica', description: 'Tratamento de disfunções do assoalho pélvico', basePrice: 220.00, duration: 40, requiresEvaluation: true },
+            { code: 'ACUPUNTURA', name: 'Acupuntura', description: 'Tratamento através de técnicas de medicina chinesa', basePrice: 180.00, duration: 30, requiresEvaluation: true },
+            { code: 'RPG', name: 'RPG', description: 'Reeducação Postural Global', basePrice: 120.00, duration: 30, requiresEvaluation: false },
+            { code: 'PILATES', name: 'Pilates', description: 'Exercícios de fortalecimento e alongamento', basePrice: 70.00, duration: 50, requiresEvaluation: false },
+            { code: 'QUIROPRAXIA', name: 'Quiropraxia', description: 'Ajustes quiropráticos para alívio de dores', basePrice: 120.00, duration: 60, requiresEvaluation: false },
             { code: 'CONSULTA_ORTOPEDISTA', name: 'Consulta com Ortopedista', description: 'Consulta médica ortopédica', basePrice: 400.00, duration: 30, requiresEvaluation: false },
-            { code: 'AVALIACAO_FISIO_PELVICA', name: 'Avaliação Fisioterapia Pélvica', description: 'Avaliação inicial para fisioterapia pélvica', basePrice: 250.00, duration: 60, requiresEvaluation: false },
-            { code: 'AVALIACAO_ACUPUNTURA', name: 'Avaliação Acupuntura', description: 'Avaliação inicial para acupuntura', basePrice: 200.00, duration: 45, requiresEvaluation: false },
-            { code: 'INFILTRACAO', name: 'Infiltração de ponto gatilho e Agulhamento a seco', description: 'Técnica para alívio de dores musculares', basePrice: 150.00, duration: 40, requiresEvaluation: false },
+            { code: 'AVALIACAO_FISIO_PELVICA', name: 'Avaliação Fisioterapia Pélvica', description: 'Avaliação inicial para fisioterapia pélvica', basePrice: 250.00, duration: 30, requiresEvaluation: false },
+            { code: 'AVALIACAO_ACUPUNTURA', name: 'Avaliação Acupuntura', description: 'Avaliação inicial para acupuntura', basePrice: 200.00, duration: 30, requiresEvaluation: false },
+            { code: 'INFILTRACAO', name: 'Infiltração de ponto gatilho e Agulhamento a seco', description: 'Técnica para alívio de dores musculares', basePrice: 150.00, duration: 30, requiresEvaluation: false },
             { code: 'ESTIMULACAO_ELETRICA', name: 'Estimulação Elétrica Transcutânea', description: 'TENS para alívio de dores', basePrice: 80.00, duration: 30, requiresEvaluation: false },
             { code: 'TERAPIA_ONDAS_CHOQUE', name: 'Terapias por Ondas de Choque', description: 'Tratamento com ondas de choque para lesões', basePrice: 200.00, duration: 30, requiresEvaluation: false },
-            { code: 'FISIO_POS_OPERATORIA', name: 'Fisioterapia Pós-operatória', description: 'Reabilitação após cirurgias', basePrice: 60.00, duration: 50, requiresEvaluation: false },
+            { code: 'FISIO_POS_OPERATORIA', name: 'Fisioterapia Pós-operatória', description: 'Reabilitação após cirurgias', basePrice: 60.00, duration: 30, requiresEvaluation: false },
             { code: 'CONSULTA_CLINICO_GERAL', name: 'Consulta Clínico Geral', description: 'Consulta médica clínica geral', basePrice: 200.00, duration: 30, requiresEvaluation: false }
         ]
 
@@ -421,15 +421,15 @@ async function seedClinicData() {
             { insurance: 'AMBEP', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'FISIO_RESPIRATORIA', 'RPG'] },
             { insurance: 'GAMA', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA'] },
             { insurance: 'LIFE', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'FISIO_RESPIRATORIA', 'RPG'] },
-            { insurance: 'NOTREDAME', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
-            { insurance: 'OAB', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
-            { insurance: 'CAPESAUDE', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
-            { insurance: 'CASEMBRAPA', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA'] },
-            { insurance: 'CULTURAL', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA'] },
-            { insurance: 'EVIDA', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
-            { insurance: 'FOGAS', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA'] },
-            { insurance: 'FUSEX', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
-            { insurance: 'PLAN_ASSITE', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA'] }
+            { insurance: 'NOTREDAME', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
+            { insurance: 'OAB', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA', 'RPG'] },
+            { insurance: 'CAPESAUDE', procedures: ['ACUPUNTURA'] },
+            { insurance: 'CASEMBRAPA', procedures: ['FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] },
+            { insurance: 'CULTURAL', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'FISIO_RESPIRATORIA', 'RPG'] },
+            { insurance: 'EVIDA', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA', 'RPG'] },
+            { insurance: 'FOGAS', procedures: ['ACUPUNTURA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_RESPIRATORIA', 'RPG'] },
+            { insurance: 'FUSEX', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'QUIROPRAXIA', 'RPG'] },
+            { insurance: 'PLAN_ASSITE', procedures: ['ACUPUNTURA', 'CONSULTA_ORTOPEDISTA', 'FISIO_NEUROLOGICA', 'FISIO_ORTOPEDICA', 'FISIO_PELVICA', 'RPG'] }
         ]
 
         let totalCoverage = 0

@@ -93,7 +93,7 @@
             "id": "fisioterapia_neurologica",
             "name": "Fisioterapia Neurológica",
             "description": "Reabilitação funcional para pacientes com limitações motoras decorrentes de AVC, neuropatias e doenças neurológicas.",
-            "duration": 30,
+            "duration": 40,
             "availableUnits": [
                 "vieiralves",
                 "sao_jose"
@@ -234,7 +234,7 @@
             "id": "fisioterapia_pelvica",
             "name": "Fisioterapia Pélvica",
             "description": "Tratamento especializado para fortalecimento do assoalho pélvico, dor pélvica, incontinência e funções urinárias e sexuais.",
-            "duration": 30,
+            "duration": 40,
             "availableUnits": [
                 "vieiralves"
             ],
@@ -321,7 +321,7 @@
             "id": "pilates",
             "name": "Pilates",
             "description": "Prática que combina força, flexibilidade e controle muscular, ideal para postura e prevenção de lesões.",
-            "duration": 30,
+            "duration": 50,
             "availableUnits": [
                 "vieiralves"
             ],
@@ -343,7 +343,7 @@
             "id": "quiropraxia",
             "name": "Quiropraxia",
             "description": "Ajustes articulares e manipulações manuais para alívio de dores na coluna e restauração da mobilidade.",
-            "duration": 30,
+            "duration": 60,
             "availableUnits": [
                 "vieiralves"
             ],

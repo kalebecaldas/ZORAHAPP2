@@ -72,7 +72,7 @@ export const procedures: Procedure[] = [
     basePrice: 220,
     insuranceAccepted: ['unimed', 'bradesco', 'amil'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 40,
     categories: ['fisioterapia', 'especializada'],
     specialNotes: 'Requer avaliação específica e prévia autorização do convênio'
   },
@@ -83,7 +83,7 @@ export const procedures: Procedure[] = [
     basePrice: 180,
     insuranceAccepted: ['unimed', 'bradesco', 'sulamerica'],
     requiresEvaluation: true,
-    duration: 45,
+    duration: 30,
     categories: ['acupuntura', 'tradicional'],
     specialNotes: 'Requer avaliação prévia e indicação médica',
     priceByLocation: { 'sao-jose': 60 }
@@ -105,7 +105,7 @@ export const procedures: Procedure[] = [
     basePrice: 200,
     insuranceAccepted: ['unimed', 'bradesco', 'sulamerica'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 50,
     categories: ['pilates', 'reabilitação']
   },
   {
@@ -115,7 +115,7 @@ export const procedures: Procedure[] = [
     basePrice: 120,
     insuranceAccepted: ['unimed', 'bradesco', 'amil'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 30,
     categories: ['postura', 'reeducação'],
     priceByLocation: { 'sao-jose': 50 }
   },
@@ -188,7 +188,7 @@ export const procedures: Procedure[] = [
     basePrice: 100,
     insuranceAccepted: ['unimed', 'bradesco', 'sulamerica'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 40,
     categories: ['fisioterapia'],
     priceByLocation: { 'sao-jose': 60 }
   },
@@ -199,7 +199,7 @@ export const procedures: Procedure[] = [
     basePrice: 90,
     insuranceAccepted: ['unimed', 'bradesco', 'sulamerica'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 30,
     categories: ['fisioterapia'],
     priceByLocation: { 'sao-jose': 45 }
   },
@@ -210,7 +210,7 @@ export const procedures: Procedure[] = [
     basePrice: 100,
     insuranceAccepted: ['bradesco'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 30,
     categories: ['fisioterapia'],
     priceByLocation: { 'sao-jose': 60 }
   },
@@ -221,7 +221,7 @@ export const procedures: Procedure[] = [
     basePrice: 60,
     insuranceAccepted: ['particular'],
     requiresEvaluation: true,
-    duration: 60,
+    duration: 30,
     categories: ['fisioterapia']
   },
   {
@@ -281,7 +281,7 @@ export const procedures: Procedure[] = [
     basePrice: 120,
     insuranceAccepted: ['fusex'],
     requiresEvaluation: false,
-    duration: 45,
+    duration: 60,
     categories: ['terapia-complementar'],
     availability: {
       'Quarta': '14:00 - 17:00',
