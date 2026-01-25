@@ -113,7 +113,7 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
   const totalTeamClosed = agents.reduce((sum, a) => sum + a.closedConversations, 0);
 
   // Identificar atendentes com atenção necessária
-  const needsAttention = agents.filter(a => 
+  const needsAttention = agents.filter(a =>
     a.avgResponseTimeMinutes > 10 || a.conversionRate < 30
   );
 

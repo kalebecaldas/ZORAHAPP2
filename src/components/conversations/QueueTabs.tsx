@@ -75,8 +75,8 @@ export const QueueTabs: React.FC<QueueTabsProps> = ({ activeQueue, onQueueChange
                             key={queue.key}
                             onClick={() => onQueueChange(queue.key)}
                             className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${isActive
-                                    ? `${queue.bgClass} ${queue.textClass} border ${queue.borderClass}`
-                                    : 'text-gray-600 hover:bg-gray-50'
+                                ? `${queue.bgClass} ${queue.textClass} border ${queue.borderClass}`
+                                : 'text-gray-600 hover:bg-gray-50'
                                 }`}
                         >
                             <Icon className="h-3.5 w-3.5 flex-shrink-0" />

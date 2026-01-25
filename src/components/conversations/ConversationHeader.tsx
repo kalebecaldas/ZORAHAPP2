@@ -55,10 +55,10 @@ export const ConversationHeader: React.FC<ConversationHeaderProps> = ({
     const patientName = patient?.name || conversation.phone;
 
     // Check if conversation can be taken over
-    const canTakeOver = !conversation.assignedToId && 
-        (conversation.status === 'PRINCIPAL' || 
-         conversation.status === 'AGUARDANDO' || 
-         conversation.status === 'BOT_QUEUE');
+    const canTakeOver = !conversation.assignedToId &&
+        (conversation.status === 'PRINCIPAL' ||
+            conversation.status === 'AGUARDANDO' ||
+            conversation.status === 'BOT_QUEUE');
 
     return (
         <div className="bg-white border-b border-gray-200 px-6 py-4">

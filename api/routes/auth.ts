@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
-import { generateToken, hashPassword, comparePassword } from '../utils/auth.js'
+import { generateToken, hashPassword, comparePassword, verifyToken } from '../utils/auth.js'
 import { registerSchema, loginSchema } from '../utils/validation.js'
 
 const router = Router()
@@ -107,6 +107,64 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 // Logout
 router.post('/logout', async (req: Request, res: Response): Promise<void> => {
   res.json({ message: 'Logout realizado com sucesso' })
+})
+
+// Generate N8N API Token (apenas para MASTER/ADMIN)
+router.post('/generate-n8n-token', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const authHeader = req.headers.authorization
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Token não fornecido' })
+      return
+    }
+
+    const token = authHeader.substring(7)
+    
+    // Verify token and get user
+    const decoded = await verifyToken(token)
+    if (!decoded) {
+      res.status(401).json({ error: 'Token inválido' })
+      return
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.userId } })
+    
+    if (!user) {
+      res.status(401).json({ error: 'Usuário não encontrado' })
+      return
+    }
+
+    // Only MASTER and ADMIN can generate N8N tokens
+    if (!['MASTER', 'ADMIN'].includes(user.role)) {
+      res.status(403).json({ error: 'Sem permissão para gerar tokens N8N' })
+      return
+    }
+
+    // Generate N8N API token (valid for 10 years)
+    const n8nToken = generateToken('n8n_integration', '10y')
+    
+    // Log token generation
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'GENERATE_N8N_TOKEN',
+        entityType: 'API_TOKEN',
+        entityId: 'n8n_integration',
+        details: { generatedBy: user.email, timestamp: new Date().toISOString() }
+      }
+    })
+
+    res.json({
+      token: n8nToken,
+      type: 'n8n_integration',
+      expiresIn: '10 years',
+      usage: 'Use este token no header: Authorization: Bearer {token}'
+    })
+  } catch (error) {
+    console.error('Erro ao gerar token N8N:', error)
+    res.status(500).json({ error: 'Erro interno' })
+  }
 })
 
 export default router

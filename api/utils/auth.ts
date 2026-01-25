@@ -19,8 +19,8 @@ declare global {
 
 const JWT_SECRET = process.env.AUTH_JWT_SECRET || 'fallback-secret'
 
-export function generateToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' })
+export function generateToken(userId: string, expiresIn: string = '7d'): string {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn })
 }
 
 export function verifyToken(token: string): { userId: string } | null {

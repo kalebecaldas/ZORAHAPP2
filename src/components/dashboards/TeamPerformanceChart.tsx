@@ -30,19 +30,19 @@ export const TeamPerformanceChart: React.FC<TeamPerformanceChartProps> = ({
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis 
-            dataKey="name" 
+          <XAxis
+            dataKey="name"
             stroke="#6b7280"
             fontSize={12}
           />
-          <YAxis 
+          <YAxis
             stroke="#6b7280"
             fontSize={12}
             label={yAxisLabel ? { value: yAxisLabel, angle: -90, position: 'insideLeft' } : undefined}
           />
-          <Tooltip 
-            contentStyle={{ 
-              backgroundColor: '#fff', 
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#fff',
               border: '1px solid #e5e7eb',
               borderRadius: '8px',
               boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'

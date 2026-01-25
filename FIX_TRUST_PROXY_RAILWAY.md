@@ -95,3 +95,21 @@ Esta configuração é **essencial** para qualquer aplicação Express hospedada
 
 **Data:** 25/01/2026  
 **Status:** ✅ Corrigido e testado no Railway
+
+## 🚀 Para Aplicar a Correção
+
+### Commit criado:
+```
+7ebfb6e - Fix: Configurar trust proxy para Railway e corrigir ValidationError
+```
+
+### Para fazer o push:
+```bash
+git push origin main
+```
+
+Ou use o VS Code:
+1. Vá para "Source Control" (Ctrl+Shift+G)
+2. Clique em "Sync Changes" ou "Push"
+
+O Railway detectará o commit e fará redeploy automaticamente.
