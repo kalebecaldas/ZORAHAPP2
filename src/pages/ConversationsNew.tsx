@@ -502,23 +502,28 @@ const ConversationsPage: React.FC = () => {
         const phoneToReload = selectedConversation.phone;
         const conversationIdToReload = selectedConversation.id;
 
+        // ✅ Preparar dados do payload
+        const payload = {
+            action: 'close',
+            conversationId: selectedConversation.id,
+            phone: selectedConversation.phone,
+            category: closeCategory,
+            privateAppointment: closeCategory === 'AGENDAMENTO_PARTICULAR' ? {
+                procedure: privateAppointment.procedure,
+                sessions: parseInt(privateAppointment.sessions) || 0,
+                totalValue: parseFloat(privateAppointment.totalValue) || 0
+            } : null,
+            normalAppointment: closeCategory === 'AGENDAMENTO' ? {
+                insurance: normalAppointment.insurance,
+                procedure: normalAppointment.procedure,
+                sessions: parseInt(normalAppointment.sessions) || 0
+            } : null
+        };
+
+        console.log('📤 [FRONTEND] Enviando dados de encerramento:', payload);
+
         try {
-            await api.post('/api/conversations/actions', {
-                action: 'close',
-                conversationId: selectedConversation.id,
-                phone: selectedConversation.phone,
-                category: closeCategory, // ✅ Enviar categoria
-                privateAppointment: closeCategory === 'AGENDAMENTO_PARTICULAR' ? {
-                    procedure: privateAppointment.procedure,
-                    sessions: parseInt(privateAppointment.sessions) || 0,
-                    totalValue: parseFloat(privateAppointment.totalValue) || 0
-                } : null, // ✅ Enviar dados do particular
-                normalAppointment: closeCategory === 'AGENDAMENTO' ? {
-                    insurance: normalAppointment.insurance,
-                    procedure: normalAppointment.procedure,
-                    sessions: parseInt(normalAppointment.sessions) || 0
-                } : null // ✅ Enviar dados do agendamento normal
-            });
+            await api.post('/api/conversations/actions', payload);
 
             toast.success('Conversa encerrada com sucesso');
             setShowCloseModal(false);

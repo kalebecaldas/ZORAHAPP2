@@ -703,6 +703,13 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         break
 
       case 'close':
+        // ✅ Log dos dados recebidos
+        console.log('📋 [CLOSE] Dados recebidos:', {
+          category: req.body.category,
+          privateAppointment: req.body.privateAppointment,
+          normalAppointment: req.body.normalAppointment
+        })
+
         // ✅ Validar categoria obrigatória
         if (!req.body.category) {
           res.status(400).json({ error: 'Categoria de encerramento é obrigatória' })
@@ -741,6 +748,8 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           privateAppointment: req.body.privateAppointment || null,  // ✅ Dados do particular
           normalAppointment: req.body.normalAppointment || null     // ✅ Dados do agendamento normal
         }
+        
+        console.log('💾 [CLOSE] updateData que será salvo:', updateData)
         actionDescription = 'Conversa fechada'
 
         // ✅ Verificar se a sessão está expirada (mais de 24h sem resposta do cliente)
@@ -812,92 +821,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           console.error('⚠️ Erro ao criar mensagem do sistema:', sysError)
         }
 
-        // ✅ Disparar webhook conversation_closed
-        try {
-          const { WebhookService } = await import('../services/webhookService.js')
-          const { getWebhookEvents, clearWebhookEvents } = await import('../utils/webhookEvents.js')
-
-          // Buscar eventos acumulados durante a conversa
-          const events = await getWebhookEvents(conversation.id)
-
-          // ✅ Buscar conversa atualizada com todos os dados de tabulação
-          const updatedConversation = await prisma.conversation.findUnique({
-            where: { id: conversation.id },
-            include: {
-              patient: {
-                select: {
-                  id: true,
-                  name: true,
-                  phone: true,
-                  email: true
-                }
-              },
-              closedBy: {
-                select: {
-                  id: true,
-                  name: true,
-                  email: true
-                }
-              }
-            }
-          })
-
-          // Buscar total de mensagens
-          const messageCount = await prisma.message.count({
-            where: { conversationId: conversation.id }
-          })
-
-          // Calcular duração da conversa
-          const duration = updatedConversation?.closedAt && updatedConversation?.createdAt
-            ? Math.floor((updatedConversation.closedAt.getTime() - updatedConversation.createdAt.getTime()) / 1000)
-            : null
-
-          await WebhookService.trigger('conversation_closed', {
-            conversationId: conversation.id,
-            phone: conversation.phone,
-            timestamp: new Date().toISOString(),
-            
-            // ✅ Dados de tabulação
-            category: updatedConversation?.closeCategory || req.body.category || 'OUTROS',
-            closedAt: updatedConversation?.closedAt?.toISOString() || new Date().toISOString(),
-            closedBy: updatedConversation?.closedBy ? {
-              id: updatedConversation.closedBy.id,
-              name: updatedConversation.closedBy.name,
-              email: updatedConversation.closedBy.email
-            } : {
-              id: req.user?.id || 'system',
-              name: req.user?.name || 'Sistema',
-              email: req.user?.email || null
-            },
-            
-            // ✅ Dados de agendamento particular (se houver)
-            privateAppointment: updatedConversation?.privateAppointment || null,
-            
-            // ✅ Dados de agendamento normal/convênio (se houver)
-            normalAppointment: updatedConversation?.normalAppointment || null,
-            
-            // Dados do paciente
-            patient: updatedConversation?.patient || null,
-            patientId: conversation.patientId,
-            
-            // Eventos e métricas
-            events: events,
-            metrics: {
-              duration,
-              messageCount,
-              sessionExpired: isSessionExpired,
-              channel: conversation.channel || 'whatsapp',
-              totalEvents: events.length
-            }
-          })
-
-          console.log(`📤 Webhook consolidado disparado com ${events.length} eventos para ${conversation.phone}`)
-
-          // Limpar eventos após envio bem-sucedido
-          await clearWebhookEvents(conversation.id)
-        } catch (webhookError) {
-          console.error('⚠️ Erro ao disparar webhook (não bloqueia fluxo):', webhookError)
-        }
+        // ⚠️ WEBHOOK MOVIDO PARA DEPOIS DO UPDATE - Ver case 'close' após linha ~1016
         break
 
       case 'reopen':
@@ -931,12 +855,23 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
       data: updateData,
       include: {
         patient: {
-          select: { id: true, name: true, cpf: true, insuranceCompany: true }
+          select: { id: true, name: true, cpf: true, insuranceCompany: true, phone: true, email: true }
         },
         assignedTo: {
           select: { id: true, name: true, email: true }
+        },
+        closedBy: {
+          select: { id: true, name: true, email: true }
         }
       }
+    })
+
+    console.log('✅ [UPDATE] Conversa atualizada:', {
+      id: updatedConversation.id,
+      status: updatedConversation.status,
+      closeCategory: updatedConversation.closeCategory,
+      privateAppointment: updatedConversation.privateAppointment,
+      normalAppointment: updatedConversation.normalAppointment
     })
 
     // ✅ Criar mensagem do sistema para cada ação
@@ -993,6 +928,80 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           await createSystemMessage(conversation.id, 'CONVERSATION_CLOSED', {
             agentName: currentAgentName
           })
+          
+          // ✅ Disparar webhook conversation_closed AQUI (após o update)
+          try {
+            const { WebhookService } = await import('../services/webhookService.js')
+            const { getWebhookEvents, clearWebhookEvents } = await import('../utils/webhookEvents.js')
+
+            // Buscar eventos acumulados durante a conversa
+            const events = await getWebhookEvents(conversation.id)
+
+            // Buscar total de mensagens
+            const messageCount = await prisma.message.count({
+              where: { conversationId: conversation.id }
+            })
+
+            // Calcular duração da conversa
+            const duration = updatedConversation?.closedAt && updatedConversation?.createdAt
+              ? Math.floor((updatedConversation.closedAt.getTime() - updatedConversation.createdAt.getTime()) / 1000)
+              : null
+
+            console.log('🔍 [WEBHOOK] Conversa após update:', {
+              id: updatedConversation.id,
+              closeCategory: updatedConversation.closeCategory,
+              privateAppointment: updatedConversation.privateAppointment,
+              normalAppointment: updatedConversation.normalAppointment
+            })
+
+            await WebhookService.trigger('conversation_closed', {
+              conversationId: conversation.id,
+              phone: conversation.phone,
+              timestamp: new Date().toISOString(),
+              
+              // ✅ Dados de tabulação (do updatedConversation após o update)
+              category: updatedConversation.closeCategory || 'OUTROS',
+              closedAt: updatedConversation.closedAt?.toISOString() || new Date().toISOString(),
+              closedBy: updatedConversation.closedBy ? {
+                id: updatedConversation.closedBy.id,
+                name: updatedConversation.closedBy.name,
+                email: updatedConversation.closedBy.email
+              } : {
+                id: req.user?.id || 'system',
+                name: req.user?.name || 'Sistema',
+                email: req.user?.email || null
+              },
+              
+              // ✅ Dados de agendamento particular (se houver)
+              privateAppointment: updatedConversation.privateAppointment || null,
+              
+              // ✅ Dados de agendamento normal/convênio (se houver)
+              normalAppointment: updatedConversation.normalAppointment || null,
+              
+              // Dados do paciente
+              patient: updatedConversation.patient || null,
+              patientId: conversation.patientId,
+              
+              // Eventos e métricas
+              events: events,
+              metrics: {
+                duration,
+                messageCount,
+                sessionExpired: conversation.sessionExpiryTime 
+                  ? new Date(conversation.sessionExpiryTime) < new Date()
+                  : false,
+                channel: conversation.channel || 'whatsapp',
+                totalEvents: events.length
+              }
+            })
+
+            console.log(`📤 Webhook consolidado disparado com ${events.length} eventos para ${conversation.phone}`)
+
+            // Limpar eventos após envio bem-sucedido
+            await clearWebhookEvents(conversation.id)
+          } catch (webhookError) {
+            console.error('⚠️ Erro ao disparar webhook (não bloqueia fluxo):', webhookError)
+          }
           break
       }
     } catch (systemMsgError) {
