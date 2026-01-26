@@ -720,6 +720,17 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           }
         }
 
+        // ✅ Validar normalAppointment se categoria for AGENDAMENTO
+        if (req.body.category === 'AGENDAMENTO') {
+          const { normalAppointment } = req.body
+          if (!normalAppointment?.insurance || !normalAppointment?.procedure || !normalAppointment?.sessions) {
+            res.status(400).json({ 
+              error: 'Para agendamentos com convênio, informe: convênio, procedimento e número de sessões' 
+            })
+            return
+          }
+        }
+
         updateData = {
           status: 'FECHADA',
           assignedToId: null,
@@ -727,7 +738,8 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           closeCategory: req.body.category,           // ✅ Salvar categoria
           closedAt: new Date(),                       // ✅ Data do encerramento
           closedByUserId: req.user?.id || null,       // ✅ Quem encerrou
-          privateAppointment: req.body.privateAppointment || null  // ✅ Dados do particular
+          privateAppointment: req.body.privateAppointment || null,  // ✅ Dados do particular
+          normalAppointment: req.body.normalAppointment || null     // ✅ Dados do agendamento normal
         }
         actionDescription = 'Conversa fechada'
 
@@ -860,6 +872,9 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
             
             // ✅ Dados de agendamento particular (se houver)
             privateAppointment: updatedConversation?.privateAppointment || null,
+            
+            // ✅ Dados de agendamento normal/convênio (se houver)
+            normalAppointment: updatedConversation?.normalAppointment || null,
             
             // Dados do paciente
             patient: updatedConversation?.patient || null,

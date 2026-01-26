@@ -429,4 +429,54 @@ router.get('/data', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
+/**
+ * GET /api/clinic/insurances/list
+ * Lista todos os convênios disponíveis
+ */
+router.get('/insurances/list', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const insurances = await prisma.insuranceCompany.findMany({
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        displayName: true
+      },
+      orderBy: {
+        displayName: 'asc'
+      }
+    })
+
+    res.json(insurances)
+  } catch (error) {
+    console.error('Erro ao buscar convênios:', error)
+    res.status(500).json({ error: 'Erro ao buscar convênios' })
+  }
+})
+
+/**
+ * GET /api/clinic/procedures/list
+ * Lista todos os procedimentos disponíveis
+ */
+router.get('/procedures/list', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const procedures = await prisma.procedure.findMany({
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    })
+
+    res.json(procedures)
+  } catch (error) {
+    console.error('Erro ao buscar procedimentos:', error)
+    res.status(500).json({ error: 'Erro ao buscar procedimentos' })
+  }
+})
+
 export default router

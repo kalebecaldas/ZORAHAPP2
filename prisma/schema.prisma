@@ -99,6 +99,7 @@ model Conversation {
   closedAt          DateTime? // Data/hora do encerramento
   closedByUserId    String?   // Quem encerrou a conversa
   privateAppointment Json?    // { procedure, sessions, totalValue } para agendamentos particulares
+  normalAppointment  Json?    // { insurance, procedure, sessions } para agendamentos normais (convênio)
   
   assignedTo User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   closedBy   User?    @relation("ConversationClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)

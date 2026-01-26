@@ -14,6 +14,7 @@ import ConversationHistoryModal from '../components/ConversationHistoryModal';
 import QuickRepliesModal from '../components/QuickRepliesModal';
 import '../styles/minimal-theme.css'; // ✅ Importar CSS do badge
 import SystemMessage from '../components/chat/SystemMessage';
+import { SearchableSelect } from '../components/SearchableSelect';
 
 // ✅ NOVOS: Hooks refatorados
 import { useConversations } from '../hooks/conversations/useConversations';
@@ -76,9 +77,16 @@ const ConversationsPage: React.FC = () => {
     const [closeCategory, setCloseCategory] = useState<string>(''); // ✅ Categoria da conversa ao encerrar
     const [privateAppointment, setPrivateAppointment] = useState({
         procedure: '',
-        sessions: 1,
-        totalValue: 0
+        sessions: '',
+        totalValue: ''
     }); // ✅ Dados do agendamento particular
+    const [normalAppointment, setNormalAppointment] = useState({
+        insurance: '',
+        procedure: '',
+        sessions: ''
+    }); // ✅ Dados do agendamento normal (convênio)
+    const [insuranceOptions, setInsuranceOptions] = useState<Array<{value: string, label: string}>>([]);
+    const [procedureOptions, setProcedureOptions] = useState<Array<{value: string, label: string}>>([]);
     const [availableAgents, setAvailableAgents] = useState<any[]>([]);
     const [transferTarget, setTransferTarget] = useState<string>('');
 
@@ -410,6 +418,33 @@ const ConversationsPage: React.FC = () => {
         }
     };
 
+    // ✅ Fetch insurances and procedures for dropdowns
+    const fetchInsurancesAndProcedures = async () => {
+        try {
+            const [insurancesRes, proceduresRes] = await Promise.all([
+                api.get('/api/clinic/insurances/list'),
+                api.get('/api/clinic/procedures/list')
+            ]);
+
+            setInsuranceOptions(
+                (insurancesRes.data || []).map((ins: any) => ({
+                    value: ins.code || ins.id,
+                    label: ins.displayName || ins.name
+                }))
+            );
+
+            setProcedureOptions(
+                (proceduresRes.data || []).map((proc: any) => ({
+                    value: proc.code || proc.id,
+                    label: proc.name
+                }))
+            );
+        } catch (error) {
+            console.error('Error fetching insurances and procedures:', error);
+            // Não mostrar toast para não ser intrusivo
+        }
+    };
+
     // Transfer conversation
     const handleTransfer = async () => {
         if (!selectedConversation || !transferTarget) return;
@@ -456,6 +491,14 @@ const ConversationsPage: React.FC = () => {
             }
         }
 
+        // ✅ Validar campos de agendamento normal
+        if (closeCategory === 'AGENDAMENTO') {
+            if (!normalAppointment.insurance || !normalAppointment.procedure || !normalAppointment.sessions) {
+                toast.error('Preencha todos os campos do agendamento (convênio, procedimento e sessões)');
+                return;
+            }
+        }
+
         const phoneToReload = selectedConversation.phone;
         const conversationIdToReload = selectedConversation.id;
 
@@ -465,7 +508,16 @@ const ConversationsPage: React.FC = () => {
                 conversationId: selectedConversation.id,
                 phone: selectedConversation.phone,
                 category: closeCategory, // ✅ Enviar categoria
-                privateAppointment: closeCategory === 'AGENDAMENTO_PARTICULAR' ? privateAppointment : null // ✅ Enviar dados do particular
+                privateAppointment: closeCategory === 'AGENDAMENTO_PARTICULAR' ? {
+                    procedure: privateAppointment.procedure,
+                    sessions: parseInt(privateAppointment.sessions) || 0,
+                    totalValue: parseFloat(privateAppointment.totalValue) || 0
+                } : null, // ✅ Enviar dados do particular
+                normalAppointment: closeCategory === 'AGENDAMENTO' ? {
+                    insurance: normalAppointment.insurance,
+                    procedure: normalAppointment.procedure,
+                    sessions: parseInt(normalAppointment.sessions) || 0
+                } : null // ✅ Enviar dados do agendamento normal
             });
 
             toast.success('Conversa encerrada com sucesso');
@@ -690,6 +742,7 @@ const ConversationsPage: React.FC = () => {
     useEffect(() => {
         fetchConversations();
         fetchAgents();
+        fetchInsurancesAndProcedures();
 
         // ✅ Buscar total inicial de conversas encerradas para inicializar contador
         const initClosedTotal = async () => {
@@ -2514,12 +2567,12 @@ const ConversationsPage: React.FC = () => {
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
                                         Procedimento *
                                     </label>
-                                    <input
-                                        type="text"
+                                    <SearchableSelect
+                                        options={procedureOptions}
                                         value={privateAppointment.procedure}
-                                        onChange={(e) => setPrivateAppointment({...privateAppointment, procedure: e.target.value})}
-                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                        placeholder="Ex: Limpeza de pele"
+                                        onChange={(value) => setPrivateAppointment({...privateAppointment, procedure: value})}
+                                        placeholder="Selecione um procedimento..."
+                                        className="w-full"
                                     />
                                 </div>
                                 
@@ -2532,8 +2585,9 @@ const ConversationsPage: React.FC = () => {
                                             type="number"
                                             min="1"
                                             value={privateAppointment.sessions}
-                                            onChange={(e) => setPrivateAppointment({...privateAppointment, sessions: parseInt(e.target.value) || 1})}
+                                            onChange={(e) => setPrivateAppointment({...privateAppointment, sessions: e.target.value})}
                                             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="Ex: 10"
                                         />
                                     </div>
                                     
@@ -2546,11 +2600,58 @@ const ConversationsPage: React.FC = () => {
                                             min="0"
                                             step="0.01"
                                             value={privateAppointment.totalValue}
-                                            onChange={(e) => setPrivateAppointment({...privateAppointment, totalValue: parseFloat(e.target.value) || 0})}
+                                            onChange={(e) => setPrivateAppointment({...privateAppointment, totalValue: e.target.value})}
                                             className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="0.00"
+                                            placeholder="Ex: 1500.00"
                                         />
                                     </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ✅ Campos condicionais para Agendamento Normal */}
+                        {closeCategory === 'AGENDAMENTO' && (
+                            <div className="space-y-3 mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                <h4 className="font-medium text-green-900">Dados do Agendamento (Convênio)</h4>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Convênio *
+                                    </label>
+                                    <SearchableSelect
+                                        options={insuranceOptions}
+                                        value={normalAppointment.insurance}
+                                        onChange={(value) => setNormalAppointment({...normalAppointment, insurance: value})}
+                                        placeholder="Selecione um convênio..."
+                                        className="w-full"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Procedimento *
+                                    </label>
+                                    <SearchableSelect
+                                        options={procedureOptions}
+                                        value={normalAppointment.procedure}
+                                        onChange={(value) => setNormalAppointment({...normalAppointment, procedure: value})}
+                                        placeholder="Selecione um procedimento..."
+                                        className="w-full"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Número de Sessões *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={normalAppointment.sessions}
+                                        onChange={(e) => setNormalAppointment({...normalAppointment, sessions: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        placeholder="Ex: 1"
+                                    />
                                 </div>
                             </div>
                         )}
@@ -2560,7 +2661,8 @@ const ConversationsPage: React.FC = () => {
                                 onClick={() => {
                                     setShowCloseModal(false);
                                     setCloseCategory('');
-                                    setPrivateAppointment({ procedure: '', sessions: 1, totalValue: 0 });
+                                    setPrivateAppointment({ procedure: '', sessions: '', totalValue: '' });
+                                    setNormalAppointment({ insurance: '', procedure: '', sessions: '' });
                                 }}
                                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                             >
