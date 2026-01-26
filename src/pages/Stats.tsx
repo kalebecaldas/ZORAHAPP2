@@ -55,6 +55,7 @@ interface AnalyticsData {
   agents: any;
   roi: any;
   funnel: any;
+  closureCategories: any;
 }
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -88,7 +89,8 @@ const Stats: React.FC = () => {
           api.get('/api/analytics/procedures', { params: { period } }),
           api.get('/api/analytics/agents', { params: { period } }),
           api.get('/api/analytics/roi', { params: { period } }),
-          api.get('/api/analytics/funnel', { params: { period } })
+          api.get('/api/analytics/funnel', { params: { period } }),
+          api.get('/api/analytics/closure-categories', { params: { period } })
         ])
       ]);
 
@@ -129,7 +131,8 @@ const Stats: React.FC = () => {
         procedures: analyticsData[2].data,
         agents: analyticsData[3].data,
         roi: analyticsData[4].data,
-        funnel: analyticsData[5].data
+        funnel: analyticsData[5].data,
+        closureCategories: analyticsData[6].data
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -401,6 +404,47 @@ const Stats: React.FC = () => {
               </div>
             ))}
           </div>
+        </ChartContainer>
+      </div>
+
+      {/* Categorias de Encerramento */}
+      <div className="mb-8">
+        <ChartContainer title="Categorias de Encerramento">
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={analytics?.closureCategories?.categories || []}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="category" />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: any, name: string) => {
+                  if (name === 'count') return [value, 'Conversas'];
+                  if (name === 'percentage') return [value.toFixed(1) + '%', 'Porcentagem'];
+                  if (name === 'revenue') return ['R$ ' + value.toFixed(2), 'Receita'];
+                  return [value, name];
+                }}
+              />
+              <Bar dataKey="count" fill="#3B82F6" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          
+          {analytics?.closureCategories?.categories && analytics.closureCategories.categories.length > 0 && (
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+              {analytics.closureCategories.categories.map((cat: any, index: number) => (
+                <div key={cat.category} className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">{cat.category}</span>
+                    <span className="text-xs text-gray-500">{cat.percentage.toFixed(1)}%</span>
+                  </div>
+                  <div className="text-2xl font-bold text-gray-900">{cat.count}</div>
+                  {cat.revenue > 0 && (
+                    <div className="mt-1 text-sm text-green-600 font-medium">
+                      R$ {cat.revenue.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </ChartContainer>
       </div>
     </div>

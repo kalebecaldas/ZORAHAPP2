@@ -25,6 +25,7 @@ model User {
   updatedAt DateTime  @updatedAt
   
   conversations Conversation[]
+  closedConversations Conversation[] @relation("ConversationClosedBy")
   auditLogs    AuditLog[]
   quickReplies QuickReply[]
 }
@@ -93,7 +94,14 @@ model Conversation {
   // ✅ NOVO: Contador de mensagens não lidas
   unreadCount       Int       @default(0)
   
+  // ✅ NOVO: Tabulação de encerramento
+  closeCategory     String?   // Categoria: AGENDAMENTO, AGENDAMENTO_PARTICULAR, INFORMATIVO, etc
+  closedAt          DateTime? // Data/hora do encerramento
+  closedByUserId    String?   // Quem encerrou a conversa
+  privateAppointment Json?    // { procedure, sessions, totalValue } para agendamentos particulares
+  
   assignedTo User?    @relation(fields: [assignedToId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  closedBy   User?    @relation("ConversationClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
   patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages   Message[]
 }

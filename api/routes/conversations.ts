@@ -703,10 +703,31 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
         break
 
       case 'close':
+        // ✅ Validar categoria obrigatória
+        if (!req.body.category) {
+          res.status(400).json({ error: 'Categoria de encerramento é obrigatória' })
+          return
+        }
+
+        // ✅ Validar privateAppointment se categoria for AGENDAMENTO_PARTICULAR
+        if (req.body.category === 'AGENDAMENTO_PARTICULAR') {
+          const { privateAppointment } = req.body
+          if (!privateAppointment?.procedure || !privateAppointment?.sessions || !privateAppointment?.totalValue) {
+            res.status(400).json({ 
+              error: 'Para agendamentos particulares, informe: procedimento, sessões e valor total' 
+            })
+            return
+          }
+        }
+
         updateData = {
           status: 'FECHADA',
           assignedToId: null,
-          sessionStatus: 'closed'
+          sessionStatus: 'closed',
+          closeCategory: req.body.category,           // ✅ Salvar categoria
+          closedAt: new Date(),                       // ✅ Data do encerramento
+          closedByUserId: req.user?.id || null,       // ✅ Quem encerrou
+          privateAppointment: req.body.privateAppointment || null  // ✅ Dados do particular
         }
         actionDescription = 'Conversa fechada'
 
@@ -787,10 +808,26 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           // Buscar eventos acumulados durante a conversa
           const events = await getWebhookEvents(conversation.id)
 
-          // Buscar dados do paciente se necessário
-          const conversationWithPatient = await prisma.conversation.findUnique({
+          // ✅ Buscar conversa atualizada com todos os dados de tabulação
+          const updatedConversation = await prisma.conversation.findUnique({
             where: { id: conversation.id },
-            include: { patient: true }
+            include: {
+              patient: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  email: true
+                }
+              },
+              closedBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
           })
 
           // Buscar total de mensagens
@@ -799,23 +836,37 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           })
 
           // Calcular duração da conversa
-          const duration = conversation.sessionStartTime
-            ? Date.now() - new Date(conversation.sessionStartTime).getTime()
+          const duration = updatedConversation?.closedAt && updatedConversation?.createdAt
+            ? Math.floor((updatedConversation.closedAt.getTime() - updatedConversation.createdAt.getTime()) / 1000)
             : null
 
           await WebhookService.trigger('conversation_closed', {
             conversationId: conversation.id,
             phone: conversation.phone,
             timestamp: new Date().toISOString(),
-            category: req.body.category || 'OUTROS', // ✅ Categoria da conversa
-            closedBy: {
+            
+            // ✅ Dados de tabulação
+            category: updatedConversation?.closeCategory || req.body.category || 'OUTROS',
+            closedAt: updatedConversation?.closedAt?.toISOString() || new Date().toISOString(),
+            closedBy: updatedConversation?.closedBy ? {
+              id: updatedConversation.closedBy.id,
+              name: updatedConversation.closedBy.name,
+              email: updatedConversation.closedBy.email
+            } : {
               id: req.user?.id || 'system',
               name: req.user?.name || 'Sistema',
               email: req.user?.email || null
             },
+            
+            // ✅ Dados de agendamento particular (se houver)
+            privateAppointment: updatedConversation?.privateAppointment || null,
+            
+            // Dados do paciente
+            patient: updatedConversation?.patient || null,
             patientId: conversation.patientId,
-            patientName: conversationWithPatient?.patient?.name || null,
-            events: events, // ✅ Eventos acumulados durante a conversa
+            
+            // Eventos e métricas
+            events: events,
             metrics: {
               duration,
               messageCount,

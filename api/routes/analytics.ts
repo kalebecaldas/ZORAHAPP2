@@ -29,19 +29,13 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
             }
         })
 
-        // Conversas do bot que geraram agendamento
+        // Conversas do bot que geraram agendamento (baseado na categoria de encerramento)
         const botConversationsWithAppointment = await prisma.conversation.count({
             where: {
                 createdAt: { gte: startDate },
                 status: 'FECHADA',
                 assignedToId: null,
-                patient: {
-                    appointments: {
-                        some: {
-                            createdAt: { gte: startDate }
-                        }
-                    }
-                }
+                closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] }
             }
         })
 
@@ -230,15 +224,7 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                         status: true,
                         createdAt: true,
                         updatedAt: true,
-                        patient: {
-                            select: {
-                                appointments: {
-                                    where: {
-                                        createdAt: { gte: startDate }
-                                    }
-                                }
-                            }
-                        }
+                        closeCategory: true
                     }
                 }
             }
@@ -248,7 +234,7 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
             const conversations = agent.conversations
             const closedConversations = conversations.filter(c => c.status === 'FECHADA')
             const withAppointment = conversations.filter(c =>
-                c.patient?.appointments && c.patient.appointments.length > 0
+                c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
             )
 
             // Calcular tempo médio de resposta
@@ -313,21 +299,19 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                 assignedToId: userId,
                 createdAt: { gte: startDate }
             },
-            include: {
-                patient: {
-                    include: {
-                        appointments: {
-                            where: { createdAt: { gte: startDate } }
-                        }
-                    }
-                }
+            select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+                closeCategory: true
             }
         })
 
         // Calcular métricas pessoais
         const closed = myConversations.filter(c => c.status === 'FECHADA')
         const withAppointment = myConversations.filter(c =>
-            c.patient?.appointments && c.patient.appointments.length > 0
+            c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
         )
 
         const avgResponseTime = myConversations.reduce((sum, c) => {
@@ -347,14 +331,12 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             include: {
                 conversations: {
                     where: { createdAt: { gte: startDate } },
-                    include: {
-                        patient: {
-                            include: {
-                                appointments: {
-                                    where: { createdAt: { gte: startDate } }
-                                }
-                            }
-                        }
+                    select: {
+                        id: true,
+                        status: true,
+                        createdAt: true,
+                        updatedAt: true,
+                        closeCategory: true
                     }
                 }
             }
@@ -372,7 +354,7 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
             conversations.forEach(c => {
                 if (c.status === 'FECHADA') teamTotalClosed++
-                if (c.patient?.appointments && c.patient.appointments.length > 0) teamTotalWithAppointment++
+                if (c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR') teamTotalWithAppointment++
 
                 const duration = (new Date(c.updatedAt).getTime() -
                     new Date(c.createdAt).getTime()) / 1000 / 60
@@ -397,7 +379,7 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             const conversations = agent.conversations
             const agentClosed = conversations.filter(c => c.status === 'FECHADA')
             const agentWithAppointment = conversations.filter(c =>
-                c.patient?.appointments && c.patient.appointments.length > 0
+                c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
             )
 
             const agentAvgResponseTime = conversations.reduce((sum, c) => {
@@ -535,9 +517,28 @@ router.get('/roi', async (req: Request, res: Response): Promise<void> => {
             }
         })
 
-        // Assumindo valor médio de R$ 150 por procedimento
+        // ✅ Receita de agendamentos particulares
+        const privateAppointmentsRevenue = await prisma.conversation.findMany({
+            where: {
+                createdAt: { gte: startDate },
+                status: 'FECHADA',
+                closeCategory: 'AGENDAMENTO_PARTICULAR',
+                privateAppointment: { not: null }
+            },
+            select: {
+                privateAppointment: true
+            }
+        })
+
+        const privateRevenue = privateAppointmentsRevenue.reduce((sum, conv) => {
+            const data = conv.privateAppointment as { totalValue?: number } | null
+            return sum + (data?.totalValue || 0)
+        }, 0)
+
+        // Assumindo valor médio de R$ 150 por procedimento regular
         const AVG_PROCEDURE_VALUE = 150
-        const revenueGenerated = appointmentsFromBot * AVG_PROCEDURE_VALUE
+        const regularRevenue = appointmentsFromBot * AVG_PROCEDURE_VALUE
+        const revenueGenerated = regularRevenue + privateRevenue
 
         res.json({
             botConversations,
@@ -545,7 +546,10 @@ router.get('/roi', async (req: Request, res: Response): Promise<void> => {
             timeSavedHours,
             costSaved,
             appointmentsGenerated: appointmentsFromBot,
+            privateAppointmentsCount: privateAppointmentsRevenue.length,
             revenueGenerated,
+            regularRevenue,
+            privateRevenue,
             roi: costSaved > 0 ? ((revenueGenerated - costSaved) / costSaved) * 100 : 0
         })
     } catch (error) {
@@ -624,6 +628,81 @@ router.get('/funnel', async (req: Request, res: Response): Promise<void> => {
     } catch (error) {
         console.error('Error fetching funnel metrics:', error)
         res.status(500).json({ error: 'Internal server error' })
+    }
+})
+
+/**
+ * 📊 GET /api/analytics/closure-categories
+ * Distribuição de categorias de encerramento
+ */
+router.get('/closure-categories', async (req: Request, res: Response): Promise<void> => {
+    try {
+        console.log('📊 [Analytics/ClosureCategories] Requisição recebida:', { period: req.query.period })
+        
+        const { period = '7d' } = req.query
+        const days = period === '30d' ? 30 : 7
+        const startDate = new Date()
+        startDate.setDate(startDate.getDate() - days)
+
+        // Agrupar conversas por categoria
+        const categoryCounts = await prisma.conversation.groupBy({
+            by: ['closeCategory'],
+            where: {
+                createdAt: { gte: startDate },
+                status: 'FECHADA',
+                closeCategory: { not: null }
+            },
+            _count: {
+                id: true
+            }
+        })
+
+        // Calcular receita de agendamentos particulares por categoria
+        const privateRevenue = await prisma.conversation.findMany({
+            where: {
+                createdAt: { gte: startDate },
+                closeCategory: 'AGENDAMENTO_PARTICULAR',
+                privateAppointment: { not: null }
+            },
+            select: {
+                privateAppointment: true
+            }
+        })
+
+        const totalPrivateRevenue = privateRevenue.reduce((sum, conv) => {
+            const data = conv.privateAppointment as { totalValue?: number } | null
+            return sum + (data?.totalValue || 0)
+        }, 0)
+
+        // Mapear estatísticas por categoria
+        const categoryStats = categoryCounts.map(cat => ({
+            category: cat.closeCategory,
+            count: cat._count.id,
+            percentage: 0, // Calcular depois
+            revenue: cat.closeCategory === 'AGENDAMENTO_PARTICULAR' ? totalPrivateRevenue : 0
+        }))
+
+        const totalConversations = categoryStats.reduce((sum, cat) => sum + cat.count, 0)
+        categoryStats.forEach(cat => {
+            cat.percentage = totalConversations > 0 ? (cat.count / totalConversations) * 100 : 0
+        })
+
+        // Ordenar por count decrescente
+        categoryStats.sort((a, b) => b.count - a.count)
+
+        console.log('📊 [Analytics/ClosureCategories] Categorias calculadas:', {
+            totalCategories: categoryStats.length,
+            totalConversations
+        })
+
+        res.json({
+            categories: categoryStats,
+            totalClosed: totalConversations,
+            periodDays: days
+        })
+    } catch (error) {
+        console.error('❌ [Analytics/ClosureCategories] Erro:', error)
+        res.json({ categories: [], totalClosed: 0, periodDays: 0 })
     }
 })
 

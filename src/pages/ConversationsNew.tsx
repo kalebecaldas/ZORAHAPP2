@@ -74,6 +74,11 @@ const ConversationsPage: React.FC = () => {
     const [showTransferModal, setShowTransferModal] = useState(false);
     const [showCloseModal, setShowCloseModal] = useState(false);
     const [closeCategory, setCloseCategory] = useState<string>(''); // ✅ Categoria da conversa ao encerrar
+    const [privateAppointment, setPrivateAppointment] = useState({
+        procedure: '',
+        sessions: 1,
+        totalValue: 0
+    }); // ✅ Dados do agendamento particular
     const [availableAgents, setAvailableAgents] = useState<any[]>([]);
     const [transferTarget, setTransferTarget] = useState<string>('');
 
@@ -443,6 +448,14 @@ const ConversationsPage: React.FC = () => {
             return;
         }
 
+        // ✅ Validar campos de agendamento particular
+        if (closeCategory === 'AGENDAMENTO_PARTICULAR') {
+            if (!privateAppointment.procedure || !privateAppointment.sessions || !privateAppointment.totalValue) {
+                toast.error('Preencha todos os campos do agendamento particular');
+                return;
+            }
+        }
+
         const phoneToReload = selectedConversation.phone;
         const conversationIdToReload = selectedConversation.id;
 
@@ -451,7 +464,8 @@ const ConversationsPage: React.FC = () => {
                 action: 'close',
                 conversationId: selectedConversation.id,
                 phone: selectedConversation.phone,
-                category: closeCategory // ✅ Enviar categoria
+                category: closeCategory, // ✅ Enviar categoria
+                privateAppointment: closeCategory === 'AGENDAMENTO_PARTICULAR' ? privateAppointment : null // ✅ Enviar dados do particular
             });
 
             toast.success('Conversa encerrada com sucesso');
@@ -2480,6 +2494,7 @@ const ConversationsPage: React.FC = () => {
                             >
                                 <option value="">Selecione uma categoria...</option>
                                 <option value="AGENDAMENTO">📅 Agendamento</option>
+                                <option value="AGENDAMENTO_PARTICULAR">💰 Agendamento Particular</option>
                                 <option value="INFORMATIVO">ℹ️ Informativo</option>
                                 <option value="CANCELAMENTO">❌ Cancelamento</option>
                                 <option value="REAGENDAMENTO">🔄 Reagendamento</option>
@@ -2490,11 +2505,62 @@ const ConversationsPage: React.FC = () => {
                             </select>
                         </div>
 
+                        {/* ✅ Campos condicionais para Agendamento Particular */}
+                        {closeCategory === 'AGENDAMENTO_PARTICULAR' && (
+                            <div className="space-y-3 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                <h4 className="font-medium text-blue-900">Dados do Agendamento Particular</h4>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Procedimento *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={privateAppointment.procedure}
+                                        onChange={(e) => setPrivateAppointment({...privateAppointment, procedure: e.target.value})}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        placeholder="Ex: Limpeza de pele"
+                                    />
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Sessões *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={privateAppointment.sessions}
+                                            onChange={(e) => setPrivateAppointment({...privateAppointment, sessions: parseInt(e.target.value) || 1})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Valor Total (R$) *
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={privateAppointment.totalValue}
+                                            onChange={(e) => setPrivateAppointment({...privateAppointment, totalValue: parseFloat(e.target.value) || 0})}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            placeholder="0.00"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex gap-3">
                             <button
                                 onClick={() => {
                                     setShowCloseModal(false);
                                     setCloseCategory('');
+                                    setPrivateAppointment({ procedure: '', sessions: 1, totalValue: 0 });
                                 }}
                                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                             >
