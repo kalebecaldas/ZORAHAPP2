@@ -13,6 +13,8 @@ const statsAuth = process.env.NODE_ENV === 'development'
 // Get statistics
 router.get('/', statsAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('📊 [Stats] Requisição recebida:', { period: req.query.period })
+    
     const { period = '24h' } = req.query
     const now = new Date()
     let startDate: Date
@@ -88,20 +90,39 @@ router.get('/', statsAuth, async (req: Request, res: Response): Promise<void> =>
         }
       }),
       
-      // Average response time (cross-db safe fallback)
+      // Average response time (cross-db safe)
       (async () => {
         try {
-        const result = await prisma.$queryRawUnsafe<any[]>(
-            `SELECT AVG(CAST( (strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) as avg_time
-             FROM messages m1
-             JOIN messages m2 ON m1.conversationId = m2.conversationId
-             WHERE m1.direction = 'RECEIVED'
-               AND m2.direction = 'SENT'
-               AND m1.timestamp >= ${startDate.toISOString()}
-               AND m2.timestamp > m1.timestamp`
-          )
-          return result
-        } catch {
+          // Detectar tipo de banco de dados
+          const isPostgres = process.env.DATABASE_URL?.includes('postgresql')
+          
+          if (isPostgres) {
+            // Query para PostgreSQL
+            const result = await prisma.$queryRaw<any[]>`
+              SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) as avg_time
+              FROM messages m1
+              JOIN messages m2 ON m1."conversationId" = m2."conversationId"
+              WHERE m1.direction = 'RECEIVED'
+                AND m2.direction = 'SENT'
+                AND m1.timestamp >= ${startDate}
+                AND m2.timestamp > m1.timestamp
+            `
+            return result
+          } else {
+            // Query para SQLite
+            const result = await prisma.$queryRaw<any[]>`
+              SELECT AVG(CAST((strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) as avg_time
+              FROM messages m1
+              JOIN messages m2 ON m1.conversationId = m2.conversationId
+              WHERE m1.direction = 'RECEIVED'
+                AND m2.direction = 'SENT'
+                AND m1.timestamp >= ${startDate}
+                AND m2.timestamp > m1.timestamp
+            `
+            return result
+          }
+        } catch (error) {
+          console.error('Erro ao calcular tempo médio de resposta:', error)
           return [{ avg_time: 0 }]
         }
       })(),
@@ -143,20 +164,54 @@ router.get('/', statsAuth, async (req: Request, res: Response): Promise<void> =>
       }
     }
 
+    console.log('📊 [Stats] Estatísticas calculadas:', {
+      totalConversations,
+      activeConversations,
+      totalPatients,
+      avgResponseTime: stats.performance.avgResponseTime
+    })
+    
     res.json(stats)
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error)
-    res.status(500).json({ error: 'Erro interno' })
+    console.error('❌ [Stats] Erro ao buscar estatísticas:', error)
+    // Retornar estatísticas vazias em vez de erro 500
+    res.json({
+      conversations: {
+        total: 0,
+        active: 0,
+        closed: 0,
+        bot: 0,
+        human: 0
+      },
+      messages: {
+        total: 0
+      },
+      patients: {
+        total: 0,
+        new: 0
+      },
+      performance: {
+        avgResponseTime: 0
+      },
+      analytics: {
+        topIntents: [],
+        sentiment: []
+      }
+    })
   }
 })
 
 // Get detailed reports
 router.get('/reports', statsAuth, async (req: Request, res: Response): Promise<void> => {
   try {
+    console.log('📊 [Reports] Requisição recebida:', req.query)
+    
     const { startDate, endDate, groupBy = 'day' } = req.query
     
     const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     const end = endDate ? new Date(endDate as string) : new Date()
+    
+    console.log('📊 [Reports] Período:', { start, end })
 
     // Daily metrics (cross-db safe)
     const convInRange = await prisma.conversation.findMany({
@@ -259,10 +314,26 @@ router.get('/reports', statsAuth, async (req: Request, res: Response): Promise<v
       dateRange: { start, end }
     }
 
+    console.log('📊 [Reports] Relatórios calculados:', {
+      dailyMetricsCount: dailyMetrics.length,
+      agentsCount: perf.length,
+      proceduresCount: procedureStats.length
+    })
+    
     res.json(reports)
   } catch (error) {
-    console.error('Erro ao buscar relatórios:', error)
-    res.status(500).json({ error: 'Erro interno' })
+    console.error('❌ [Reports] Erro ao buscar relatórios:', error)
+    // Retornar relatórios vazios em vez de erro 500
+    res.json({
+      dailyMetrics: [],
+      agentPerformance: [],
+      procedureStats: [],
+      insuranceStats: [],
+      dateRange: { 
+        start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), 
+        end: new Date() 
+      }
+    })
   }
 })
 

@@ -660,14 +660,13 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           res.status(409).json({ error: 'Conversa já está atribuída a outro atendente. Use Solicitar conversa.' })
           return
         }
-        // ✅ Atualizar lastUserActivity para evitar que o monitor de inatividade
-        // retorne a conversa imediatamente após assumir
-        // Isso garante que o atendente tenha o tempo completo do timeout para responder
-        const now = new Date()
+        // ✅ NÃO resetar lastUserActivity ao assumir conversa
+        // O timeout deve ser baseado na última mensagem do PACIENTE, não no momento que o atendente assumiu
+        // Isso garante que o paciente não fique sem resposta por mais de X minutos
         updateData = {
           status: 'EM_ATENDIMENTO',
-          assignedToId: assigneeId,
-          lastUserActivity: now // ✅ Resetar timer de inatividade ao assumir
+          assignedToId: assigneeId
+          // ❌ REMOVIDO: lastUserActivity: now - Mantemos a data da última mensagem do paciente
         }
         actionDescription = 'Conversa assumida'
         // Cancel bot timeout if conversation was in bot queue

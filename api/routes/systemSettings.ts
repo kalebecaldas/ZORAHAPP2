@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
+import { updateInactivityTimeout } from '../services/inactivityMonitor.js'
 
 const router = Router()
 
@@ -86,6 +87,12 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
                     maxConversationsPerAgent: maxConversationsPerAgent || 5
                 }
             })
+        }
+
+        // ✅ Se o timeout foi atualizado, reiniciar o monitor com o novo valor
+        if (inactivityTimeoutMinutes !== undefined) {
+            await updateInactivityTimeout()
+            console.log(`✅ Monitor de inatividade atualizado para ${inactivityTimeoutMinutes} minutos`)
         }
 
         res.json(settings)

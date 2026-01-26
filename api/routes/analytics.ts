@@ -13,6 +13,8 @@ router.use(authMiddleware)
  */
 router.get('/conversion', async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log('📊 [Analytics/Conversion] Requisição recebida:', { period: req.query.period })
+        
         const { period = '7d' } = req.query
         const days = period === '30d' ? 30 : 7
         const startDate = new Date()
@@ -66,7 +68,7 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
         //     }
         // })
 
-        res.json({
+        const result = {
             botConversionRate: totalBotConversations > 0
                 ? (botConversationsWithAppointment / totalBotConversations) * 100
                 : 0,
@@ -76,10 +78,20 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
             totalBotConversations,
             conversationsWithAppointment: botConversationsWithAppointment,
             avgResolutionTimeMinutes: 0 // TODO: calcular corretamente
-        })
+        }
+        
+        console.log('📊 [Analytics/Conversion] Métricas calculadas:', result)
+        res.json(result)
     } catch (error) {
-        console.error('Error fetching conversion metrics:', error)
-        res.status(500).json({ error: 'Internal server error' })
+        console.error('❌ [Analytics/Conversion] Erro:', error)
+        // Retornar dados vazios em vez de erro 500
+        res.json({
+            botConversionRate: 0,
+            humanTransferRate: 0,
+            totalBotConversations: 0,
+            conversationsWithAppointment: 0,
+            avgResolutionTimeMinutes: 0
+        })
     }
 })
 
@@ -192,6 +204,8 @@ router.get('/procedures', async (req: Request, res: Response): Promise<void> => 
  */
 router.get('/agents', async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log('📊 [Analytics/Agents] Requisição recebida:', { period: req.query.period })
+        
         const { period = '7d' } = req.query
         const days = period === '30d' ? 30 : 7
         const startDate = new Date()
@@ -199,7 +213,10 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
 
         const agents = await prisma.user.findMany({
             where: {
-                role: 'AGENT'
+                OR: [
+                    { role: 'AGENT' },
+                    { role: 'ATENDENTE' }
+                ]
             },
             select: {
                 id: true,
@@ -258,10 +275,12 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
         // Ordenar por taxa de conversão
         const sortedAgents = agentStats.sort((a, b) => b.conversionRate - a.conversionRate)
 
+        console.log('📊 [Analytics/Agents] Total de agentes:', sortedAgents.length)
         res.json({ agents: sortedAgents })
     } catch (error) {
-        console.error('Error fetching agent stats:', error)
-        res.status(500).json({ error: 'Internal server error' })
+        console.error('❌ [Analytics/Agents] Erro:', error)
+        // Retornar array vazio em vez de erro 500
+        res.json({ agents: [] })
     }
 })
 
@@ -271,8 +290,14 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
  */
 router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
     try {
+        console.log('📊 [Analytics/AgentsMe] Requisição recebida:', { 
+            userId: req.user?.id, 
+            period: req.query.period 
+        })
+        
         const userId = req.user?.id
         if (!userId) {
+            console.log('❌ [Analytics/AgentsMe] Usuário não autenticado')
             res.status(401).json({ error: 'Unauthorized' })
             return
         }
@@ -313,7 +338,12 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
         // Buscar todos os atendentes para comparação
         const allAgents = await prisma.user.findMany({
-            where: { role: 'ATENDENTE' },
+            where: {
+                OR: [
+                    { role: 'AGENT' },
+                    { role: 'ATENDENTE' }
+                ]
+            },
             include: {
                 conversations: {
                     where: { createdAt: { gte: startDate } },
@@ -398,7 +428,7 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             }
         })
 
-        res.json({
+        const result = {
             personal: {
                 totalConversations: myConversations.length,
                 closedConversations: closed.length,
@@ -423,10 +453,40 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                 position: myRank,
                 total: allAgents.length
             }
+        }
+        
+        console.log('📊 [Analytics/AgentsMe] Estatísticas calculadas:', {
+            conversas: result.personal.totalConversations,
+            taxa_conversao: result.personal.conversionRate,
+            rank: result.rank.position
         })
+        
+        res.json(result)
     } catch (error) {
-        console.error('Error fetching personal stats:', error)
-        res.status(500).json({ error: 'Internal server error' })
+        console.error('❌ [Analytics/AgentsMe] Erro:', error)
+        // Retornar dados vazios em vez de erro 500
+        res.json({
+            personal: {
+                totalConversations: 0,
+                closedConversations: 0,
+                withAppointment: 0,
+                conversionRate: 0,
+                avgResponseTimeMinutes: 0,
+                closeRate: 0,
+                activeNow: 0
+            },
+            comparison: {
+                teamAvgResponseTime: 0,
+                teamAvgConversionRate: 0,
+                teamAvgCloseRate: 0,
+                performanceDelta: 0,
+                isAboveAverage: false
+            },
+            rank: {
+                position: 0,
+                total: 0
+            }
+        })
     }
 })
 
