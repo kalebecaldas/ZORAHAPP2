@@ -147,11 +147,14 @@ router.post('/generate-n8n-token', async (req: Request, res: Response): Promise<
     // Log token generation
     await prisma.auditLog.create({
       data: {
-        userId: user.id,
+        actorId: user.id,
         action: 'GENERATE_N8N_TOKEN',
-        entityType: 'API_TOKEN',
-        entityId: 'n8n_integration',
-        details: { generatedBy: user.email, timestamp: new Date().toISOString() }
+        details: { 
+          entityType: 'API_TOKEN',
+          entityId: 'n8n_integration',
+          generatedBy: user.email, 
+          timestamp: new Date().toISOString() 
+        }
       }
     })
 
