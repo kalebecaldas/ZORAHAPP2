@@ -44,6 +44,8 @@ async function updatePrices() {
     ]
 
     for (const item of vieiralvesPrices) {
+      const packageJson = item.packages.length > 0 ? JSON.stringify(item.packages) : null
+      
       await prisma.clinicInsuranceProcedure.upsert({
         where: {
           clinicId_insuranceCode_procedureCode: {
@@ -55,7 +57,7 @@ async function updatePrices() {
         update: {
           price: item.price,
           hasPackage: item.packages.length > 0,
-          packageInfo: item.packages.length > 0 ? JSON.stringify(item.packages) : null,
+          packageInfo: packageJson,
           isActive: true
         },
         create: {
@@ -64,11 +66,15 @@ async function updatePrices() {
           procedureCode: item.code,
           price: item.price,
           hasPackage: item.packages.length > 0,
-          packageInfo: item.packages.length > 0 ? JSON.stringify(item.packages) : null,
+          packageInfo: packageJson,
           isActive: true
         }
       })
-      console.log(`  ✓ ${item.code}: R$ ${item.price}${item.packages.length > 0 ? ` + pacotes` : ''}`)
+      
+      const packageDetails = item.packages.length > 0 
+        ? ` + pacote: ${item.packages.map((p: any) => `${p.sessions}x = R$ ${p.price}`).join(', ')}`
+        : ''
+      console.log(`  ✓ ${item.code}: R$ ${item.price}${packageDetails}`)
     }
 
     // ============================================
@@ -88,6 +94,8 @@ async function updatePrices() {
     ]
 
     for (const item of saoJosePrices) {
+      const packageJson = item.packages.length > 0 ? JSON.stringify(item.packages) : null
+      
       await prisma.clinicInsuranceProcedure.upsert({
         where: {
           clinicId_insuranceCode_procedureCode: {
@@ -99,7 +107,7 @@ async function updatePrices() {
         update: {
           price: item.price,
           hasPackage: item.packages.length > 0,
-          packageInfo: item.packages.length > 0 ? JSON.stringify(item.packages) : null,
+          packageInfo: packageJson,
           isActive: true
         },
         create: {
@@ -108,11 +116,15 @@ async function updatePrices() {
           procedureCode: item.code,
           price: item.price,
           hasPackage: item.packages.length > 0,
-          packageInfo: item.packages.length > 0 ? JSON.stringify(item.packages) : null,
+          packageInfo: packageJson,
           isActive: true
         }
       })
-      console.log(`  ✓ ${item.code}: R$ ${item.price}${item.packages.length > 0 ? ` + pacotes` : ''}`)
+      
+      const packageDetails = item.packages.length > 0 
+        ? ` + pacote: ${item.packages.map((p: any) => `${p.sessions}x = R$ ${p.price}`).join(', ')}`
+        : ''
+      console.log(`  ✓ ${item.code}: R$ ${item.price}${packageDetails}`)
     }
 
     console.log('\n✅ Preços e pacotes atualizados com sucesso!')
