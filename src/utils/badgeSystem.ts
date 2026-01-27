@@ -6,6 +6,12 @@ export interface AgentStats {
   avgResponseTimeMinutes: number;
   closeRate: number;
   rank?: number;
+  streak?: number; // Dias consecutivos batendo metas
+  firstConversationHour?: number; // Hora da primeira conversa (0-23)
+  lastConversationHour?: number; // Hora da última conversa (0-23)
+  transfersReceived?: number; // Conversas recebidas por transferência
+  goalsAchieved?: number; // Número de metas atingidas
+  totalGoals?: number; // Número total de metas
 }
 
 export interface Badge {
@@ -79,6 +85,90 @@ export const BADGES: Badge[] = [
     bgColor: 'bg-pink-50',
     borderColor: 'border-pink-300',
     condition: (stats) => stats.withAppointment > 10
+  },
+  // ✅ Novas Badges
+  {
+    id: 'perfect_day',
+    name: 'Dia Perfeito',
+    description: 'Atingiu todas as metas do dia',
+    icon: '🌟',
+    color: 'text-yellow-600',
+    bgColor: 'bg-yellow-100',
+    borderColor: 'border-yellow-400',
+    condition: (stats) => {
+      if (!stats.totalGoals || stats.totalGoals === 0) return false;
+      return (stats.goalsAchieved || 0) === stats.totalGoals;
+    }
+  },
+  {
+    id: 'streak_3',
+    name: 'Sequência de 3',
+    description: '3 dias consecutivos batendo metas',
+    icon: '🔥',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-300',
+    condition: (stats) => (stats.streak || 0) >= 3
+  },
+  {
+    id: 'early_bird',
+    name: 'Madrugador',
+    description: 'Primeira conversa antes das 8h',
+    icon: '🌅',
+    color: 'text-amber-700',
+    bgColor: 'bg-amber-50',
+    borderColor: 'border-amber-300',
+    condition: (stats) => (stats.firstConversationHour || 24) < 8
+  },
+  {
+    id: 'night_owl',
+    name: 'Coruja',
+    description: 'Última conversa depois das 20h',
+    icon: '🦉',
+    color: 'text-indigo-700',
+    bgColor: 'bg-indigo-50',
+    borderColor: 'border-indigo-300',
+    condition: (stats) => (stats.lastConversationHour || 0) >= 20
+  },
+  {
+    id: 'speed_master',
+    name: 'Mestre da Velocidade',
+    icon: '⚡⚡',
+    description: 'Tempo médio de resposta menor que 1 minuto',
+    color: 'text-yellow-700',
+    bgColor: 'bg-yellow-50',
+    borderColor: 'border-yellow-300',
+    condition: (stats) => stats.avgResponseTimeMinutes < 1
+  },
+  {
+    id: 'closer_elite',
+    name: 'Fechador Elite',
+    description: 'Taxa de fechamento acima de 90%',
+    icon: '💎',
+    color: 'text-cyan-700',
+    bgColor: 'bg-cyan-50',
+    borderColor: 'border-cyan-300',
+    condition: (stats) => stats.closeRate > 90
+  },
+  {
+    id: 'converter_master',
+    name: 'Mestre da Conversão',
+    description: 'Taxa de conversão acima de 85%',
+    icon: '👑',
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-100',
+    borderColor: 'border-purple-400',
+    condition: (stats) => stats.conversionRate > 85
+  },
+  {
+    id: 'helping_hand',
+    name: 'Mão Amiga',
+    description: 'Ajudou em 5+ conversas transferidas',
+    icon: '🤝',
+    color: 'text-teal-700',
+    bgColor: 'bg-teal-50',
+    borderColor: 'border-teal-300',
+    condition: (stats) => (stats.transfersReceived || 0) >= 5
   }
 ];
 

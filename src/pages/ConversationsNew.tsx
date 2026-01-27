@@ -410,8 +410,8 @@ const ConversationsPage: React.FC = () => {
     // Fetch available agents
     const fetchAgents = async () => {
         try {
-            const response = await api.get('/api/users?role=AGENT');
-            setAvailableAgents(response.data.users || response.data);
+            const response = await api.get('/api/users/agents');
+            setAvailableAgents(response.data);
         } catch (error) {
             console.error('Error fetching agents:', error);
             toast.error('Erro ao buscar atendentes');
@@ -1813,7 +1813,7 @@ const ConversationsPage: React.FC = () => {
         };
     }, [socket, selectedConversation?.id]);
 
-    // ✅ Heartbeat para manter conversa ativa (atualiza lastUserActivity)
+    // ✅ Heartbeat para manter conversa ativa (atualiza lastAgentActivity)
     useEffect(() => {
         if (!selectedConversation) return;
         if (selectedConversation.status !== 'EM_ATENDIMENTO') return;
@@ -1821,9 +1821,12 @@ const ConversationsPage: React.FC = () => {
         // Chamar heartbeat imediatamente
         const sendHeartbeat = async () => {
             try {
-                await api.post(`/conversations/${selectedConversation.phone}/heartbeat`);
+                // Encode phone para evitar problemas com caracteres especiais
+                const encodedPhone = encodeURIComponent(selectedConversation.phone);
+                await api.post(`/conversations/${encodedPhone}/heartbeat`);
             } catch (error) {
-                // Silenciar erros de heartbeat para não poluir console
+                // Heartbeat é silencioso - não exibe erro ao usuário
+                console.warn('Erro no heartbeat:', error);
             }
         };
 

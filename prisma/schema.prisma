@@ -28,6 +28,25 @@ model User {
   closedConversations Conversation[] @relation("ConversationClosedBy")
   auditLogs    AuditLog[]
   quickReplies QuickReply[]
+  goals        Goal[]
+}
+
+// ✅ Sistema de Metas Individuais
+model Goal {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // 'CONVERSATIONS', 'APPOINTMENTS', 'CONVERSION_RATE', 'RESPONSE_TIME'
+  target    Float    // Valor alvo (ex: 15 conversas, 80% conversão, 3 minutos)
+  period    String   // 'DAILY', 'WEEKLY', 'MONTHLY'
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, type, period])
+  @@index([userId])
+  @@index([userId, isActive])
 }
 
 // ✅ NOVO: Sistema de Atalhos (Respostas Rápidas)

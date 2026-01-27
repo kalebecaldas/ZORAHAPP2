@@ -16,6 +16,7 @@ import { api } from '../../lib/utils';
 import { StatCard, ChartContainer, LoadingSpinner } from '../ui/DesignSystem';
 import { DailyGoalCard } from './DailyGoalCard';
 import { TeamComparisonCard } from './TeamComparisonCard';
+import GoalsProgress from './GoalsProgress';
 import { 
   calculateEarnedBadges, 
   calculatePerformanceLevel, 
@@ -74,9 +75,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ user }) => {
       const params = { period };
       const response = await api.get('/api/analytics/agents/me', { params });
 
-      setPersonalStats(response.data.personal);
-      setComparison(response.data.comparison);
-      setRank(response.data.rank);
+      // ✅ Verificar se há dados suficientes
+      if (response.data.personal?.hasData === false) {
+        setPersonalStats(null);
+        setComparison(null);
+        setRank(null);
+      } else {
+        setPersonalStats(response.data.personal);
+        setComparison(response.data.comparison);
+        setRank(response.data.rank);
+      }
     } catch (error) {
       console.error('Error fetching personal dashboard data:', error);
     } finally {
@@ -114,9 +122,62 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ user }) => {
 
   if (!personalStats || !comparison || !rank) {
     return (
-      <div className="flex-1 p-8">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-          <p className="text-yellow-800">Sem dados disponíveis para exibir.</p>
+      <div className="flex-1 p-8 bg-gray-50">
+        {/* Header com seletor de período */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Meu Desempenho</h1>
+              <p className="text-gray-600 mt-2">
+                Olá, {user.name}! Acompanhe suas métricas e conquistas
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPeriod('7d')}
+                className={`px-4 py-2 rounded-lg ${
+                  period === '7d'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Últimos 7 dias
+              </button>
+              <button
+                onClick={() => setPeriod('30d')}
+                className={`px-4 py-2 rounded-lg ${
+                  period === '30d'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                Últimos 30 dias
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Estado vazio */}
+        <div className="max-w-2xl mx-auto mt-16">
+          <div className="bg-white border-2 border-gray-200 rounded-lg p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gray-100 rounded-full flex items-center justify-center">
+              <MessageSquare className="w-10 h-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              Sem dados suficientes para este período
+            </h3>
+            <p className="text-gray-600 mb-6">
+              Você ainda não tem conversas encerradas nos {period === '7d' ? 'últimos 7 dias' : 'últimos 30 dias'}. 
+              Comece a atender conversas para ver suas métricas e conquistas!
+            </p>
+            <Link
+              to="/conversationsNew"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <MessageSquare className="w-5 h-5" />
+              Ir para Conversas
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -206,13 +267,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ user }) => {
         </div>
       )}
 
-      {/* Meta Diária */}
+      {/* Metas Configuráveis */}
       <div className="mb-8">
-        <DailyGoalCard
-          current={personalStats.closedConversations}
-          goal={15}
-          metric="conversas encerradas"
-          subtitle="Meta diária"
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Minhas Metas</h3>
+        <GoalsProgress 
+          userId={user.id} 
+          period="DAILY" 
         />
       </div>
 

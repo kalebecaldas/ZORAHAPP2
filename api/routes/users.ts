@@ -17,6 +17,31 @@ const usersAuthorizeList = process.env.NODE_ENV === 'development'
 
 const router = Router()
 
+// Get agents list (accessible by all authenticated users - needed for transfers)
+router.get('/agents', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Lista apenas atendentes e supervisores ativos (sem dados sensíveis)
+    const agents = await prisma.user.findMany({
+      where: {
+        role: { in: ['ATENDENTE', 'SUPERVISOR'] },
+        // Apenas usuários ativos (se houver campo isActive)
+      },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        // NÃO expor: email, phone, password, etc
+      },
+      orderBy: { name: 'asc' }
+    })
+
+    res.json(agents)
+  } catch (error) {
+    console.error('Erro ao buscar agentes:', error)
+    res.status(500).json({ error: 'Erro ao buscar lista de agentes' })
+  }
+})
+
 // Get all users (admin only; in development, public)
 router.get('/', usersAuth, usersAuthorizeList, async (req: Request, res: Response): Promise<void> => {
   try {

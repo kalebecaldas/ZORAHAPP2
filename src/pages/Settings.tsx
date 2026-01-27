@@ -5,10 +5,11 @@ import {
   Save, Plus, Trash2, Edit2, X, Check,
   Settings as SettingsIcon, Building2, FileText,
   ChevronDown, ChevronUp, AlertCircle,
-  Monitor, Upload, Image as ImageIcon, Webhook
+  Monitor, Upload, Image as ImageIcon, Webhook, Target
 } from 'lucide-react';
 import SystemSettingsTab from '../components/settings/SystemSettingsTab';
 import WebhooksManagement from '../components/WebhooksManagement';
+import GoalsManagement from '../components/settings/GoalsManagement';
 
 interface Unit {
   id: string;
@@ -237,6 +238,7 @@ export const Settings = () => {
           {[
             { id: 'geral', label: 'Geral', icon: Building2 },
             { id: 'clinica', label: 'Clínica', icon: Building2 },
+            { id: 'metas', label: 'Metas', icon: Target },
             { id: 'configuracoes', label: 'Configurações', icon: SettingsIcon },
             { id: 'webhooks', label: 'Webhooks', icon: Webhook },
             { id: 'sistema', label: 'Branding', icon: Monitor },
@@ -566,6 +568,12 @@ export const Settings = () => {
           {activeTab === 'configuracoes' && (
             <div className="p-6">
               <SystemSettingsTab />
+            </div>
+          )}
+
+          {activeTab === 'metas' && (
+            <div className="p-6">
+              <GoalsManagement />
             </div>
           )}
 
