@@ -1389,10 +1389,14 @@ const ConversationsPage: React.FC = () => {
     useEffect(() => {
         if (!socket || !selectedConversation) return;
 
+        // ✅ Armazenar referência da conversa atual para cleanup
+        const currentPhone = selectedConversation.phone;
+        const currentId = selectedConversation.id;
+
         // Join both phone and conversation ID rooms for compatibility
-        socket.emit('join_conversation', selectedConversation.phone);
-        socket.emit('join_conversation', selectedConversation.id);
-        console.log(`🔌 Joined rooms: conv:${selectedConversation.phone} and conv:${selectedConversation.id}`);
+        socket.emit('join_conversation', currentPhone);
+        socket.emit('join_conversation', currentId);
+        console.log(`🔌 Joined rooms: conv:${currentPhone} and conv:${currentId}`);
 
         const onNewMessage = (payload: any) => {
             const timestamp = new Date().toISOString();
@@ -1772,16 +1776,22 @@ const ConversationsPage: React.FC = () => {
             }
         });
 
-        // Listener para timeout de inatividade
+        // Listener para timeout de inatividade (notificação individual)
         socket.on('conversation:timeout', (data) => {
             console.log('⏰ [conversation:timeout] Conversa retornou por inatividade:', data);
+
+            // ✅ Se o usuário está visualizando esta conversa, limpar seleção
+            if (selectedConversation?.id === data.conversationId) {
+                setSelectedConversation(null);
+                setMessages([]);
+            }
 
             // Remover conversa da lista atual
             setConversations(prev => prev.filter(c => c.id !== data.conversationId));
 
-            // Mostrar notificação
-            toast.warning(`⏰ Conversa retornou para fila por inatividade`, {
-                description: `Agente: ${data.previousAgent || 'Desconhecido'}`
+            // ✅ Mostrar notificação individual
+            toast.warning(`⏰ Sua conversa retornou à fila por inatividade`, {
+                description: `Paciente: ${data.phone || 'Desconhecido'} - Sem resposta por tempo prolongado`
             });
 
             // Atualizar lista de conversas
@@ -1789,8 +1799,9 @@ const ConversationsPage: React.FC = () => {
         });
 
         return () => {
-            socket.emit('leave_conversation', selectedConversation.phone);
-            socket.emit('leave_conversation', selectedConversation.id);
+            // ✅ Usar referências capturadas no momento do efeito
+            socket.emit('leave_conversation', currentPhone);
+            socket.emit('leave_conversation', currentId);
             socket.off('message_sent', onMessageSent);
             socket.off('new_message', onNewMessageReceived);
             socket.off('conversation_updated', onConversationUpdated);
@@ -1798,8 +1809,9 @@ const ConversationsPage: React.FC = () => {
             socket.off('message:new');
             socket.off('conversation:updated');
             socket.off('conversation:closed');
+            socket.off('conversation:timeout');
         };
-    }, [socket, selectedConversation]);
+    }, [socket, selectedConversation?.id]);
 
     // ✅ Intersection Observer for Lazy Loading
     const observer = useRef<IntersectionObserver>();

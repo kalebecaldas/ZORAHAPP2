@@ -120,14 +120,28 @@ async function checkInactiveConversations(timeoutMinutes: number) {
                 reason: `Sem resposta por ${timeoutMinutes} minutos`
             })
 
-            // Emitir evento Socket.IO
+            // Emitir evento Socket.IO apenas para o usuário específico
             try {
                 const { io } = getRealtime()
-                io.emit('conversation:timeout', {
+                
+                // ✅ Emitir notificação individual para o usuário que perdeu a conversa
+                if (conversation.assignedToId) {
+                    io.to(`user_${conversation.assignedToId}`).emit('conversation:timeout', {
+                        conversationId: conversation.id,
+                        phone: conversation.phone,
+                        previousAgent: conversation.assignedTo?.name,
+                        previousAgentId: conversation.assignedToId
+                    })
+                    console.log(`📡 Notificação de timeout enviada apenas para usuário ${conversation.assignedToId}`)
+                }
+                
+                // Emitir evento geral de atualização para todos (sem notificação)
+                io.emit('conversation:updated', {
                     conversationId: conversation.id,
                     phone: conversation.phone,
-                    previousAgent: conversation.assignedTo?.name,
-                    previousAgentId: conversation.assignedToId
+                    status: 'PRINCIPAL',
+                    assignedToId: null,
+                    reason: 'inactivity_timeout'
                 })
             } catch (error) {
                 console.error('Erro ao emitir evento Socket.IO:', error)

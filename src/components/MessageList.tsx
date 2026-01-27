@@ -224,13 +224,16 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
     fetchMessages();
 
     if (socket) {
-      // Join both conversation ID and phone rooms for compatibility
-      socket.emit('join_conversation', conversationId);
+      // ✅ Capturar referências no momento da execução do efeito
+      const currentConvId = conversationId;
       const conversationPhone = (conversation as any)?.phone || (conversation as any)?.patient?.phone;
+      
+      // Join both conversation ID and phone rooms for compatibility
+      socket.emit('join_conversation', currentConvId);
       if (conversationPhone) {
         socket.emit('join_conversation', conversationPhone);
       }
-      console.log(`🔌 MessageList: Joined rooms for conv:${conversationId} and phone:${conversationPhone}`);
+      console.log(`🔌 MessageList: Joined rooms for conv:${currentConvId} and phone:${conversationPhone}`);
 
       const appendFromPayload = (payload: any) => {
         const m = payload?.message || payload
@@ -383,7 +386,8 @@ const MessageList: React.FC<MessageListProps> = ({ conversationId, conversation,
       socket.on('conversation_updated', onConversationUpdated)
 
       return () => {
-        socket.emit('leave_conversation', conversationId)
+        // ✅ Usar referências capturadas no momento do efeito
+        socket.emit('leave_conversation', currentConvId)
         if (conversationPhone) {
           socket.emit('leave_conversation', conversationPhone)
         }

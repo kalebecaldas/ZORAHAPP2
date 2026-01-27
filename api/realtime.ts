@@ -29,6 +29,17 @@ export function initRealtime(server: HTTPServer): Realtime {
   io.on('connection', (socket) => {
     console.log('Cliente conectado:', socket.id)
 
+    // ✅ Permitir usuário entrar em sua própria sala para notificações individuais
+    socket.on('join_user_room', (userId: string) => {
+      socket.join(`user_${userId}`)
+      console.log(`Cliente ${socket.id} entrou na sala do usuário ${userId}`)
+    })
+
+    socket.on('leave_user_room', (userId: string) => {
+      socket.leave(`user_${userId}`)
+      console.log(`Cliente ${socket.id} saiu da sala do usuário ${userId}`)
+    })
+
     socket.on('join_conversation', (conversationId: string) => {
       socket.join(`conv:${conversationId}`)
       console.log(`Cliente ${socket.id} entrou na conversa ${conversationId}`)

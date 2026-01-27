@@ -364,29 +364,34 @@ router.post('/:phone/mark-read', listAuth, async (req: Request, res: Response): 
       return
     }
 
-    // Zerar contador apenas se > 0
-    if (conversation.unreadCount > 0) {
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { unreadCount: 0 }
-      })
-
-      // Emitir evento para atualizar badge em tempo real
-      try {
-        const realtime = getRealtime()
-        realtime.io.emit('conversation:updated', {
-          conversationId: conversation.id,
-          unreadCount: 0
-        })
-        console.log(`📢 Conversa marcada como lida: ${conversation.id}`)
-      } catch (e) {
-        console.warn('⚠️ Erro ao emitir evento:', e)
-      }
-
-      res.json({ success: true, unreadCount: 0 })
-    } else {
-      res.json({ success: true, unreadCount: 0, message: 'Já estava zerado' })
+    // ✅ Atualizar unreadCount e lastUserActivity para manter conversa ativa
+    // Isso impede que conversas sendo atendidas voltem à fila por inatividade
+    const updateData: any = { unreadCount: 0 }
+    
+    // Se a conversa está em atendimento (EM_ATENDIMENTO), atualizar lastUserActivity
+    // para indicar que o atendente está ativo visualizando a conversa
+    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
+      updateData.lastUserActivity = new Date()
     }
+
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: updateData
+    })
+
+    // Emitir evento para atualizar badge em tempo real
+    try {
+      const realtime = getRealtime()
+      realtime.io.emit('conversation:updated', {
+        conversationId: conversation.id,
+        unreadCount: 0
+      })
+      console.log(`📢 Conversa marcada como lida: ${conversation.id}`)
+    } catch (e) {
+      console.warn('⚠️ Erro ao emitir evento:', e)
+    }
+
+    res.json({ success: true, unreadCount: 0 })
   } catch (error) {
     console.error('Erro ao marcar como lida:', error)
     res.status(500).json({ error: 'Erro interno' })

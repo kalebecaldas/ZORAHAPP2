@@ -52,6 +52,12 @@ export function useSocket() {
     socket.on('connect', () => {
       setState(prev => ({ ...prev, isConnected: true, socket }));
       console.log('Socket connected');
+      
+      // ✅ Entrar na sala do usuário para receber notificações individuais
+      if (user?.id) {
+        socket.emit('join_user_room', user.id);
+        console.log(`🔔 Joined user room: user_${user.id}`);
+      }
     });
 
     socket.on('disconnect', () => {
