@@ -85,7 +85,8 @@ model Conversation {
   sessionStartTime  DateTime? 
   sessionExpiryTime DateTime?
   sessionStatus     String    @default("active")  // 'active', 'warning', 'expired', 'closed'
-  lastUserActivity  DateTime?
+  lastUserActivity  DateTime?  // Última mensagem do PACIENTE (para sessão de 24h)
+  lastAgentActivity DateTime?  // Última ação do ATENDENTE (resposta ou heartbeat)
   
   // Multi-channel support
   channel           String    @default("whatsapp")  // 'whatsapp', 'instagram', 'messenger'

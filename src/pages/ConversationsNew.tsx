@@ -1813,6 +1813,31 @@ const ConversationsPage: React.FC = () => {
         };
     }, [socket, selectedConversation?.id]);
 
+    // ✅ Heartbeat para manter conversa ativa (atualiza lastUserActivity)
+    useEffect(() => {
+        if (!selectedConversation) return;
+        if (selectedConversation.status !== 'EM_ATENDIMENTO') return;
+
+        // Chamar heartbeat imediatamente
+        const sendHeartbeat = async () => {
+            try {
+                await api.post(`/conversations/${selectedConversation.phone}/heartbeat`);
+            } catch (error) {
+                // Silenciar erros de heartbeat para não poluir console
+            }
+        };
+
+        // Chamar heartbeat imediatamente
+        sendHeartbeat();
+
+        // Configurar intervalo para chamar a cada 30 segundos
+        const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
+        return () => {
+            clearInterval(heartbeatInterval);
+        };
+    }, [selectedConversation?.id, selectedConversation?.status]);
+
     // ✅ Intersection Observer for Lazy Loading
     const observer = useRef<IntersectionObserver>();
     const lastConversationElementRef = useCallback((node: HTMLDivElement) => {

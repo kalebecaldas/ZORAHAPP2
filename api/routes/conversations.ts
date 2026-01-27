@@ -348,6 +348,39 @@ router.get('/:phone', listAuth, async (req: Request, res: Response): Promise<voi
   }
 })
 
+// ✅ Heartbeat para manter conversa ativa (atualiza lastAgentActivity sem emitir eventos)
+router.post('/:phone/heartbeat', listAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone } = req.params
+
+    // ✅ Buscar a conversa mais recente (ordenada por createdAt desc)
+    const conversation = await prisma.conversation.findFirst({
+      where: { phone },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
+
+    // ✅ Atualizar lastAgentActivity APENAS se está em atendimento
+    // Indica que o atendente está VISUALIZANDO ativamente a conversa
+    // Não emitir eventos para evitar loops
+    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { lastAgentActivity: new Date() }
+      })
+    }
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Erro ao fazer heartbeat:', error)
+    res.status(500).json({ error: 'Erro interno' })
+  }
+})
+
 // ✅ Marcar conversa como lida (zerar unreadCount)
 router.post('/:phone/mark-read', listAuth, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -364,34 +397,29 @@ router.post('/:phone/mark-read', listAuth, async (req: Request, res: Response): 
       return
     }
 
-    // ✅ Atualizar unreadCount e lastUserActivity para manter conversa ativa
-    // Isso impede que conversas sendo atendidas voltem à fila por inatividade
-    const updateData: any = { unreadCount: 0 }
-    
-    // Se a conversa está em atendimento (EM_ATENDIMENTO), atualizar lastUserActivity
-    // para indicar que o atendente está ativo visualizando a conversa
-    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
-      updateData.lastUserActivity = new Date()
-    }
-
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: updateData
-    })
-
-    // Emitir evento para atualizar badge em tempo real
-    try {
-      const realtime = getRealtime()
-      realtime.io.emit('conversation:updated', {
-        conversationId: conversation.id,
-        unreadCount: 0
+    // Zerar contador apenas se > 0
+    if (conversation.unreadCount > 0) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { unreadCount: 0 }
       })
-      console.log(`📢 Conversa marcada como lida: ${conversation.id}`)
-    } catch (e) {
-      console.warn('⚠️ Erro ao emitir evento:', e)
-    }
 
-    res.json({ success: true, unreadCount: 0 })
+      // Emitir evento para atualizar badge em tempo real
+      try {
+        const realtime = getRealtime()
+        realtime.io.emit('conversation:updated', {
+          conversationId: conversation.id,
+          unreadCount: 0
+        })
+        console.log(`📢 Conversa marcada como lida: ${conversation.id}`)
+      } catch (e) {
+        console.warn('⚠️ Erro ao emitir evento:', e)
+      }
+
+      res.json({ success: true, unreadCount: 0 })
+    } else {
+      res.json({ success: true, unreadCount: 0, message: 'Já estava zerado' })
+    }
   } catch (error) {
     console.error('Erro ao marcar como lida:', error)
     res.status(500).json({ error: 'Erro interno' })
@@ -600,6 +628,7 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
   console.log('🚨 [/actions] REQUISIÇÃO RECEBIDA!', { body: req.body, headers: req.headers['content-type'] });
   try {
     const { action, phone, assignTo, conversationId } = req.body
+    const now = new Date()
 
     console.log('🎯 [POST /actions] Recebida ação:', { action, conversationId, phone })
 
@@ -665,11 +694,12 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           res.status(409).json({ error: 'Conversa já está atribuída a outro atendente. Use Solicitar conversa.' })
           return
         }
-        // ✅ NÃO resetar lastUserActivity ao assumir conversa
-        // O timeout deve ser baseado na última mensagem do PACIENTE, não no momento que o atendente assumiu
-        // Isso garante que o paciente não fique sem resposta por mais de X minutos
+        // ✅ Atualizar lastAgentActivity ao assumir conversa
+        // Indica que o atendente começou a atender (resetar timer de inatividade)
+        // lastUserActivity não é alterado (mantém data da última mensagem do paciente)
         updateData = {
           status: 'EM_ATENDIMENTO',
+          lastAgentActivity: now,
           assignedToId: assigneeId
           // ❌ REMOVIDO: lastUserActivity: now - Mantemos a data da última mensagem do paciente
         }
@@ -1196,11 +1226,13 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
     messageCacheService.invalidate(conversation.id)
 
     // Atualizar conversa (sem include pesado)
+    const now = new Date()
     const updatedConversation = await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
         lastMessage: text,
-        lastTimestamp: new Date()
+        lastTimestamp: now,
+        lastAgentActivity: now // ✅ Atendente enviou mensagem (resposta ativa)
       }
     })
 

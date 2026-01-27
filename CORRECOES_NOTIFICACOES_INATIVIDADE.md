@@ -97,31 +97,155 @@ socket.on('conversation:timeout', (data) => {
 });
 ```
 
-### 2. Atualização de `lastUserActivity` em Conversas Ativas
+### 2. Sistema de Inatividade Correto (REFEITO)
+
+#### Conceito: Dois Sistemas Independentes
+
+**Sistema de Sessão (24 horas):**
+- Controla janela de mensagens do WhatsApp
+- Expira 24h após última mensagem do **PACIENTE**
+- `lastUserActivity` = timestamp da última mensagem do paciente
+- Usado para determinar se pode enviar mensagens template
+
+**Sistema de Inatividade (30 minutos):**
+- Controla se **ATENDENTE** está respondendo o paciente
+- Se paciente enviou mensagem e atendente não respondeu em 30min → volta à fila
+- `lastAgentActivity` = timestamp da última ação do atendente (resposta ou visualização)
+- Usado para devolver conversas sem resposta à fila
+
+#### Backend - Novo Campo no Banco de Dados
+Adicionado campo `lastAgentActivity` ao modelo `Conversation`:
+```sql
+ALTER TABLE "Conversation" ADD COLUMN "lastAgentActivity" TIMESTAMP(3);
+```
 
 #### Backend - `api/routes/conversations.ts`
-Modificado o endpoint `mark-read` para atualizar `lastUserActivity`:
+Criado endpoint `/heartbeat` para atualizar `lastAgentActivity`:
 ```typescript
-// ✅ Atualizar unreadCount e lastUserActivity para manter conversa ativa
-const updateData: any = { unreadCount: 0 }
+// ✅ Heartbeat para manter conversa ativa (atualiza lastAgentActivity)
+router.post('/:phone/heartbeat', listAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const conversation = await prisma.conversation.findFirst({
+      where: { phone: req.params.phone },
+      orderBy: { createdAt: 'desc' }
+    })
 
-// Se a conversa está em atendimento (EM_ATENDIMENTO), atualizar lastUserActivity
-// para indicar que o atendente está ativo visualizando a conversa
-if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
-    updateData.lastUserActivity = new Date()
-}
+    if (!conversation) {
+      res.status(404).json({ error: 'Conversa não encontrada' })
+      return
+    }
 
-await prisma.conversation.update({
-    where: { id: conversation.id },
-    data: updateData
+    // ✅ Atualizar lastAgentActivity (atendente está visualizando)
+    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { lastAgentActivity: new Date() }
+      })
+    }
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Erro ao fazer heartbeat:', error)
+    res.status(500).json({ error: 'Erro interno' })
+  }
 })
 ```
 
+**Assumir Conversa (action: 'take'):**
+```typescript
+case 'take':
+  updateData = {
+    status: 'EM_ATENDIMENTO',
+    lastAgentActivity: now, // ✅ Atendente começou a atender
+    assignedToId: assigneeId
+  }
+  // lastUserActivity NÃO é alterado (mantém data da última msg do paciente)
+```
+
+**Enviar Mensagem:**
+```typescript
+const updatedConversation = await prisma.conversation.update({
+  where: { id: conversation.id },
+  data: {
+    lastMessage: text,
+    lastTimestamp: now,
+    lastAgentActivity: now // ✅ Atendente enviou resposta
+  }
+})
+```
+
+#### Frontend - `src/pages/ConversationsNew.tsx`
+Adicionado heartbeat periódico a cada 30 segundos:
+```typescript
+// ✅ Heartbeat para manter conversa ativa (atualiza lastUserActivity)
+useEffect(() => {
+    if (!selectedConversation) return;
+    if (selectedConversation.status !== 'EM_ATENDIMENTO') return;
+
+    const sendHeartbeat = async () => {
+        try {
+            await api.post(`/conversations/${selectedConversation.phone}/heartbeat`);
+        } catch (error) {
+            // Silenciar erros de heartbeat
+        }
+    };
+
+    // Chamar heartbeat imediatamente
+    sendHeartbeat();
+
+    // Configurar intervalo para chamar a cada 30 segundos
+    const heartbeatInterval = setInterval(sendHeartbeat, 30000);
+
+    return () => {
+        clearInterval(heartbeatInterval);
+    };
+}, [selectedConversation?.id, selectedConversation?.status]);
+```
+
+#### Backend - `api/services/inactivityMonitor.ts`
+Monitor verifica lógica correta:
+```typescript
+// Lógica: Paciente enviou mensagem e está esperando resposta?
+const inactiveConversations = await prisma.conversation.findMany({
+  where: {
+    status: 'EM_ATENDIMENTO',
+    assignedToId: { not: null },
+    lastUserActivity: {
+      lt: timeoutDate, // Paciente enviou há mais de 30min
+      not: null
+    }
+  }
+})
+
+// Filtrar: paciente enviou DEPOIS da última ação do atendente?
+const conversationsAwaitingResponse = inactiveConversations.filter(conv => {
+  if (!conv.lastAgentActivity) return true // Atendente nunca respondeu
+  
+  const userActivityTime = new Date(conv.lastUserActivity).getTime()
+  const agentActivityTime = new Date(conv.lastAgentActivity).getTime()
+  
+  return userActivityTime > agentActivityTime // Paciente enviou depois
+})
+
+// Para cada conversa: devolver à fila
+```
+
 **Como Funciona:**
-- Quando o atendente está visualizando uma conversa em atendimento, o frontend envia requisições de `mark-read` periodicamente
-- Cada requisição de `mark-read` agora atualiza o `lastUserActivity` da conversa
-- O monitor de inatividade verifica `lastUserActivity` para determinar se a conversa está inativa
-- Resultado: Conversas sendo atendidas ativamente não voltam mais à fila por inatividade
+
+1. **Paciente envia mensagem** → `lastUserActivity` atualizado
+2. **Atendente assume conversa** → `lastAgentActivity` = now (começa atendimento)
+3. **Atendente visualiza (heartbeat a cada 30s)** → `lastAgentActivity` atualizado
+4. **Atendente envia resposta** → `lastAgentActivity` = now
+5. **Monitor verifica:**
+   - Se `lastUserActivity` > `lastAgentActivity` (paciente aguardando)
+   - E `(now - lastUserActivity)` > 30min
+   - Então: devolve à fila
+
+**Resultado:**
+- ✅ Conversas onde atendente já respondeu: NÃO voltam à fila
+- ✅ Conversas onde atendente está visualizando: NÃO voltam à fila (heartbeat ativo)
+- ✅ Conversas onde paciente enviou há 30min sem resposta: VOLTAM à fila
+- ✅ Sistema de sessão (24h) permanece independente
 
 ### 3. Otimização dos Eventos de Socket
 
@@ -262,6 +386,50 @@ O sistema agora usa dois tipos de salas:
 3. Backend atualiza lastUserActivity se status = EM_ATENDIMENTO
 4. Monitor vê lastUserActivity recente
 5. Conversa NÃO é marcada como inativa
+```
+
+## Problemas Encontrados Durante Implementação
+
+### 1. Loop Infinito de Requisições (RESOLVIDO)
+**Problema:** Após a primeira implementação, as conversas começaram a "piscar" com milhares de requisições por segundo em loop infinito.
+
+**Causa:** A atualização de `lastUserActivity` no endpoint `mark-read` estava disparando o evento `conversation:updated`, que fazia o frontend atualizar e chamar `mark-read` novamente, criando um loop.
+
+**Solução:** 
+1. Revertida a modificação no endpoint `mark-read`
+2. Criado endpoint dedicado `/heartbeat` que:
+   - Atualiza apenas `lastUserActivity`
+   - NÃO emite eventos Socket.IO
+   - É chamado a cada 30 segundos em vez de constantemente
+3. Resultado: Zero loops, performance mantida, conversas permanecem ativas
+
+### 2. Conversas Assumidas Retornando Imediatamente (RESOLVIDO)
+**Problema:** Conversas antigas (dias sem atividade) eram assumidas pelo atendente mas retornavam imediatamente à fila por inatividade, mesmo com o atendente visualizando ativamente.
+
+**Causa:** Quando o atendente assumia uma conversa (action: 'take'), o `lastUserActivity` não era atualizado. Se a conversa estava há dias sem atividade do paciente, o monitor verificava e a marcava como inativa imediatamente.
+
+**Exemplo dos Logs:**
+```
+⏰ [Monitor] Verificando 1 conversas inativas (timeout: 20min)
+  - 5592993516420: 7226min desde última atividade (agente: Kalebe Caldas)
+⏰ Encontradas 1 conversas inativas
+```
+(7226 minutos = mais de 5 dias sem atividade)
+
+**Solução:** 
+1. Modificado o action 'take' para atualizar `lastUserActivity` ao assumir a conversa
+2. Isso garante que conversas antigas não retornem imediatamente
+3. O heartbeat (a cada 30s) mantém a conversa ativa enquanto visualizando
+4. Resultado: Atendente pode assumir qualquer conversa sem ela voltar imediatamente
+
+**Código:**
+```typescript
+case 'take':
+  updateData = {
+    status: 'EM_ATENDIMENTO',
+    lastUserActivity: now, // ✅ Atualiza ao assumir
+    assignedToId: assigneeId
+  }
 ```
 
 ## Melhorias Futuras (Opcional)

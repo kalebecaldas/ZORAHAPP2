@@ -33,6 +33,16 @@ export function stopInactivityMonitor() {
 
 /**
  * Verifica conversas inativas e retorna para fila PRINCIPAL
+ * 
+ * Lógica de inatividade:
+ * - Verifica se o PACIENTE enviou mensagem e está esperando resposta há mais de X minutos
+ * - lastUserActivity = última mensagem do PACIENTE (para sessão de 24h)
+ * - lastAgentActivity = última ação do ATENDENTE (resposta ou heartbeat)
+ * 
+ * Conversa é considerada inativa SE:
+ * 1. Está EM_ATENDIMENTO
+ * 2. Paciente enviou mensagem DEPOIS da última ação do atendente (lastUserActivity > lastAgentActivity)
+ * 3. Paciente está esperando há mais de X minutos ((now - lastUserActivity) > timeout)
  */
 async function checkInactiveConversations(timeoutMinutes: number) {
     try {
@@ -40,52 +50,67 @@ async function checkInactiveConversations(timeoutMinutes: number) {
         const timeoutDate = new Date()
         timeoutDate.setMinutes(timeoutDate.getMinutes() - timeoutMinutes)
 
-        // Buscar conversas inativas (atribuídas a agente mas sem atividade recente)
-        // ✅ IMPORTANTE: Usar lastUserActivity em vez de lastTimestamp
-        // lastTimestamp é atualizado quando QUALQUER mensagem é enviada (agente ou paciente)
-        // lastUserActivity é atualizado apenas quando o PACIENTE envia mensagem
-        // Para inatividade, queremos verificar se o PACIENTE não respondeu há X minutos
+        // Buscar conversas onde:
+        // 1. Está EM_ATENDIMENTO
+        // 2. Paciente enviou mensagem há mais de X minutos
+        // 3. Paciente enviou mensagem DEPOIS da última ação do atendente
         const inactiveConversations = await prisma.conversation.findMany({
             where: {
                 status: 'EM_ATENDIMENTO',
                 assignedToId: { not: null },
-                OR: [
-                    // Se lastUserActivity existe, usar ele
-                    { lastUserActivity: { lt: timeoutDate } },
-                    // Se não existe, usar lastTimestamp como fallback
-                    { lastUserActivity: null, lastTimestamp: { lt: timeoutDate } }
-                ]
+                lastUserActivity: {
+                    lt: timeoutDate, // Paciente enviou há mais de X minutos
+                    not: null
+                }
             },
             include: {
                 assignedTo: true
             }
         })
 
-        // Log para debug: mostrar quantas conversas foram encontradas e o timeout usado
-        if (inactiveConversations.length > 0) {
-            console.log(`⏰ [Monitor] Verificando ${inactiveConversations.length} conversas inativas (timeout: ${timeoutMinutes}min)`)
-            inactiveConversations.forEach(conv => {
-                const lastActivity = conv.lastUserActivity || conv.lastTimestamp
-                const minutesSinceActivity = lastActivity
-                    ? Math.floor((now.getTime() - new Date(lastActivity).getTime()) / (1000 * 60))
+        // Filtrar conversas onde paciente está ESPERANDO resposta
+        const conversationsAwaitingResponse = inactiveConversations.filter(conv => {
+            // Se não há lastAgentActivity, significa que atendente nunca respondeu
+            if (!conv.lastAgentActivity) return true
+            
+            // Se lastUserActivity é mais recente que lastAgentActivity,
+            // significa que paciente enviou mensagem depois da última ação do atendente
+            const userActivityTime = conv.lastUserActivity ? new Date(conv.lastUserActivity).getTime() : 0
+            const agentActivityTime = conv.lastAgentActivity ? new Date(conv.lastAgentActivity).getTime() : 0
+            
+            return userActivityTime > agentActivityTime
+        })
+
+        // Log para debug
+        if (conversationsAwaitingResponse.length > 0) {
+            console.log(`⏰ [Monitor] Verificando ${conversationsAwaitingResponse.length} conversas aguardando resposta (timeout: ${timeoutMinutes}min)`)
+            conversationsAwaitingResponse.forEach(conv => {
+                const minutesSinceUserActivity = conv.lastUserActivity
+                    ? Math.floor((now.getTime() - new Date(conv.lastUserActivity).getTime()) / (1000 * 60))
                     : 'N/A'
-                console.log(`  - ${conv.phone}: ${minutesSinceActivity}min desde última atividade (agente: ${conv.assignedTo?.name})`)
+                const minutesSinceAgentActivity = conv.lastAgentActivity
+                    ? Math.floor((now.getTime() - new Date(conv.lastAgentActivity).getTime()) / (1000 * 60))
+                    : 'N/A'
+                console.log(`  - ${conv.phone}: ${minutesSinceUserActivity}min desde msg paciente, ${minutesSinceAgentActivity}min desde ação atendente (${conv.assignedTo?.name})`)
             })
         }
 
-        // #region agent log
-        if (inactiveConversations.length === 0) {
+        if (conversationsAwaitingResponse.length === 0) {
             return
         }
 
-        console.log(`⏰ Encontradas ${inactiveConversations.length} conversas inativas`)
+        console.log(`⏰ Encontradas ${conversationsAwaitingResponse.length} conversas sem resposta`)
 
-        for (const conversation of inactiveConversations) {
+        for (const conversation of conversationsAwaitingResponse) {
             // ✅ Recarregar conversa para verificar status atual
-            // Evitar race condition: conversa pode ter sido modificada entre busca e update
             const currentConv = await prisma.conversation.findUnique({
                 where: { id: conversation.id },
-                select: { status: true, assignedToId: true, lastUserActivity: true }
+                select: { 
+                    status: true, 
+                    assignedToId: true, 
+                    lastUserActivity: true,
+                    lastAgentActivity: true
+                }
             })
 
             // Verificar se conversa ainda está EM_ATENDIMENTO e inativa
@@ -94,14 +119,19 @@ async function checkInactiveConversations(timeoutMinutes: number) {
                 continue
             }
 
-            // Verificar novamente se realmente está inativa (pode ter recebido mensagem recente)
-            const now = new Date()
-            const timeoutDate = new Date()
-            timeoutDate.setMinutes(timeoutDate.getMinutes() - timeoutMinutes)
-            const lastActivity = currentConv.lastUserActivity || conversation.lastTimestamp
+            // Verificar novamente se paciente ainda está esperando resposta
+            const userActivityTime = currentConv.lastUserActivity ? new Date(currentConv.lastUserActivity).getTime() : 0
+            const agentActivityTime = currentConv.lastAgentActivity ? new Date(currentConv.lastAgentActivity).getTime() : 0
             
-            if (lastActivity && new Date(lastActivity) >= timeoutDate) {
-                console.log(`⏭️ Conversa ${conversation.phone} recebeu atividade recente, pulando...`)
+            // Se atendente respondeu depois da última mensagem do paciente, não devolver
+            if (agentActivityTime >= userActivityTime) {
+                console.log(`⏭️ Conversa ${conversation.phone} já foi respondida pelo atendente, pulando...`)
+                continue
+            }
+            
+            // Verificar se ainda está dentro do timeout
+            if (currentConv.lastUserActivity && new Date(currentConv.lastUserActivity) >= timeoutDate) {
+                console.log(`⏭️ Conversa ${conversation.phone} recebeu mensagem recente do paciente, pulando...`)
                 continue
             }
 
