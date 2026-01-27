@@ -1,11 +1,120 @@
 import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
+import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 
 const router = Router()
 
 // Aplicar auth em todas as rotas
 router.use(authMiddleware)
+
+/**
+ * Helper: Calcular datas de início e fim com base no período
+ */
+function getPeriodDates(period: string) {
+    const now = new Date()
+    
+    switch(period) {
+        case 'DAILY':
+            return {
+                startDate: startOfDay(now),
+                endDate: endOfDay(now)
+            }
+        case 'WEEKLY':
+            return {
+                startDate: startOfWeek(now, { weekStartsOn: 0 }),
+                endDate: endOfWeek(now, { weekStartsOn: 0 })
+            }
+        case 'MONTHLY':
+            return {
+                startDate: startOfMonth(now),
+                endDate: endOfMonth(now)
+            }
+        default:
+            return {
+                startDate: startOfDay(now),
+                endDate: endOfDay(now)
+            }
+    }
+}
+
+/**
+ * Helper: Calcular valor atual de uma meta (simplificado para analytics)
+ */
+async function calculateCurrentValue(goal: any) {
+    const { userId, type, period } = goal
+    const { startDate, endDate } = getPeriodDates(period)
+    
+    switch(type) {
+        case 'CONVERSATIONS': {
+            const count = await prisma.conversation.count({
+                where: {
+                    assignedToId: userId,
+                    status: 'FECHADA',
+                    closedAt: { gte: startDate, lte: endDate }
+                }
+            })
+            return count
+        }
+            
+        case 'APPOINTMENTS': {
+            const count = await prisma.conversation.count({
+                where: {
+                    assignedToId: userId,
+                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    closedAt: { gte: startDate, lte: endDate }
+                }
+            })
+            return count
+        }
+            
+        case 'CONVERSION_RATE': {
+            const total = await prisma.conversation.count({
+                where: { 
+                    assignedToId: userId, 
+                    status: 'FECHADA',
+                    closedAt: { gte: startDate, lte: endDate } 
+                }
+            })
+            const converted = await prisma.conversation.count({
+                where: {
+                    assignedToId: userId,
+                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    closedAt: { gte: startDate, lte: endDate }
+                }
+            })
+            return total > 0 ? (converted / total) * 100 : 0
+        }
+            
+        case 'RESPONSE_TIME': {
+            const result = await prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
+                SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) / 60 as avg_minutes
+                FROM "Message" m1
+                INNER JOIN "Message" m2 
+                    ON m1."conversationId" = m2."conversationId"
+                    AND m2.timestamp > m1.timestamp
+                    AND m2.direction = 'SENT'
+                INNER JOIN "Conversation" c
+                    ON c.id = m1."conversationId"
+                WHERE m1.direction = 'RECEIVED'
+                    AND c."assignedToId" = ${userId}
+                    AND c."closedAt" >= ${startDate}
+                    AND c."closedAt" <= ${endDate}
+                    AND m2.timestamp = (
+                        SELECT MIN(m3.timestamp)
+                        FROM "Message" m3
+                        WHERE m3."conversationId" = m1."conversationId"
+                            AND m3.direction = 'SENT'
+                            AND m3.timestamp > m1.timestamp
+                    )
+            `
+            return result[0]?.avg_minutes ? Math.round(result[0].avg_minutes * 10) / 10 : 0
+        }
+            
+        default:
+            return 0
+    }
+}
 
 /**
  * Helper: Calcular tempo médio de resposta correto
