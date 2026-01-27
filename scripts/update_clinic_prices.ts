@@ -38,7 +38,14 @@ async function updatePrices() {
       { code: 'ACUPUNTURA', price: 180, packages: [{ sessions: 10, price: 1600 }] },
       { code: 'AVALIACAO_FISIO_PELVICA', price: 250, packages: [] },
       { code: 'RPG', price: 120, packages: [{ sessions: 10, price: 1000 }] },
-      { code: 'PILATES', price: 70, packages: [] }, // Sessão avulsa
+      { 
+        code: 'PILATES', 
+        price: 70, // Sessão avulsa
+        packages: [
+          { type: 'monthly', frequency: '2x semana', price: 390, description: 'Plano mensal 2x por semana' },
+          { type: 'monthly', frequency: '3x semana', price: 560, description: 'Plano mensal 3x por semana' }
+        ]
+      },
       { code: 'QUIROPRAXIA', price: 120, packages: [] },
       { code: 'INFILTRACAO', price: 150, packages: [] },
     ]
@@ -72,7 +79,9 @@ async function updatePrices() {
       })
       
       const packageDetails = item.packages.length > 0 
-        ? ` + pacote: ${item.packages.map((p: any) => `${p.sessions}x = R$ ${p.price}`).join(', ')}`
+        ? ` + ${item.packages.map((p: any) => 
+            p.sessions ? `${p.sessions}x = R$ ${p.price}` : `${p.frequency} = R$ ${p.price}`
+          ).join(', ')}`
         : ''
       console.log(`  ✓ ${item.code}: R$ ${item.price}${packageDetails}`)
     }
@@ -122,7 +131,9 @@ async function updatePrices() {
       })
       
       const packageDetails = item.packages.length > 0 
-        ? ` + pacote: ${item.packages.map((p: any) => `${p.sessions}x = R$ ${p.price}`).join(', ')}`
+        ? ` + ${item.packages.map((p: any) => 
+            p.sessions ? `${p.sessions}x = R$ ${p.price}` : `${p.frequency} = R$ ${p.price}`
+          ).join(', ')}`
         : ''
       console.log(`  ✓ ${item.code}: R$ ${item.price}${packageDetails}`)
     }

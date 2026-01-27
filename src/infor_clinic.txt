@@ -268,8 +268,8 @@ Exemplo padrão: **20% de desconto** sobre qualquer procedimento particular.
 * Acupuntura — **R$ 180,00**
 * Avaliação Fisioterapia Pélvica — **R$ 250,00**
 * RPG — **R$ 120,00**
-* Pilates 2x na semana — **R$ 39,00**
-* Pilates 3x na semana — **R$ 56,00**
+* Pilates 2x na semana — **R$ 390,00**
+* Pilates 3x na semana — **R$ 560,00**
 * Pilates sessão avulsa — **R$ 70,00**
 * Quiropraxia — **R$ 120,00**
 
