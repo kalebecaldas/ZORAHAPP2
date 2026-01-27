@@ -17,7 +17,7 @@
     "up": "npm run kill-ports && npm run dev",
     "start": "npm run deploy:prod",
     "start:prod": "npm run deploy:prod",
-    "deploy:prod": "npx tsx scripts/railway_migrate_with_baseline.ts && npx tsx scripts/railway_migrate_and_seed.ts && npx tsx scripts/seed_complete.ts && npx tsx scripts/import_workflow_definitivo.ts && npx tsx api/server.ts",
+    "deploy:prod": "npx tsx scripts/railway_migrate_with_baseline.ts && npx tsx scripts/railway_migrate_and_seed.ts && npx tsx scripts/seed_complete.ts && npx tsx scripts/update_clinic_prices.ts && npx tsx scripts/import_workflow_definitivo.ts && npx tsx api/server.ts",
     "railway:migrate": "npx tsx scripts/railway_migrate_and_seed.ts",
     "railway:migrate:sql": "npx prisma db execute --file=scripts/railway_migrate.sql",
     "railway:backup": "npx tsx scripts/railway_backup_before_deploy.ts",
@@ -51,7 +51,8 @@
     "seed:procedure-template": "tsx scripts/seed_procedure_template.ts",
     "seed:ai-config": "tsx scripts/seed_ai_configuration.ts",
     "seed:clinic-data": "tsx scripts/seed_clinic_data.ts",
-    "verify:ai-config": "tsx scripts/verify_ai_config.ts"
+    "verify:ai-config": "tsx scripts/verify_ai_config.ts",
+    "update:clinic-prices": "tsx scripts/update_clinic_prices.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",
