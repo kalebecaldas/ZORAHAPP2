@@ -91,6 +91,8 @@ export const Settings = () => {
       setSaving(true);
       await api.post('/api/settings/clinic-data', clinicData);
       toast.success('Dados da clínica salvos com sucesso');
+      // ✅ Recarregar dados do servidor após salvar
+      await fetchData();
     } catch (error) {
       console.error('Error saving clinic data:', error);
       toast.error('Erro ao salvar dados da clínica');
