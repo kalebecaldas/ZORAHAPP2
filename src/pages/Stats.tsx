@@ -231,15 +231,15 @@ const Stats: React.FC = () => {
           <div className="card-body">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm text-gray-600">Receita Gerada</p>
-                <p className="text-3xl font-bold text-green-600">R$ {(analytics?.roi?.revenueGenerated || 0).toLocaleString()}</p>
+                <p className="text-sm text-gray-600">Receita Particular Gerada</p>
+                <p className="text-3xl font-bold text-green-600">R$ {(analytics?.roi?.privateRevenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="bg-green-100 p-3 rounded-lg">
                 <DollarSign className="h-6 w-6 text-green-600" />
               </div>
             </div>
             <p className="text-sm text-gray-500">
-              {analytics?.roi?.appointmentsGenerated || 0} agendamentos
+              {analytics?.roi?.privateAppointmentsCount || 0} particular(es) · {analytics?.roi?.conventionAppointmentsCount || 0} convênio(s)
             </p>
           </div>
         </div>
@@ -419,7 +419,7 @@ const Stats: React.FC = () => {
                 formatter={(value: any, name: string) => {
                   if (name === 'count') return [value, 'Conversas'];
                   if (name === 'percentage') return [value.toFixed(1) + '%', 'Porcentagem'];
-                  if (name === 'revenue') return ['R$ ' + value.toFixed(2), 'Receita'];
+                  if (name === 'revenue') return ['R$ ' + value.toFixed(2), 'Receita Particular'];
                   return [value, name];
                 }}
               />

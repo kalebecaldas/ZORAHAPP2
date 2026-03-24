@@ -17,14 +17,12 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/utils';
-import { useSystemBranding } from '../services/systemBrandingService';
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { hasPermission } = usePermissions();
   const [pendingCount, setPendingCount] = useState(0);
-  const branding = useSystemBranding();
 
   // Verificar se é a primeira vez acessando conversas nesta sessão
   const getInitialCollapsedState = () => {
@@ -174,15 +172,12 @@ const Sidebar: React.FC = () => {
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
             <div className="flex-shrink-0">
               <img
-                src={`${branding.logoUrl}?t=${Date.now()}`}
-                alt={`${branding.systemName} Logo`}
-                className="h-8 w-8"
-                key={branding.logoUrl}
-                onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }}
+                src={isCollapsed ? '/logo-zorah-icon.png' : '/logo-zorah.png'}
+                alt="ZoraH Logo"
+                className={isCollapsed ? 'h-8 w-8 object-contain' : 'h-8 object-contain'}
               />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <h1 className="text-xl font-bold text-gray-700 whitespace-nowrap">{branding.systemName}</h1>
               <p className="text-xs text-gray-600 whitespace-nowrap">WhatsApp + IA</p>
             </div>
           </div>

@@ -195,71 +195,71 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
 
-        // Taxa de conversão do bot (conversas que viraram agendamento)
-        const totalBotConversations = await prisma.conversation.count({
-            where: {
-                createdAt: { gte: startDate },
-                status: 'FECHADA',
-                assignedToId: null // Apenas bot
-            }
-        })
+        const closedWhere = { createdAt: { gte: startDate }, status: 'FECHADA' } as const
+        const scheduledCategories = ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] as const
 
-        // Conversas do bot que geraram agendamento (baseado na categoria de encerramento)
-        const botConversationsWithAppointment = await prisma.conversation.count({
-            where: {
-                createdAt: { gte: startDate },
-                status: 'FECHADA',
-                assignedToId: null,
-                closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] }
-            }
-        })
-
-        // Taxa de transferência para humano
-        const totalConversations = await prisma.conversation.count({
-            where: { createdAt: { gte: startDate } }
-        })
-
-        const humanTransferred = await prisma.conversation.count({
-            where: {
-                createdAt: { gte: startDate },
-                assignedToId: { not: null }
-            }
-        })
-
-        // Tempo médio até resolução (removido por enquanto - não há campo numérico para calcular)
-        // const avgResolution = await prisma.conversation.aggregate({
-        //     where: {
-        //         createdAt: { gte: startDate },
-        //         status: 'FECHADA'
-        //     },
-        //     _avg: {
-        //         unreadCount: true
-        //     }
-        // })
+        const [
+            totalClosed,
+            totalConverted,
+            botClosed,
+            botConverted,
+            humanClosed,
+            humanConverted,
+            totalConversations,
+            humanTransferred,
+        ] = await Promise.all([
+            // Total fechadas
+            prisma.conversation.count({ where: { ...closedWhere } }),
+            // Total convertidas (bot + atendente)
+            prisma.conversation.count({ where: { ...closedWhere, closeCategory: { in: [...scheduledCategories] } } }),
+            // Bot: assignedToId null
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null } }),
+            // Bot convertidas
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null, closeCategory: { in: [...scheduledCategories] } } }),
+            // Humano: assignedToId preenchido
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null } } }),
+            // Humano convertidas
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null }, closeCategory: { in: [...scheduledCategories] } } }),
+            // Total de conversas no período
+            prisma.conversation.count({ where: { createdAt: { gte: startDate } } }),
+            // Transferidas para humano
+            prisma.conversation.count({ where: { createdAt: { gte: startDate }, assignedToId: { not: null } } }),
+        ])
 
         const result = {
-            botConversionRate: totalBotConversations > 0
-                ? (botConversationsWithAppointment / totalBotConversations) * 100
-                : 0,
-            humanTransferRate: totalConversations > 0
-                ? (humanTransferred / totalConversations) * 100
-                : 0,
-            totalBotConversations,
-            conversationsWithAppointment: botConversationsWithAppointment,
-            avgResolutionTimeMinutes: 0 // TODO: calcular corretamente
+            totalConversionRate: totalClosed > 0 ? (totalConverted / totalClosed) * 100 : 0,
+            botConversionRate: botClosed > 0 ? (botConverted / botClosed) * 100 : 0,
+            humanConversionRate: humanClosed > 0 ? (humanConverted / humanClosed) * 100 : 0,
+            humanTransferRate: totalConversations > 0 ? (humanTransferred / totalConversations) * 100 : 0,
+            totalClosed,
+            totalConverted,
+            botClosed,
+            botConverted,
+            humanClosed,
+            humanConverted,
+            totalBotConversations: botClosed,
+            conversationsWithAppointment: totalConverted,
+            avgResolutionTimeMinutes: 0,
         }
-        
+
         console.log('📊 [Analytics/Conversion] Métricas calculadas:', result)
         res.json(result)
     } catch (error) {
         console.error('❌ [Analytics/Conversion] Erro:', error)
-        // Retornar dados vazios em vez de erro 500
         res.json({
+            totalConversionRate: 0,
             botConversionRate: 0,
+            humanConversionRate: 0,
             humanTransferRate: 0,
+            totalClosed: 0,
+            totalConverted: 0,
+            botClosed: 0,
+            botConverted: 0,
+            humanClosed: 0,
+            humanConverted: 0,
             totalBotConversations: 0,
             conversationsWithAppointment: 0,
-            avgResolutionTimeMinutes: 0
+            avgResolutionTimeMinutes: 0,
         })
     }
 })
@@ -756,23 +756,16 @@ router.get('/roi', async (req: Request, res: Response): Promise<void> => {
         const COST_PER_HOUR = 30
         const costSaved = (timeSavedHours * COST_PER_HOUR)
 
-        // Receita gerada (agendamentos do bot)
-        const appointmentsFromBot = await prisma.appointment.count({
+        // Agendamentos via convênio (contagem, sem valor monetário estimado)
+        const conventionAppointmentsCount = await prisma.conversation.count({
             where: {
                 createdAt: { gte: startDate },
-                patient: {
-                    conversations: {
-                        some: {
-                            status: 'FECHADA',
-                            assignedToId: null,
-                            createdAt: { gte: startDate }
-                        }
-                    }
-                }
+                status: 'FECHADA',
+                closeCategory: 'AGENDAMENTO',
             }
         })
 
-        // ✅ Receita de agendamentos particulares
+        // Receita real: somente agendamentos particulares com totalValue preenchido
         const privateAppointmentsRevenue = await prisma.conversation.findMany({
             where: {
                 createdAt: { gte: startDate },
@@ -780,9 +773,7 @@ router.get('/roi', async (req: Request, res: Response): Promise<void> => {
                 closeCategory: 'AGENDAMENTO_PARTICULAR',
                 privateAppointment: { not: null }
             },
-            select: {
-                privateAppointment: true
-            }
+            select: { privateAppointment: true }
         })
 
         const privateRevenue = privateAppointmentsRevenue.reduce((sum, conv) => {
@@ -790,22 +781,15 @@ router.get('/roi', async (req: Request, res: Response): Promise<void> => {
             return sum + (data?.totalValue || 0)
         }, 0)
 
-        // Assumindo valor médio de R$ 150 por procedimento regular
-        const AVG_PROCEDURE_VALUE = 150
-        const regularRevenue = appointmentsFromBot * AVG_PROCEDURE_VALUE
-        const revenueGenerated = regularRevenue + privateRevenue
-
         res.json({
             botConversations,
             timeSavedMinutes,
             timeSavedHours,
             costSaved,
-            appointmentsGenerated: appointmentsFromBot,
+            conventionAppointmentsCount,
             privateAppointmentsCount: privateAppointmentsRevenue.length,
-            revenueGenerated,
-            regularRevenue,
             privateRevenue,
-            roi: costSaved > 0 ? ((revenueGenerated - costSaved) / costSaved) * 100 : 0
+            roi: costSaved > 0 ? (privateRevenue / costSaved) * 100 : 0
         })
     } catch (error) {
         console.error('Error fetching ROI metrics:', error)

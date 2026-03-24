@@ -1,0 +1,16 @@
+---
+description: Padrões obrigatórios para o backend ZoraH — autenticação, validação, Prisma, OpenAI, webhooks
+globs: api/**/*.ts
+alwaysApply: false
+---
+
+PADRÕES OBRIGATÓRIOS — Backend ZoraH:
+
+1. AUTH: Endpoint público = comentário justificando. Endpoint privado = `authMiddleware` + `authorize([roles])`. Roles: MASTER | ADMIN | SUPERVISOR | ATENDENTE.
+2. VALIDAÇÃO: Zod em todos os body/params. Referência: `api/utils/validation.ts`.
+3. PRISMA: `try/catch` em toda query. Erro Prisma → mensagem genérica ao cliente. Usar transações para operações multi-tabela.
+4. WEBHOOKS: Validar assinatura HMAC antes de processar. Limite de 1MB no body de webhooks.
+5. OPENAI: `max_tokens` explícito sempre. Singleton para o cliente. `costMonitoringService.logUsage()` obrigatório.
+6. RATE LIMIT: Nunca bypassar por `NODE_ENV`. Usar valores relaxados em dev, nunca ausência total.
+7. ERROS: Formato `{ error: string, code?: string }` em todos os responses de erro.
+8. ENV: Usar `AUTH_JWT_SECRET` (não `JWT_SECRET` — README desatualizado).

@@ -57,6 +57,19 @@ export class ConversationalAIService {
         conversationId: string,
         phone: string
     ): Promise<ConversationalResponse> {
+        if (!process.env.OPENAI_API_KEY) {
+            console.warn('⚠️ [ConversationalAI] OPENAI_API_KEY não configurada — retornando sem resposta de IA.')
+            return {
+                message: '',
+                intent: 'CONVERSA_LIVRE',
+                sentiment: 'neutral',
+                action: 'continue',
+                confidence: 0,
+                entities: {},
+                suggestedNextSteps: []
+            }
+        }
+
         console.log(`🤖 Gerando resposta conversacional para: "${message}"`)
 
         try {

@@ -43,6 +43,7 @@ import webhooksRoutes from './routes/webhooks.js' // ✅ Sistema de Webhooks
 import docsRoutes from './routes/docs.js' // ✅ Documentação Pública
 import webhookN8NRoutes from './routes/webhook-n8n.js' // ✅ Webhook para N8N responder
 import goalsRoutes from './routes/goals.js' // ✅ Sistema de Metas Individuais
+import clinicaAgilRoutes from './routes/clinicaAgil.js' // ✅ Proxy Clínica Ágil
 import { authMiddleware } from './utils/auth.js'
 import { workflowEngine } from './services/workflowEngine.js'
 
@@ -183,6 +184,7 @@ app.use('/api/users', authenticatedLimiter, usersRoutes)
 app.use('/api/settings', authenticatedLimiter, settingsRoutes)
 app.use('/api/appointments', authenticatedLimiter, appointmentsRoutes)
 app.use('/api/goals', authenticatedLimiter, goalsRoutes)
+app.use('/api/clinica-agil', authenticatedLimiter, clinicaAgilRoutes) // ✅ Proxy Clínica Ágil
 app.use('/api/test', testRoutes) // Test routes without rate limiting
 app.use('/api/cobertura', authenticatedLimiter, coverageRoutes)
 app.use('/api/permissions', authenticatedLimiter, permissionsRoutes)

@@ -2113,6 +2113,9 @@ export async function processIncomingMessage(
     }
 
     // Tentar processar com N8N
+    const n8nFallbackEnabled = process.env.N8N_FALLBACK_ENABLED !== 'false'
+    const openAiKeyConfigured = !!process.env.OPENAI_API_KEY
+
     if (n8nBotService.isEnabled()) {
       console.log(`🔄 Tentando processar com N8N...`)
       if (selectedUnit) {
@@ -2138,23 +2141,39 @@ export async function processIncomingMessage(
           console.log(`✅ N8N processou com sucesso: ${n8nResult.intent || 'sem intent'}`)
 
           // N8N já enviou a resposta via webhook-n8n.ts
-          // Apenas retornar logs
           workflowLogs.push(`✅ Processado pelo N8N: ${n8nResult.intent || 'sem intent'}`)
           return workflowLogs
         } else {
+          // If N8N is the primary system and fallback is disabled (or OpenAI key is absent),
+          // do not fall through to the legacy intelligent router — it would crash anyway.
+          if (!n8nFallbackEnabled || !openAiKeyConfigured) {
+            console.log(`⚠️ N8N falhou e fallback desabilitado (N8N_FALLBACK_ENABLED=false ou OPENAI_API_KEY ausente). Encerrando sem fallback.`)
+            workflowLogs.push(`⚠️ N8N falhou — fallback desabilitado`)
+            return workflowLogs
+          }
           console.log(`⚠️ N8N retornou fallback, usando sistema antigo`)
           // Continua para o sistema antigo abaixo
         }
       } catch (n8nError) {
         console.error(`❌ Erro ao processar com N8N:`, n8nError)
+        if (!n8nFallbackEnabled || !openAiKeyConfigured) {
+          console.log(`⚠️ N8N falhou e fallback desabilitado. Encerrando sem fallback.`)
+          workflowLogs.push(`⚠️ N8N erro — fallback desabilitado`)
+          return workflowLogs
+        }
         console.log(`🔄 Usando fallback (sistema antigo)`)
         // Continua para o sistema antigo abaixo
       }
     } else {
+      if (!openAiKeyConfigured) {
+        console.log(`⚠️ N8N não configurado e OPENAI_API_KEY ausente — nenhum bot disponível para processar a mensagem.`)
+        workflowLogs.push(`⚠️ Nenhum processador de bot configurado`)
+        return workflowLogs
+      }
       console.log(`⚠️ N8N não configurado, usando sistema antigo`)
     }
 
-    // ✅ FALLBACK: Usar Roteador Inteligente (sistema antigo)
+    // ✅ FALLBACK: Usar Roteador Inteligente (sistema antigo — requer OPENAI_API_KEY)
     console.log(`🤖 Processando mensagem com Roteador Inteligente (fallback)...`)
 
     try {

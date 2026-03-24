@@ -89,13 +89,33 @@ export class ConversationSessionManager {
   }
 
   /**
-   * Update session activity (extend session on user activity)
+   * Update session activity (extend session on user activity).
+   * If the session does not exist in memory (e.g. after a server restart/redeploy),
+   * a lightweight recovery session is created automatically instead of throwing.
    */
   async updateSessionActivity(conversationId: string): Promise<ConversationSession> {
     try {
-      const session = this.sessions.get(conversationId);
+      let session = this.sessions.get(conversationId);
+
       if (!session) {
-        throw new Error(`Session not found for conversation ${conversationId}`);
+        // Session lost after redeploy — reconstruct from minimal data so the
+        // in-memory map stays consistent without causing cascading errors.
+        const now = new Date();
+        session = {
+          conversationId,
+          userId: 'recovered',
+          startTime: now,
+          lastActivity: now,
+          expiryTime: new Date(now.getTime() + this.config.maxSessionDuration),
+          status: 'active',
+          messageCount: 1,
+          transferCount: 0,
+          metadata: { recovered: true }
+        };
+        this.sessions.set(conversationId, session);
+        this.setWarningTimer(conversationId, session.expiryTime);
+        sessionLogger.info(`Session auto-recovered for conversation ${conversationId} after missing in-memory map`);
+        return session;
       }
 
       const now = new Date();
@@ -105,13 +125,9 @@ export class ConversationSessionManager {
       // Update expiry time if session is close to expiry
       const timeUntilExpiry = session.expiryTime.getTime() - now.getTime();
       if (timeUntilExpiry < this.config.warningThreshold && session.status === 'warning') {
-        // Extend session by 1 hour if user is still active
         session.expiryTime = new Date(now.getTime() + 60 * 60 * 1000);
         session.status = 'active';
-        
-        // Reset warning timer
         this.setWarningTimer(conversationId, session.expiryTime);
-        
         sessionLogger.info(`Session extended for conversation ${conversationId} due to user activity`);
       }
 

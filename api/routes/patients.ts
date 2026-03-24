@@ -288,4 +288,89 @@ function cleanPhone(phone: string): string {
   return phone.replace(/\D/g, '')
 }
 
+// Middleware para autenticação via API key do bot (N8N)
+function botKeyMiddleware(req: Request, res: Response, next: any): void {
+  const botKey = process.env.N8N_BOT_API_KEY
+  if (!botKey) {
+    res.status(503).json({ error: 'N8N_BOT_API_KEY não configurada no servidor' })
+    return
+  }
+  const provided = req.headers['x-bot-key']
+  if (!provided || provided !== botKey) {
+    res.status(401).json({ error: 'Não autorizado' })
+    return
+  }
+  next()
+}
+
+/**
+ * POST /api/patients/upsert-from-bot
+ * Cria ou retorna paciente existente pelo telefone.
+ * Autenticado via header x-bot-key (N8N_BOT_API_KEY).
+ * Usado pelo N8N após lookup na Clínica Ágil.
+ */
+router.post('/upsert-from-bot', botKeyMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, name, email, insuranceCompany, source } = req.body
+
+    if (!phone) {
+      res.status(400).json({ error: 'phone é obrigatório' })
+      return
+    }
+
+    const cleaned = cleanPhone(phone)
+    if (cleaned.length < 10 || cleaned.length > 11) {
+      res.status(400).json({ error: 'Telefone inválido' })
+      return
+    }
+
+    const safeName = (name && name.trim() && name !== 'Novo Paciente')
+      ? name.trim()
+      : `Paciente Bot ${cleaned.slice(-4)}`
+
+    const existing = await prisma.patient.findFirst({ where: { phone: cleaned } })
+
+    if (existing) {
+      // Atualizar apenas campos que chegaram com valor real
+      const updateData: Record<string, any> = {}
+      if (name && name.trim() && name !== 'Novo Paciente' && existing.name.startsWith('Paciente Bot')) {
+        updateData.name = name.trim()
+      }
+      if (email && !existing.email) updateData.email = email.toLowerCase().trim()
+      if (insuranceCompany && !existing.insuranceCompany) updateData.insuranceCompany = String(insuranceCompany).trim()
+
+      const updated = Object.keys(updateData).length > 0
+        ? await prisma.patient.update({ where: { id: existing.id }, data: updateData })
+        : existing
+
+      res.json({ patient: updated, created: false })
+      return
+    }
+
+    const patient = await prisma.patient.create({
+      data: {
+        phone: cleaned,
+        name: safeName,
+        email: email ? email.toLowerCase().trim() : null,
+        insuranceCompany: insuranceCompany ? String(insuranceCompany).trim() : null,
+        preferences: { source: source || 'bot' },
+      }
+    })
+
+    await prisma.patientInteraction.create({
+      data: {
+        patientId: patient.id,
+        type: 'PATIENT_CREATED',
+        description: 'Paciente criado automaticamente via bot',
+        data: { source: source || 'bot' }
+      }
+    })
+
+    res.status(201).json({ patient, created: true })
+  } catch (error: any) {
+    console.error('Erro ao upsert paciente via bot:', error)
+    res.status(500).json({ error: 'Erro interno' })
+  }
+})
+
 export default router

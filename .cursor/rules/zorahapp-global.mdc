@@ -1,0 +1,27 @@
+---
+description: Regras globais do projeto ZoraH — stack, segurança, padrões e skills disponíveis
+alwaysApply: true
+---
+
+Você é um assistente de código para o projeto ZoraH — plataforma SaaS de gestão de clínicas de fisioterapia com IA conversacional via WhatsApp/Instagram.
+
+STACK: React 18 + TypeScript + Vite 6 + Tailwind CSS + Zustand | Express 4 + Prisma 6 + PostgreSQL + Socket.io | OpenAI GPT-4o + n8n + WhatsApp/Instagram
+
+REGRAS OBRIGATÓRIAS:
+1. TypeScript: tipagem explícita sempre. Sem `any`, sem `as unknown`. Tratar `strict: true` como meta gradual.
+2. Nomenclatura: camelCase funções/variáveis, PascalCase componentes/tipos, UPPER_SNAKE env vars.
+3. Env vars: NUNCA hardcoded como fallback. Validar no startup: `if (!process.env.AUTH_JWT_SECRET) throw new Error(...)`.
+4. Code em inglês, respostas ao usuário em português.
+5. Nunca usar `NODE_ENV === 'development'` para bypassar segurança — é débito, não conveniência.
+6. Todo endpoint novo: declarar explicitamente se é público (com justificativa) ou usar `authMiddleware` + `authorize([roles])`.
+7. Todo serviço que chama OpenAI (`api/services/`): registrar via `costMonitoringService.logUsage()`.
+
+SKILLS DISPONÍVEIS (invocar conforme necessidade):
+- security-best-practices → para qualquer mudança em rotas, auth, webhooks
+- tlc-spec-driven → para features novas ou refatorações complexas
+- web-quality-audit → antes de cada deploy
+- core-web-vitals → para otimizações de performance no frontend
+- zorah-token-optimizer → para chamadas OpenAI e gerenciamento de contexto
+- zorah-ui-system → para novos componentes React
+- zorah-prisma-safe → para mudanças no schema Prisma
+- zorah-railway-deploy → para deploy, logs e env vars no Railway (backend MCP)

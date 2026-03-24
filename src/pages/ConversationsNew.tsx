@@ -1823,7 +1823,7 @@ const ConversationsPage: React.FC = () => {
             try {
                 // Encode phone para evitar problemas com caracteres especiais
                 const encodedPhone = encodeURIComponent(selectedConversation.phone);
-                await api.post(`/conversations/${encodedPhone}/heartbeat`);
+                await api.post(`/api/conversations/${encodedPhone}/heartbeat`);
             } catch (error) {
                 // Heartbeat é silencioso - não exibe erro ao usuário
                 console.warn('Erro no heartbeat:', error);

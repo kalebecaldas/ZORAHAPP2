@@ -1,0 +1,15 @@
+---
+description: Padrões obrigatórios para o frontend ZoraH — Design System, estado, segurança no browser
+globs: src/**/*.tsx,src/**/*.ts,src/**/*.css
+alwaysApply: false
+---
+
+PADRÕES OBRIGATÓRIOS — Frontend ZoraH:
+
+1. DESIGN SYSTEM: Variáveis CSS de `src/styles/design-system.css`. Sem cores hex inline. Classes `card`, `card-body`, `skeleton`, `fade-in` antes de criar novas.
+2. COMPONENTES: `src/components/<domínio>/`. Reutilizáveis em `src/components/ui/`. Consultar `DesignSystem.tsx` antes de criar.
+3. ESTADO: Zustand → estado global persistido (auth, conversas). React Query → dados remotos cacheáveis (pacientes, agendamentos). Nunca os dois para o mesmo dado.
+4. SEGURANÇA: Nunca `new OpenAI({ apiKey })` no browser. Toda chamada IA vai para `api/`. Padrão proibido: `src/services/workflow/executors/gptExecutor.ts`.
+5. JWT: Novas features de auth devem usar httpOnly cookie, não localStorage.
+6. IMPORTS: Alias `@/` para `src/`. Máximo 2 níveis de caminho relativo.
+7. TAILWIND: Sem classes arbitrárias de cor (`text-[#3B82F6]`). Usar design tokens do config.
