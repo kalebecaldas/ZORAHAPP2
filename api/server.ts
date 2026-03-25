@@ -1,8 +1,14 @@
 import { createServer } from 'http'
-import app from './app.js'
 import { initRealtime } from './realtime.js'
 import { startInactivityMonitor, stopInactivityMonitor } from './services/inactivityMonitor.js'
-import { workflowEngine } from './services/workflowEngine.js'
+
+/**
+ * Mensagens de arranque no stderr: com concurrently/npm pipes, stdout costuma ficar
+ * bufferizado e parece "travado" até a carga pesada terminar.
+ */
+function bootLog(message: string): void {
+  process.stderr.write(`${message}\n`)
+}
 
 /**
  * start server with port
@@ -20,12 +26,21 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Promise:', promise)
 })
 
+bootLog(
+  '⏳ ZoraH API: carregando Express + rotas (conversas carregam na 1ª chamada HTTP — arranque deve ser rápido)...'
+)
+const [{ default: app }, { workflowEngine }] = await Promise.all([
+  import('./app.js'),
+  import('./services/workflowEngine.js'),
+])
+bootLog('✅ Módulos da API carregados (Express + workflow engine).')
+
 const httpServer = createServer(app as any)
 
 // Inicializar realtime com tratamento de erro
 try {
   initRealtime(httpServer)
-  console.log('✅ Socket.IO inicializado')
+  bootLog('✅ Socket.IO inicializado')
 } catch (error) {
   console.error('⚠️ Erro ao inicializar Socket.IO:', error)
   // Continua mesmo se Socket.IO falhar
@@ -54,16 +69,16 @@ httpServer.on('error', (error: NodeJS.ErrnoException) => {
 })
 
 httpServer.listen(PORT, async () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`)
-  console.log(`📱 WhatsApp Webhook: http://localhost:${PORT}/webhook`)
-  console.log(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`)
-  console.log(`💚 Health Check: http://localhost:${PORT}/api/health`)
-  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`)
+  bootLog(`🚀 Servidor rodando na porta ${PORT}`)
+  bootLog(`📱 WhatsApp Webhook: http://localhost:${PORT}/webhook`)
+  bootLog(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`)
+  bootLog(`💚 Health Check: http://localhost:${PORT}/api/health`)
+  bootLog(`🌍 Ambiente: ${process.env.NODE_ENV || 'development'}`)
 
   // Carregar workflows
   try {
     await workflowEngine.loadWorkflows()
-    console.log('✅ Workflows carregados')
+    bootLog('✅ Workflows carregados')
   } catch (error) {
     console.error('⚠️ Erro ao carregar workflows:', error)
   }

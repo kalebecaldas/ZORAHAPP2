@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { MessageSquare, Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { useSystemBranding } from '../services/systemBrandingService';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -9,7 +8,7 @@ export function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
-  const branding = useSystemBranding();
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,20 +26,17 @@ export function Login() {
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="mx-auto flex items-center justify-center">
-            <img 
-              src={`${branding.logoUrl}?t=${Date.now()}`} 
-              alt={`${branding.systemName} Logo`} 
-              className="h-16 w-16" 
-              key={branding.logoUrl}
-              onError={(e) => { (e.target as HTMLImageElement).src = '/favicon.svg'; }} 
+            <img
+              src="/logo-zorah-completo.png"
+              alt="ZoraH"
+              className={`h-28 object-contain transition-opacity duration-300 ${logoLoaded ? 'opacity-100' : 'opacity-0'}`}
+              onLoad={() => setLogoLoaded(true)}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/logo-zorah.png';
+                setLogoLoaded(true);
+              }}
             />
           </div>
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-800">
-            {branding.systemName}
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sistema de Agendamento Inteligente
-          </p>
         </div>
         
         <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-lg" onSubmit={handleSubmit}>

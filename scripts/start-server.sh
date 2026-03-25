@@ -64,8 +64,18 @@ wait_for_port() {
 # Main execution
 echo -e "${GREEN}📋 Verificando portas...${NC}"
 
-# Check and kill ports if in use
-for port in $SERVER_PORT $CLIENT_PORT; do
+# Porta real da API (Express): PORT no .env ou 3001 (SERVER_PORT no script é legado/túnel local)
+API_PORT=3001
+if [ -f .env ]; then
+  _api_line=$(grep -E '^[[:space:]]*PORT[[:space:]]*=' .env 2>/dev/null | head -1)
+  if [ -n "$_api_line" ]; then
+    API_PORT=$(echo "$_api_line" | cut -d= -f2- | tr -d ' \r' | tr -d '"' | tr -d "'")
+    API_PORT=${API_PORT:-3001}
+  fi
+fi
+
+# Check and kill ports if in use (3001 = API padrão; 4002 = Vite)
+for port in $CLIENT_PORT 3001 $SERVER_PORT; do
     if check_port $port; then
         kill_port $port
         if ! wait_for_port $port; then
@@ -105,11 +115,15 @@ if [ -f "workflow_completo_definitivo.json" ]; then
 fi
 
 # Start the system
-echo -e "${GREEN}🎯 Iniciando servidor e cliente...${NC}"
-echo -e "${GREEN}📡 Servidor: http://localhost:$SERVER_PORT${NC}"
-echo -e "${GREEN}🌐 Cliente: http://localhost:$CLIENT_PORT${NC}"
-echo -e "${YELLOW}⏱️  Isso pode levar alguns segundos...${NC}"
+echo -e "${GREEN}🎯 Iniciando API e frontend...${NC}"
+echo -e "${GREEN}📡 API (backend): http://localhost:${API_PORT}${NC}"
+echo -e "${GREEN}🌐 App (Vite):    http://localhost:$CLIENT_PORT${NC}"
+echo -e "${YELLOW}⏱️  O frontend só abre o Vite depois que a API responder em /api/health (evita ECONNREFUSED no proxy).${NC}"
+echo -e "${YELLOW}   Se editar Conversas, a 1ª requisição HTTP ainda pode carregar o módulo grande.${NC}"
+echo -e "${RED}⚠️  Evite salvar vários ficheiros de seguida: o nodemon pode reiniciar o tsx a meio e gerar ECANCELED.${NC}"
 echo ""
+
+export PORT="${API_PORT}"
 
 # Use npm run dev to start both client and server
 npm run dev

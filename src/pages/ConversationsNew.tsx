@@ -112,6 +112,8 @@ const ConversationsPage: React.FC = () => {
     const [loadingClosed, setLoadingClosed] = useState(false);
     const [hasMoreClosed, setHasMoreClosed] = useState(true);
 
+    // Conversation close animation
+    const [isClosingConversation, setIsClosingConversation] = useState(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -146,6 +148,17 @@ const ConversationsPage: React.FC = () => {
         return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
     }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
 
+    const triggerCloseAnimation = useCallback((callback?: () => void) => {
+        setIsClosingConversation(true);
+        setTimeout(() => {
+            setSelectedConversation(null);
+            setMessages([]);
+            setIsClosingConversation(false);
+            // Limpa a URL para evitar que o useEffect re-selecione a conversa encerrada
+            navigate('/conversations', { replace: true });
+            callback?.();
+        }, 420);
+    }, [navigate]);
 
     // Fetch conversations
     // Fetch conversations
@@ -527,19 +540,8 @@ const ConversationsPage: React.FC = () => {
 
             toast.success('Conversa encerrada com sucesso');
             setShowCloseModal(false);
-            setCloseCategory(''); // ✅ Limpar categoria
-
-            // ✅ Recarregar mensagens após encerramento para mostrar mensagem template
-            // Aguardar um pouco para garantir que o backend processou
-            setTimeout(() => {
-                if (phoneToReload && conversationIdToReload) {
-                    fetchMessages(phoneToReload, conversationIdToReload);
-                }
-            }, 1000); // Aumentar delay para garantir processamento
-
-            // Não limpar selectedConversation imediatamente para manter a conversa visível
-            // setSelectedConversation(null);
-            fetchConversations();
+            setCloseCategory('');
+            triggerCloseAnimation(() => fetchConversations());
         } catch (error) {
             console.error('❌ Error closing conversation:', error);
             toast.error('Erro ao encerrar conversa');
@@ -832,11 +834,10 @@ const ConversationsPage: React.FC = () => {
             console.log('🔒 [GLOBAL] conversation:closed evento recebido:', data);
 
             if (data.conversationId) {
-                // ✅ Se a conversa encerrada é a selecionada, limpar seleção
+                // ✅ Se a conversa encerrada é a selecionada, animar e limpar seleção
                 if (selectedConversation && (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
-                    console.log('🔒 Conversa selecionada foi encerrada - limpando seleção');
-                    setSelectedConversation(null);
-                    setMessages([]);
+                    console.log('🔒 Conversa selecionada foi encerrada - animando encerramento');
+                    triggerCloseAnimation();
                 }
 
                 // ✅ Verificar se é fechamento por expiração de sessão (pode ter nova conversa sendo criada)
@@ -1878,6 +1879,14 @@ const ConversationsPage: React.FC = () => {
             0%, 100% { opacity: 1; }
             50% { opacity: .7; }
         }
+        @keyframes conversationClose {
+            0%   { opacity: 1; transform: scale(1) translateY(0); }
+            100% { opacity: 0; transform: scale(0.97) translateY(16px); }
+        }
+        .conversation-closing {
+            animation: conversationClose 0.4s ease-out forwards;
+            pointer-events: none;
+        }
         /* ✅ Estilos customizados para notificações na área do chat */
         [data-sonner-toaster] {
             position: fixed !important;
@@ -2086,7 +2095,7 @@ const ConversationsPage: React.FC = () => {
 
             {/* Main Chat Area */}
             {selectedConversation ? (
-                <div className="flex-1 flex flex-col relative">
+                <div className={`flex-1 flex flex-col relative${isClosingConversation ? ' conversation-closing' : ''}`}>
                     {/* ✅ Toaster específico para notificações na área do chat (topo direito) */}
                     <Toaster
                         position="top-right"
@@ -2475,8 +2484,8 @@ const ConversationsPage: React.FC = () => {
                         <div className="bg-gray-200 p-6 rounded-full mx-auto mb-4 w-16 h-16 flex items-center justify-center">
                             <Phone className="w-8 h-8 text-gray-400" />
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Selecione uma conversa</h3>
-                        <p className="text-gray-500">Escolha uma conversa ao lado para começar</p>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma conversa selecionada</h3>
+                        <p className="text-gray-500">Selecione uma conversa ao lado para começar</p>
                     </div>
                 </div>
             )}

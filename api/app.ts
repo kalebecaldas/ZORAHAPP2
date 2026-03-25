@@ -6,6 +6,7 @@ import express, {
   type Request,
   type Response,
   type NextFunction,
+  type Router,
 } from 'express'
 import cors from 'cors'
 import path from 'path'
@@ -18,7 +19,6 @@ import rateLimit from 'express-rate-limit'
 // Import routes
 import authRoutes from './routes/auth.js'
 import patientsRoutes from './routes/patients.js'
-import conversationsRoutes from './routes/conversations.js'
 import workflowsRoutes from './routes/workflows.js'
 import statsRoutes from './routes/stats.js'
 import usersRoutes from './routes/users.js'
@@ -45,7 +45,6 @@ import webhookN8NRoutes from './routes/webhook-n8n.js' // ✅ Webhook para N8N r
 import goalsRoutes from './routes/goals.js' // ✅ Sistema de Metas Individuais
 import clinicaAgilRoutes from './routes/clinicaAgil.js' // ✅ Proxy Clínica Ágil
 import { authMiddleware } from './utils/auth.js'
-import { workflowEngine } from './services/workflowEngine.js'
 
 // for esm mode
 const __filename = fileURLToPath(import.meta.url)
@@ -173,11 +172,42 @@ app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
 /**
+ * Monta rota com import dinâmico (1ª requisição carrega o módulo).
+ * conversations.ts é muito grande e puxa workflow em src/ — no arranque atrasava muito.
+ */
+function mountLazyApiRouter(
+  mountPath: string,
+  limiter: express.RequestHandler,
+  importModule: () => Promise<{ default: Router }>
+): void {
+  let cached: Promise<Router> | null = null
+  const resolveRouter = (): Promise<Router> => {
+    if (!cached) {
+      process.stderr.write(
+        `[zorah] Carregando "${mountPath}" na 1ª requisição (módulo grande; só acontece uma vez por processo).\n`
+      )
+      cached = importModule().then((m) => {
+        process.stderr.write(`[zorah] "${mountPath}" pronto.\n`)
+        return m.default
+      })
+    }
+    return cached
+  }
+  app.use(mountPath, limiter, (req, res, next) => {
+    void resolveRouter()
+      .then((router) => {
+        router(req, res, next)
+      })
+      .catch(next)
+  })
+}
+
+/**
  * API Routes
  */
 app.use('/api/auth', publicLimiter, authRoutes)
 app.use('/api/patients', authenticatedLimiter, patientsRoutes)
-app.use('/api/conversations', authenticatedLimiter, conversationsRoutes)
+mountLazyApiRouter('/api/conversations', authenticatedLimiter, () => import('./routes/conversations.js'))
 app.use('/api/workflows', authenticatedLimiter, workflowsRoutes)
 app.use('/api/stats', authenticatedLimiter, statsRoutes)
 app.use('/api/users', authenticatedLimiter, usersRoutes)

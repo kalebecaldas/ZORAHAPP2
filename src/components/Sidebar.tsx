@@ -168,19 +168,12 @@ const Sidebar: React.FC = () => {
         </button>
 
         {/* Header/Logo */}
-        <div className={`p-6 glass-separator ${isCollapsed ? 'px-3' : ''}`}>
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-            <div className="flex-shrink-0">
-              <img
-                src={isCollapsed ? '/logo-zorah-icon.png' : '/logo-zorah.png'}
-                alt="ZoraH Logo"
-                className={isCollapsed ? 'h-8 w-8 object-contain' : 'h-8 object-contain'}
-              />
-            </div>
-            <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
-              <p className="text-xs text-gray-600 whitespace-nowrap">WhatsApp + IA</p>
-            </div>
-          </div>
+        <div className={`py-4 px-4 glass-separator flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
+          <img
+            src={isCollapsed ? '/logo-zorah-icon.png' : '/logo-zorah.png'}
+            alt="ZoraH Logo"
+            className={isCollapsed ? 'h-8 w-8 object-contain' : 'h-8 object-contain'}
+          />
         </div>
 
         {/* Navigation */}

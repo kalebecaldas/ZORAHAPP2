@@ -44,7 +44,7 @@ export async function getSystemBranding(forceRefresh = false): Promise<SystemBra
   // Defaults
   return {
     systemName: 'ZoraH',
-    logoUrl: '/favicon.svg'
+    logoUrl: '/logo-zorah-icon.png'
   };
 }
 
@@ -82,7 +82,7 @@ import React from 'react';
 export function useSystemBranding() {
   const [branding, setBranding] = React.useState<SystemBranding>({
     systemName: 'ZoraH',
-    logoUrl: '/favicon.svg'
+    logoUrl: '/logo-zorah-icon.png'
   });
   const [isLoading, setIsLoading] = React.useState(true);
 

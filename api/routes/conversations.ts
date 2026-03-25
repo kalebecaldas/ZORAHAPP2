@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express'
 import path from 'path'
 import fs from 'fs'
+import fsp from 'fs/promises'
 import { z } from 'zod'
 import prisma from '../prisma/client.js'
 const prismaAny = prisma as any
@@ -3393,6 +3394,31 @@ router.get('/files/:filename', async (req: Request, res: Response): Promise<void
     const filePath = path.join(uploadsDir, safeFilename)
 
     if (!fs.existsSync(filePath)) {
+      // Railway uses ephemeral storage — try to re-download from WhatsApp using stored media ID
+      const mediaPath = `/api/conversations/files/${safeFilename}`
+      const message = await prisma.message.findFirst({
+        where: { mediaUrl: mediaPath },
+        select: { metadata: true }
+      })
+
+      const meta = message?.metadata as Record<string, string> | null
+      const originalId = meta?.originalId
+
+      if (originalId) {
+        try {
+          console.log(`♻️ Re-baixando mídia perdida: ${originalId}`)
+          const cdnUrl = await whatsappService.getMediaUrl(originalId)
+          const mediaBuffer = await whatsappService.downloadMedia(cdnUrl)
+          await fsp.mkdir(uploadsDir, { recursive: true })
+          await fsp.writeFile(filePath, mediaBuffer)
+          console.log(`✅ Mídia restaurada: ${safeFilename}`)
+          res.sendFile(filePath)
+          return
+        } catch (dlErr) {
+          console.error(`❌ Falha ao restaurar mídia ${originalId}:`, dlErr)
+        }
+      }
+
       res.status(404).json({ error: 'Arquivo não encontrado no servidor' })
       return
     }
