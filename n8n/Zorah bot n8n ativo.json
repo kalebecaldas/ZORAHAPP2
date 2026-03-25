@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst data = $json.body || $json;\nconst conversationId = data.conversationId || '';\n\nif (!conversationId) throw new Error('conversationId ausente');\n\nconst sessionId = crypto.createHash('md5').update(conversationId).digest('hex');\nconst platform = data.platform || 'whatsapp';\nconst needsPhone = platform === 'instagram';\n\nreturn [{\n  json: {\n    chatInput: data.message || '',\n    phone: data.phone || '',\n    conversationId,\n    sessionId,\n    platform,\n    needsPhone,\n    patient: data.patient || {},\n    context: data.context || {},\n    appointmentFlow: data.context?.appointmentFlow || {\n      patientChecked: false,\n      patientData: null,\n      insuranceValidated: false,\n      step: 'initial'\n    },\n    messageReceivedAt: Date.now(),\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+        "jsCode": "const data = $json.body || $json;\nconst conversationId = data.conversationId || '';\n\nif (!conversationId) throw new Error('conversationId ausente');\n\nfunction djb2hex(str) {\n  let h = 5381;\n  for (let i = 0; i < str.length; i++) {\n    h = (Math.imul(h, 33) + str.charCodeAt(i)) | 0;\n  }\n  return (h >>> 0).toString(16).padStart(8, '0');\n}\n\nconst sessionId = djb2hex(conversationId);\nconst platform   = data.platform  || 'whatsapp';\nconst needsPhone = platform === 'instagram';\n\nreturn [{\n  json: {\n    chatInput:       data.message  || '',\n    phone:           data.phone    || '',\n    conversationId,\n    sessionId,\n    platform,\n    needsPhone,\n    patient:         data.patient  || {},\n    context:         data.context  || {},\n    appointmentFlow: data.context?.appointmentFlow || {\n      patientChecked: false,\n      patientData: null,\n      insuranceValidated: false,\n      step: 'initial'\n    },\n    messageReceivedAt: Date.now(),\n    timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "ae9587b3-6868-4de5-ac58-53dd050a62fc",
       "name": "Extract Data",
@@ -11,66 +11,6 @@
       "typeVersion": 2,
       "position": [
         12416,
-        12080
-      ]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://app2.clinicaagil.com.br/api/integration/patient_data",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-KEY",
-              "value": "a5dcc76d202fdc2eb86646c9e57754b19f34fff30332b865b19cca44232b460b-c1a-5468970561"
-            },
-            {
-              "name": "X-API-METHOD",
-              "value": "Ch4tB0tW4tsS4v3QRc0d3"
-            },
-            {
-              "name": "accept",
-              "value": "application/json"
-            },
-            {
-              "name": "content-type",
-              "value": "multipart/form-data"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "multipart-form-data",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "numero_paciente",
-              "value": "={{ $('Extract Data').item.json.phone }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "lookup-patient-001",
-      "name": "Lookup Patient",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        12576,
-        12080
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "const lookup = $json;\nconst extractData = $('Extract Data').item.json;\n\nconst found = lookup && lookup.status === 'success' && lookup.data;\nconst patientName   = found ? (lookup.data.paciente_nome || null) : null;\nconst convenioId    = found ? (lookup.data.convenio_id   || null) : null;\nconst email         = found ? (lookup.data.email         || null) : null;\nconst clinicaAgilId = found ? (lookup.data.paciente_id   || null) : null;\n\nreturn [{\n  json: {\n    ...extractData,\n    patientFound: !!found,\n    patientName,\n    convenioId,\n    email,\n    clinicaAgilId,\n  }\n}];\n"
-      },
-      "id": "parse-patient-001",
-      "name": "Parse Patient Data",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        12736,
         12080
       ]
     },
@@ -94,7 +34,9 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({\n  phone: $json.phone,\n  name: $json.patientName || 'Novo Paciente',\n  email: $json.email || null,\n  insuranceCompany: $json.convenioId ? String($json.convenioId) : null,\n  source: 'bot'\n}) }}",
-        "options": {}
+        "options": {
+          "timeout": 8000
+        }
       },
       "id": "upsert-zorah-001",
       "name": "Upsert Patient ZoraH",
@@ -168,7 +110,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const crypto = require('crypto');\n\nconst agentResponse = $json;\nconst extractData = $('Parse Patient Data').item.json || $('Extract Data').item.json || {};\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (res.output?.text) return res.output.text;\n  if (typeof res.output === 'string') return res.output;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet responseText = extractText(agentResponse);\n\nif (typeof responseText === 'string') {\n  responseText = responseText.replace(/^json\\s*\\n?/i, '').trim();\n}\n\nconst conversationId = extractData.conversationId || agentResponse.conversationId || '';\nconst chatInput = extractData.chatInput || agentResponse.chatInput || '';\n\nlet sessionId = extractData.sessionId || agentResponse.sessionId || '';\nif (!sessionId && conversationId) {\n  sessionId = crypto.createHash('md5').update(conversationId).digest('hex');\n}\n\nlet intent = 'INFORMACAO';\nlet confidence = 0.5;\nlet reasoning = '';\nlet unit = null;\nlet needsUnit = false;\nlet parsedResponse = null;\n\nif (responseText) {\n  const jsonMatch = responseText.match(/\\{[\\s\\S]*?\\}/);\n  if (jsonMatch) {\n    try {\n      const parsed = JSON.parse(jsonMatch[0]);\n      intent = parsed.intent || intent;\n      confidence = parsed.confidence || confidence;\n      reasoning = parsed.reasoning || '';\n      unit = parsed.unit || null;\n      needsUnit = parsed.needsUnit !== undefined ? parsed.needsUnit : false;\n      parsedResponse = parsed.response || null;\n    } catch (e) {}\n  }\n}\n\nif (agentResponse.intent) {\n  intent = agentResponse.intent;\n  confidence = agentResponse.confidence || confidence;\n  unit = agentResponse.unit || null;\n}\n\nif (!unit && chatInput) {\n  const lowerInput = chatInput.toLowerCase();\n  const units = ['vieiralves', 'são josé', 'sao jose'];\n  \n  for (const u of units) {\n    if (lowerInput.includes(u)) {\n      if (u.includes('sao jose') || u.includes('são josé')) {\n        unit = 'São José';\n      } else if (u.includes('vieiralves')) {\n        unit = 'Vieiralves';\n      }\n      break;\n    }\n  }\n}\n\nif (intent === 'INFORMACAO' && chatInput) {\n  const lowerInput = chatInput.toLowerCase();\n  \n  const agendarKeywords = ['agendar', 'marcar', 'reservar', 'preciso de horário', 'quero horário', 'fazer consulta'];\n  if (agendarKeywords.some(k => lowerInput.includes(k))) {\n    intent = 'AGENDAR';\n    confidence = 0.9;\n  } else if (lowerInput.includes('atendente') || lowerInput.includes('humano') || lowerInput.includes('falar com')) {\n    intent = 'FALAR_ATENDENTE';\n    confidence = 0.95;\n  }\n}\n\nconst validIntents = ['INFORMACAO', 'AGENDAR', 'FALAR_ATENDENTE', 'PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) {\n  intent = 'INFORMACAO';\n}\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response: parsedResponse || responseText,\n    originalMessage: chatInput,\n    chatInput,\n    phone: extractData.phone || '',\n    platform: extractData.platform || 'whatsapp',\n    needsPhone: extractData.needsPhone || false,\n    patient: extractData.patient || {},\n    patientFound: extractData.patientFound || false,\n    patientName: extractData.patientName || null,\n    convenioId: extractData.convenioId || null,\n    context: extractData.context || {},\n    appointmentFlow: extractData.appointmentFlow || {\n      patientChecked: false,\n      patientData: null,\n      insuranceValidated: false,\n      step: 'initial'\n    },\n    messageReceivedAt: extractData.messageReceivedAt,\n    success: true\n  }\n}];\n"
+        "jsCode": "const agentResponse = $json;\nconst ctx = $('Lookup & Parse Patient').item.json || $('Extract Data').item.json || {};\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text)    return res.text;\n  if (res.response) return res.response;\n  if (res.message)  return res.message;\n  return '';\n}\n\nlet rawText = extractText(agentResponse).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = ctx.conversationId || agentResponse.conversationId || '';\nconst chatInput      = ctx.chatInput      || agentResponse.chatInput      || '';\nconst sessionId      = ctx.sessionId      || agentResponse.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (agentResponse.intent) {\n  intent     = agentResponse.intent;\n  confidence = agentResponse.confidence || confidence;\n  unit       = agentResponse.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                              unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId, sessionId, intent, confidence, reasoning, unit, needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           ctx.phone     || '',\n    platform:        ctx.platform  || 'whatsapp',\n    needsPhone:      ctx.needsPhone|| false,\n    patient:         ctx.patient   || {},\n    patientFound:    ctx.patientFound || false,\n    patientName:     ctx.patientName  || null,\n    convenioId:      ctx.convenioId   || null,\n    context:         ctx.context      || {},\n    appointmentFlow: ctx.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    messageReceivedAt: ctx.messageReceivedAt,\n    success: true\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -384,7 +326,9 @@
       "parameters": {
         "toolDescription": "OBRIGATÓRIO: Consulte esta tool ANTES de responder qualquer pergunta sobre procedimentos, preços ou convênios da Unidade Vieiralves. Retorne os dados exatamente como recebidos, sem inventar ou estimar valores.",
         "url": "https://zorahapp2-production.up.railway.app/api/clinic/data/vieiralves",
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
@@ -399,7 +343,9 @@
       "parameters": {
         "toolDescription": "OBRIGATÓRIO: Consulte esta tool ANTES de responder qualquer pergunta sobre procedimentos, preços ou convênios da Unidade São José. Retorne os dados exatamente como recebidos, sem inventar ou estimar valores.",
         "url": "https://zorahapp2-production.up.railway.app/api/clinic/data/sao-jose",
-        "options": {}
+        "options": {
+          "timeout": 10000
+        }
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
@@ -443,7 +389,9 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ {\n  conversationId: $json.conversationId,\n  message: $json.message,\n  intent: $json.intent,\n  action: $json.action,\n  aiProvider: $json.aiProvider,\n  appointmentFlow: $json.appointmentFlow,\n  requiresQueueTransfer: $json.requiresQueueTransfer,\n  queueName: $json.queueName,\n  metrics: $json.metrics\n} }}",
-        "options": {}
+        "options": {
+          "timeout": 8000
+        }
       },
       "id": "0cc6c12c-2506-4dc8-86a0-7036c9265683",
       "name": "Send to System",
@@ -525,7 +473,9 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "timeout": 8000
+        }
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
@@ -535,6 +485,20 @@
       ],
       "id": "ffb2c48f-afaa-4eb7-949d-31b62a147b22",
       "name": "HTTP Request",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// $json = Extract Data output — sem cross-node reference\nconst ex = $json;\nconst phone = ex.phone || '';\nlet patientFound = false, patientName = null, convenioId = null,\n    email = null, clinicaAgilId = null;\n\nif (phone) {\n  try {\n    const fd = new FormData();\n    fd.append('numero_paciente', phone);\n    const resp = await fetch(\n      'https://app2.clinicaagil.com.br/api/integration/patient_data',\n      {\n        method: 'POST',\n        headers: {\n          'X-API-KEY': 'a5dcc76d202fdc2eb86646c9e57754b19f34fff30332b865b19cca44232b460b-c1a-5468970561',\n          'X-API-METHOD': 'Ch4tB0tW4tsS4v3QRc0d3'\n        },\n        body: fd,\n        signal: AbortSignal.timeout(5000)\n      }\n    );\n    if (resp.ok) {\n      const data = await resp.json();\n      if (data.status === 'success' && data.data) {\n        patientFound  = true;\n        patientName   = data.data.paciente_nome || null;\n        convenioId    = data.data.convenio_id   || null;\n        email         = data.data.email          || null;\n        clinicaAgilId = data.data.paciente_id    || null;\n      }\n    }\n  } catch(_) { /* timeout ou erro — continua sem dados do paciente */ }\n}\n\nreturn [{ json: { ...ex, patientFound, patientName, convenioId, email, clinicaAgilId } }];"
+      },
+      "id": "lookup-parse-001",
+      "name": "Lookup & Parse Patient",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        12576,
+        12080
+      ],
       "onError": "continueRegularOutput"
     }
   ],
@@ -560,29 +524,7 @@
       "main": [
         [
           {
-            "node": "Lookup Patient",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Lookup Patient": {
-      "main": [
-        [
-          {
-            "node": "Parse Patient Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse Patient Data": {
-      "main": [
-        [
-          {
-            "node": "Upsert Patient ZoraH",
+            "node": "Lookup & Parse Patient",
             "type": "main",
             "index": 0
           }
@@ -802,6 +744,17 @@
         [
           {
             "node": "Send to System",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup & Parse Patient": {
+      "main": [
+        [
+          {
+            "node": "Upsert Patient ZoraH",
             "type": "main",
             "index": 0
           }

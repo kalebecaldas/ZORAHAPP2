@@ -1306,6 +1306,62 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
 })
 
 // Process incoming WhatsApp message (called from webhook)
+async function sendN8NFailureFallback(
+  conversation: { id: string; phone: string },
+  platform: string
+): Promise<void> {
+  const WELCOME_MSG =
+    'Olá! Bem-vindo ao IAAM 😊 Em breve um de nossos atendentes irá lhe responder.'
+
+  try {
+    if (platform === 'instagram') {
+      await instagramService.sendMessage(conversation.phone, WELCOME_MSG)
+    } else {
+      await whatsappService.sendTextMessage(conversation.phone, WELCOME_MSG)
+    }
+  } catch (e) {
+    console.warn('sendN8NFailureFallback: erro ao enviar mensagem', e)
+  }
+
+  try {
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        phoneNumber: conversation.phone,
+        messageText: WELCOME_MSG,
+        messageType: 'TEXT',
+        direction: 'SENT',
+        from: 'BOT',
+        metadata: { source: 'n8n_fallback', intent: 'FALAR_ATENDENTE' }
+      }
+    })
+  } catch (e) {
+    console.warn('sendN8NFailureFallback: erro ao salvar mensagem', e)
+  }
+
+  try {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { status: 'PRINCIPAL', assignedToId: null, awaitingInput: true }
+    })
+  } catch (e) {
+    console.warn('sendN8NFailureFallback: erro ao atualizar conversa', e)
+  }
+
+  try {
+    const realtime = getRealtime()
+    if (realtime?.io) {
+      realtime.io.emit('conversation:updated', {
+        id: conversation.id,
+        status: 'PRINCIPAL',
+        reason: 'n8n_failure_fallback'
+      })
+    }
+  } catch (_) {}
+
+  console.log(`⚠️ N8N indisponível — mensagem de boas-vindas enviada e conversa ${conversation.id} movida para PRINCIPAL`)
+}
+
 export async function processIncomingMessage(
   phone: string,
   text: string,
@@ -2148,6 +2204,7 @@ export async function processIncomingMessage(
           // do not fall through to the legacy intelligent router — it would crash anyway.
           if (!n8nFallbackEnabled || !openAiKeyConfigured) {
             console.log(`⚠️ N8N falhou e fallback desabilitado (N8N_FALLBACK_ENABLED=false ou OPENAI_API_KEY ausente). Encerrando sem fallback.`)
+            await sendN8NFailureFallback(reloadedConversation, reloadedConversation.channel || 'whatsapp')
             workflowLogs.push(`⚠️ N8N falhou — fallback desabilitado`)
             return workflowLogs
           }
@@ -2158,6 +2215,7 @@ export async function processIncomingMessage(
         console.error(`❌ Erro ao processar com N8N:`, n8nError)
         if (!n8nFallbackEnabled || !openAiKeyConfigured) {
           console.log(`⚠️ N8N falhou e fallback desabilitado. Encerrando sem fallback.`)
+          await sendN8NFailureFallback(reloadedConversation, reloadedConversation.channel || 'whatsapp')
           workflowLogs.push(`⚠️ N8N erro — fallback desabilitado`)
           return workflowLogs
         }
