@@ -1315,7 +1315,7 @@ async function sendN8NFailureFallback(
 
   try {
     if (platform === 'instagram') {
-      await instagramService.sendMessage(conversation.phone, WELCOME_MSG)
+      await instagramService.sendTextMessage(conversation.phone, WELCOME_MSG)
     } else {
       await whatsappService.sendTextMessage(conversation.phone, WELCOME_MSG)
     }
