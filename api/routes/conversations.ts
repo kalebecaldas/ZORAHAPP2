@@ -2145,6 +2145,13 @@ export async function processIncomingMessage(
       return workflowLogs
     }
 
+    // ✅ Re-verificar status APÓS reload para fechar race condition de handoff
+    // O usuário pode ter assumido a conversa entre a leitura inicial e este ponto
+    if (reloadedConversation.status !== 'BOT_QUEUE') {
+      console.log(`⚠️ [Bot] Conversa ${conversation.id} mudou de status durante processamento: BOT_QUEUE → ${reloadedConversation.status}. Bot não processará para evitar conflito com atendente.`)
+      return workflowLogs
+    }
+
     // Buscar contexto da conversa para enviar ao N8N
     const context = await conversationContextService.getContext(reloadedConversation.id)
 

@@ -69,16 +69,21 @@ router.post('/n8n-response', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Conversa não encontrada' })
     }
 
-    // ✅ VERIFICAR SE CONVERSA JÁ FOI ASSUMIDA POR ATENDENTE
-    // Se conversa está EM_ATENDIMENTO, ignorar resposta do bot para evitar conflitos
-    if (conversation.status === 'EM_ATENDIMENTO' && conversation.assignedToId) {
-      console.log(`⚠️ Conversa ${conversationId} já está EM_ATENDIMENTO com agente ${conversation.assignedTo?.name}. Ignorando resposta do bot.`)
+    // ✅ VERIFICAR SE CONVERSA AINDA ESTÁ EM BOT_QUEUE
+    // Qualquer status diferente de BOT_QUEUE indica handoff para humano:
+    //   EM_ATENDIMENTO = atendente assumiu
+    //   PRINCIPAL      = na fila humana (assumida e devolvida, ou timeout do bot)
+    //   AGUARDANDO     = aguardando input humano
+    // Em todos esses casos o bot NÃO deve enviar mensagem nem alterar o status.
+    if (conversation.status !== 'BOT_QUEUE') {
+      console.log(`⚠️ Conversa ${conversationId} não está mais em BOT_QUEUE (status atual: ${conversation.status}, agente: ${conversation.assignedTo?.name || 'nenhum'}). Ignorando resposta do bot.`)
       return res.status(200).json({
         success: true,
         skipped: true,
-        reason: 'Conversa já assumida por atendente',
+        reason: 'Conversa não está mais em BOT_QUEUE',
         conversationId,
-        assignedTo: conversation.assignedTo?.name
+        currentStatus: conversation.status,
+        assignedTo: conversation.assignedTo?.name ?? null
       })
     }
 
