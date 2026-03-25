@@ -91,6 +91,8 @@ Webhook Start
 | Mar 25 | Criado `Set: Intent Context` (faltava no workflow) — injeta chatInput, phone, conversationId, sessionId, platform, patientName, patientFound, convenioId, needsPhone, messageReceivedAt, patient, context, appointmentFlow — resolvendo erro "No prompt specified" no Intent Classifier Agent |
 | Mar 25 | Criado `Set: Pre-Parse Context` entre Intent Classifier Agent e Parse Intent Response — injeta agentOutput + contexto do Set: Intent Context — resolvendo crash do Task Runner OOM em Parse Intent Response |
 | Mar 25 | Reescrito `Parse Intent Response` — removidas todas as cross-node refs (`$('Lookup & Parse Patient').item.json`) — usa apenas `$json` (vindo do Set node anterior) |
+| Mar 25 | Fix timeout 300s: `Set: Pre-Parse Context` estava ausente do workflow (restaurado de backup sem ele) — recriado e conexões corrigidas: `Intent Classifier Agent → Set: Pre-Parse Context → Parse Intent Response` |
+| Mar 25 | Fix timeout `Format Final Response`: `Set: Info Context` ausente, `Parse Information Response`/`Handle Appointment Request`/`Format Ask Unit Response`/`Handler Transfer`/`Format Final Response` com cross-node refs — criado Set: Info Context, todos os Code nodes corrigidos para usar apenas `$json`, `messageReceivedAt` propagado por todas as branches. Workflow agora tem 48 nodes, zero cross-node refs proibidas. |
 | Mar 25 | Criado `Set: Info Context` entre Information Agent e Parse Information Response — stripa `intermediateSteps` (dados grandes das tool calls HTTP) antes do Code node — resolve OOM no Task Runner |
 | Mar 25 | Reescritos `Parse Information Response`, `Format Final Response`, `Handle Appointment Request` — removidas todas as cross-node refs (`$('Parse Patient Data')`, `$('Extract Data')`, `$('Parse Intent Response')`) |
 | Mar 25 | Varredura completa: todos os Code nodes do main flow estão sem cross-node refs |
@@ -108,6 +110,7 @@ Webhook Start
 
 - [ ] **Agendamento**: quando `AGENDAR`, o bot transfere para fila mas não coleta dados do agendamento antes (data, procedimento, convênio). Considerar coletar antes de transferir.
 - [ ] **Resposta de boas-vindas na seleção de unidade**: verificar se o tom está adequado após os ajustes de hoje
+- [x] **Zero cross-node refs**: varredura completa confirmou que todos os Code nodes do main flow usam apenas `$json` / `$input`
 - [ ] **Branch "1" (nodes com sufixo "1")**: ainda tem cross-node refs com `$items('Extract Data1')` — pode crashar se essa branch for ativada
 - [ ] **Teste do fluxo INFORMACAO completo**: verificar se após a pergunta "como posso ajudar?" o bot responde corretamente quando o usuário pergunta algo específico
 
@@ -176,7 +179,7 @@ with urllib.request.urlopen(put_req, context=ctx) as r:
 |------|----|
 | `Intent Classifier Agent` | `ef05b1f9-a3ca-402d-b58f-d4f5a9f62723` |
 | `Set: Intent Context` | `e5be6318-1760-4a97-a9cb-2bce94e1de5e` |
-| `Set: Pre-Parse Context` | `4809121a-9a51-48a8-83ba-6cf8e5c3d191` |
+| `Set: Pre-Parse Context` | `4809121a-9a51-48a8-83ba-6cf8e5c3d191` | injeta agentOutput + 13 campos de contexto do Set: Intent Context |
 | `Parse Intent Response` | `aa22d26b-dcbf-4ca0-8229-fe6f1bfbc3b1` |
 | `Intent Router` | `231a0010-a0ac-4be1-abc3-21509486ac77` |
 | `Information Agent` | `e617a874-e0fd-41d3-92fe-07cb93628459` |

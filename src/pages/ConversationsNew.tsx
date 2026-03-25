@@ -148,18 +148,25 @@ const ConversationsPage: React.FC = () => {
         return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
     }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
 
-    const isClosingRef = React.useRef(false);
+    // Ref com o ID da conversa que está sendo encerrada (sincronizado imediatamente,
+    // sem depender do batch do React — evita duplo disparo com socket em produção)
+    const closingConvIdRef = React.useRef<string | null>(null);
 
-    const triggerCloseAnimation = useCallback((callback?: () => void) => {
-        // Evita duplo disparo (handleClose + evento socket conversation:closed)
-        if (isClosingRef.current) return;
-        isClosingRef.current = true;
+    const triggerCloseAnimation = useCallback((conversationId?: string, callback?: () => void) => {
+        const idToClose = conversationId ?? closingConvIdRef.current;
+
+        // Já está animando exatamente essa conversa → ignora
+        if (closingConvIdRef.current !== null) return;
+
+        // Marca imediatamente (síncrono) antes de qualquer setState ou await
+        closingConvIdRef.current = idToClose ?? '__unknown__';
         setIsClosingConversation(true);
+
         setTimeout(() => {
             setSelectedConversation(null);
             setMessages([]);
             setIsClosingConversation(false);
-            isClosingRef.current = false;
+            closingConvIdRef.current = null;
             // Limpa a URL para evitar que o useEffect re-selecione a conversa encerrada
             navigate('/conversations', { replace: true });
             callback?.();
@@ -547,7 +554,8 @@ const ConversationsPage: React.FC = () => {
             toast.success('Conversa encerrada com sucesso');
             setShowCloseModal(false);
             setCloseCategory('');
-            triggerCloseAnimation(() => fetchConversations());
+            // Passa o ID para o ref ser marcado imediatamente (previne duplo disparo via socket)
+            triggerCloseAnimation(selectedConversation?.id, () => fetchConversations());
         } catch (error) {
             console.error('❌ Error closing conversation:', error);
             toast.error('Erro ao encerrar conversa');
@@ -841,9 +849,14 @@ const ConversationsPage: React.FC = () => {
 
             if (data.conversationId) {
                 // ✅ Se a conversa encerrada é a selecionada, animar e limpar seleção
-                if (selectedConversation && (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
-                    console.log('🔒 Conversa selecionada foi encerrada - animando encerramento');
-                    triggerCloseAnimation();
+                // closingConvIdRef garante que não dispara se handleClose já iniciou a animação
+                if (
+                    closingConvIdRef.current === null &&
+                    selectedConversation &&
+                    (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)
+                ) {
+                    console.log('🔒 Conversa selecionada foi encerrada via socket - animando encerramento');
+                    triggerCloseAnimation(data.conversationId);
                 }
 
                 // ✅ Verificar se é fechamento por expiração de sessão (pode ter nova conversa sendo criada)

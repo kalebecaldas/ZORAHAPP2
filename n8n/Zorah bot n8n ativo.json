@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-03-25T15:46:51.082Z",
+  "updatedAt": "2026-03-25T20:23:46.667Z",
   "createdAt": "2025-12-31T00:44:03.596Z",
   "id": "5xTy00n8X2mmwJ7z",
   "name": "ZoraH Bot - Simple v2.2.4",
@@ -523,8 +523,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        18656,
-        13392
+        18480,
+        13168
       ],
       "onError": "continueRegularOutput"
     },
@@ -539,8 +539,8 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        19000,
-        13376
+        18800,
+        13264
       ],
       "id": "ef05b1f9-a3ca-402d-b58f-d4f5a9f62723",
       "name": "Intent Classifier Agent"
@@ -577,7 +577,7 @@
       "typeVersion": 1.3,
       "position": [
         18928,
-        13648
+        13584
       ],
       "id": "d7d19343-38ff-4ac5-a92a-0eef97dfcfec",
       "name": "Postgres Memory Intent",
@@ -590,13 +590,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const rawAgent=($json.agentOutput||''); const chatInput=($json.chatInput||''); const conversationId=($json.conversationId||''); const sessionId=($json.sessionId||''); const phone=($json.phone||''); const platform=($json.platform||'whatsapp'); const patientName=($json.patientName||null); const patientFound=($json.patientFound||false); const convenioId=($json.convenioId||null); const needsPhone=($json.needsPhone||false); const patient=($json.patient||{}); const context=($json.context||{}); const messageReceivedAt=$json.messageReceivedAt; const appointmentFlow=($json.appointmentFlow||{patientChecked:false,patientData:null,insuranceValidated:false,step:'initial'});\nfunction extractText(v){if(!v)return'';if(typeof v==='string')return v;if(v.output&&typeof v.output==='string')return v.output;if(v.text)return v.text;if(v.response)return v.response;return JSON.stringify(v);}\nlet rawText=extractText(rawAgent).replace(/^json\\s*\\n?/i,'').trim();\nlet intent='INFORMACAO',confidence=0.5,unit=null,needsUnit=false,parsedResponse=null;\nconst m=rawText.match(/\\{[\\s\\S]*?\\}/);\nif(m){try{const p=JSON.parse(m[0]);intent=p.intent||intent;confidence=p.confidence||confidence;unit=p.unit||null;needsUnit=p.needsUnit??false;parsedResponse=p.response||null;}catch(_){}}\nif(!unit&&chatInput){const lo=chatInput.toLowerCase();if(lo.includes('vieiralves'))unit='Vieiralves';else if(lo.includes('são josé')||lo.includes('sao jose'))unit='São José';}\nif(chatInput){const lo=chatInput.toLowerCase();if(['agendar','marcar','reservar'].some(k=>lo.includes(k))){intent='AGENDAR';confidence=0.9;}else if(['atendente','humano','falar com'].some(k=>lo.includes(k))){intent='FALAR_ATENDENTE';confidence=0.95;}}\nif(!['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'].includes(intent))intent='INFORMACAO';\nif(!unit&&(intent==='AGENDAR'||intent==='INFORMACAO')){needsUnit=true;intent='PEDIR_UNIDADE';}\nreturn [{json:{conversationId,sessionId,intent,confidence,unit,needsUnit,response:parsedResponse||rawText,chatInput,originalMessage:chatInput,phone,platform,needsPhone,patient,patientFound,patientName,convenioId,context,appointmentFlow,messageReceivedAt,success:true}}];"
+        "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        19500,
-        13392
+        19168,
+        13152
       ],
       "id": "aa22d26b-dcbf-4ca0-8229-fe6f1bfbc3b1",
       "name": "Parse Intent Response"
@@ -720,7 +720,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\n\nlet message = null;\n\nif (data.response) {\n  if (typeof data.response === 'string') {\n    try {\n      const parsed = JSON.parse(data.response);\n      if (parsed.response) {\n        message = parsed.response;\n      }\n    } catch (e) {\n      message = data.response;\n    }\n  } else {\n    message = data.response;\n  }\n}\n\nif (!message && data.message) {\n  message = data.message;\n}\n\nif (message && typeof message === 'string') {\n  message = message.replace(/^json\\s*\\n?/i, '').trim();\n  const backtick = String.fromCharCode(96);\n  const codeBlockPattern = new RegExp('^' + backtick + backtick + backtick + 'json\\\\s*\\\\n?', 'i');\n  message = message.replace(codeBlockPattern, '').trim();\n  const codeBlockStart = new RegExp('^' + backtick + backtick + backtick + '\\\\s*\\\\n?', 'i');\n  message = message.replace(codeBlockStart, '').trim();\n  const codeBlockEnd = new RegExp(backtick + backtick + backtick + '\\\\s*$', 'i');\n  message = message.replace(codeBlockEnd, '').trim();\n}\n\nif (!message || message.trim() === '') {\n  message = 'Qual unidade você prefere?\\n1 - Vieiralves\\n2 - São José\\n\\nDigite o número da unidade desejada. 😊';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+        "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\n\nlet message = null;\n\nif (data.response) {\n  if (typeof data.response === 'string') {\n    try {\n      const parsed = JSON.parse(data.response);\n      if (parsed.response) message = parsed.response;\n    } catch (e) {\n      message = data.response;\n    }\n  } else {\n    message = data.response;\n  }\n}\n\nif (!message && data.message) message = data.message;\n\nif (message && typeof message === 'string') {\n  message = message.replace(/^json\\s*\\n?/i, '').trim();\n  const bt = String.fromCharCode(96);\n  message = message.replace(new RegExp('^' + bt + bt + bt + 'json\\\\s*\\\\n?', 'i'), '').trim();\n  message = message.replace(new RegExp('^' + bt + bt + bt + '\\\\s*\\\\n?', 'i'), '').trim();\n  message = message.replace(new RegExp(bt + bt + bt + '\\\\s*$', 'i'), '').trim();\n}\n\nif (!message || message.trim() === '') {\n  message = 'Qual unidade você prefere?\\n1 - Vieiralves\\n2 - São José\\n\\nDigite o número da unidade desejada. 😊';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: message,\n    intent: data.intent || 'PEDIR_UNIDADE',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
       },
       "id": "3eab372c-9ebf-46a8-aa8c-7c328fed7c97",
       "name": "Format Ask Unit Response",
@@ -733,7 +733,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Transferindo para atendente. Aguarde! 😊',\n    intent: 'FALAR_ATENDENTE',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true,\n    success: true\n  }\n}];\n"
+        "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Transferindo para atendente. Aguarde! 😊',\n    intent: 'FALAR_ATENDENTE',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true,\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true\n  }\n}];\n"
       },
       "id": "a730e79a-1d23-4d3e-bd92-3554eed72ef2",
       "name": "Handler Transfer",
@@ -747,7 +747,7 @@
     {
       "parameters": {
         "options": {
-          "systemMessage": "={{ `Você é **Zorah**, assistente de informações do IAAM.\n${ $json.patientName ? `Paciente: ${$json.patientName}.` : '' }\nUNIDADE: ${ $json.unit || 'não informada' }\n\n🚨 REGRA PRIORITÁRIA: Se a mensagem for APENAS seleção de unidade (\"1\",\"2\",\"Vieiralves\",\"São José\" sem pergunta):\n- NÃO consulte tool, NÃO liste preços\n- Responda: \"Ótimo! Você selecionou a unidade **${$json.unit}**. 😊\\nComo posso te ajudar? Precisa de informações sobre procedimentos, valores, convênios ou quer agendar?\"\n\n⚠️ Use APENAS dados das tools. Nunca invente preços.\n\nFLUXO: Sem unidade → perguntar | Só seleção → confirmar e perguntar | Com pergunta específica → consultar tool e responder só o necessário\n\nTOOLS: Vieiralves → \"Base de Informações da Unidade Vieiralves\" | São José → \"Base de Informações da Unidade São José\"\nRespostas compactas, amigável 😊` }}"
+          "systemMessage": "={{ `Você é **Zorah**, assistente de informações do IAAM.\n\n────────────────────────────\n🧑 PACIENTE:\n────────────────────────────\n${ $json.patientName ? `Nome: ${$json.patientName}. Cumprimente-o pelo nome na primeira mensagem da conversa.` : 'Paciente não identificado. NÃO invente o nome.' }\n\n## UNIDADE SELECIONADA:\n${$json.unit ? `Unidade: ${$json.unit}` : 'Unidade não selecionada ainda'}\n\n────────────────────────────\n⚠️ REGRAS ANTI-ALUCINAÇÃO (ABSOLUTAS):\n────────────────────────────\n1. NUNCA invente preços, procedimentos ou convênios. Use APENAS os dados retornados pelas tools.\n2. Se um procedimento não estiver na lista da API, diga: \"No momento não oferecemos esse serviço nesta unidade.\"\n3. Se um convênio não estiver na lista, diga: \"Esse convênio não é aceito nesta unidade.\"\n4. Se um preço não estiver disponível na API, diga: \"Para informações de valor, por favor entre em contato.\"\n5. Use SEMPRE os valores exatos retornados pela API. Não arredonde nem estime.\n6. Consulte OBRIGATORIAMENTE a tool da unidade ANTES de responder qualquer pergunta sobre procedimentos, preços ou convênios.\n\n## REGRAS:\n1. **Se não tem unidade:**\n   → PERGUNTAR: \"Qual unidade você prefere? Vieiralves ou São José?\"\n\n2. **Se tem unidade selecionada:**\n   → Use a tool específica da unidade:\n   - Se unidade = \"Vieiralves\" → use tool \"Base de Informações da Unidade Vieiralves\"\n   - Se unidade = \"São José\" → use tool \"Base de Informações da Unidade São José\"\n   → Responda com informações ESPECÍFICAS daquela unidade\n\n3. **Seja amigável e clara 😊**\n4. **Use as informações da clínica da unidade selecionada**\n5. **Mantenha contexto (memória)**\n6. **Convide para agendar quando relevante**\n7. **Traga sempre informações completas, mas compactas**\n8. **Sempre formate as respostas da melhor forma possível**\n9. **Sempre analise qual tipo de informação o paciente quer, entregue somente o necessário**\n10. Não forneça respostas extensas.\n11. Atente-se sempre somente aos procedimentos que as clínicas possuem.\n\n## EXEMPLOS:\n- Sem unidade: \"Olá! 😊 Para melhor atendê-lo, qual unidade você prefere? Vieiralves ou São José?\"\n- Com unidade: \"Ótimo! Na unidade ${$json.unit}, temos... [informações específicas]\"` }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -838,20 +838,20 @@
     },
     {
       "parameters": {
-        "jsCode": "const agentOutput=($json.agentOutput||''); const conversationId=($json.conversationId||'');\nif(!conversationId)throw new Error('conversationId ausente');\nfunction extractText(v){if(!v)return null;if(typeof v==='string')return v;if(typeof v.output==='string')return v.output;if(v.text)return v.text;return null;}\nconst responseText=extractText(agentOutput)||agentOutput||'Desculpe, não consegui processar.';\nreturn [{json:{conversationId,message:responseText,intent:'INFORMACAO',action:'RESPOND',messageReceivedAt:$json.messageReceivedAt,success:true}}];"
+        "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return null;\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output && typeof res.output.text === 'string') return res.output.text;\n  if (typeof res.text === 'string') return res.text;\n  return null;\n}\n\nconst conversationId = raw.conversationId || '';\nif (!conversationId) throw new Error('conversationId ausente no Parse Information');\n\nconst responseText = extractText(raw) || 'Desculpe, não consegui processar sua pergunta.';\n\nreturn [{\n  json: {\n    conversationId,\n    message: responseText,\n    intent: 'INFORMACAO',\n    action: 'RESPOND',\n    messageReceivedAt: raw.messageReceivedAt,\n    phone: raw.phone || '',\n    platform: raw.platform || 'whatsapp',\n    sessionId: raw.sessionId || '',\n    success: true\n  }\n}];\n"
       },
       "id": "ec48645c-3e77-401d-b0b1-e7cd7649cc41",
       "name": "Parse Information Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        20600,
+        20400,
         12896
       ]
     },
     {
       "parameters": {
-        "jsCode": "const data=$json;\nif(!data.conversationId)throw new Error('conversationId obrigatório');\nif(!data.message)throw new Error('message obrigatório');\nconst now=Date.now(); const sentAt=data.messageReceivedAt?(typeof data.messageReceivedAt==='string'?new Date(data.messageReceivedAt).getTime():data.messageReceivedAt):now;\nconst responseTimeMs=Math.max(0,now-sentAt);\nreturn [{json:{conversationId:data.conversationId,message:data.message,intent:(data.intent||'INFORMACAO'),action:(data.action||'RESPOND'),aiProvider:'n8n-gemini-v2.2.4-simple',requiresHumanIntervention:(data.requiresHumanIntervention||false),requiresQueueTransfer:(data.requiresQueueTransfer||false),queueName:(data.queueName||null),appointmentFlow:(data.appointmentFlow||null),metrics:{intent:(data.intent||'INFORMACAO'),responseTimeMs,timestamp:new Date().toISOString(),requiresTransfer:(data.requiresQueueTransfer||false)},success:true,timestamp:new Date().toISOString()}}];"
+        "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\nif (!data.message) throw new Error('message obrigatório');\n\nconst now = Date.now();\nconst messageReceivedAt = data.messageReceivedAt || now;\nconst responseTimeMs = now - messageReceivedAt;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: data.message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini-v2.2.4-simple',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    requiresQueueTransfer: data.requiresQueueTransfer || false,\n    queueName: data.queueName || null,\n    appointmentFlow: data.appointmentFlow || null,\n    metrics: {\n      intent: data.intent || 'INFORMACAO',\n      responseTimeMs: responseTimeMs,\n      timestamp: new Date().toISOString(),\n      requiresTransfer: data.requiresQueueTransfer || false\n    },\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
       },
       "id": "3facf87f-c290-4205-97a2-7e29af6ab5ef",
       "name": "Format Final Response",
@@ -899,7 +899,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data=$json;\nreturn [{json:{conversationId:(data.conversationId||''),message:'Entendi que você deseja agendar! Vou transferir você para nossa equipe de atendimento agora. Aguarde um momento! 😊',intent:'AGENDAR',action:'TRANSFER_TO_QUEUE',requiresQueueTransfer:true,queueName:'Principal',messageReceivedAt:data.messageReceivedAt,success:true}}];"
+        "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Entendi que você deseja agendar um procedimento. Vou transferir você para nossa equipe de atendimento que irá auxiliá-lo com o agendamento. Aguarde um momento! 😊',\n    intent: 'AGENDAR',\n    action: 'TRANSFER_TO_QUEUE',\n    requiresQueueTransfer: true,\n    queueName: 'Principal',\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true\n  }\n}];\n"
       },
       "id": "2f564920-9c34-4eaa-8a3d-a43fe7b06989",
       "name": "Handle Appointment Request",
@@ -1000,109 +1000,108 @@
       "webhookId": "d152cfe1-4e45-4c68-af81-e69e6d4fa2f6"
     },
     {
-      "id": "7f2a67ed-149f-4442-bd3d-f73bf6cea588",
-      "name": "Set: Intent Context",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        18816,
-        13392
-      ],
       "parameters": {
-        "mode": "manual",
-        "includeOtherFields": false,
         "assignments": {
           "assignments": [
             {
-              "id": "5625d017-a51e-455d-9234-b5dc86c19281",
+              "id": "4ee087cf-b94f-42fc-b0a1-e84fbc6d74ce",
               "name": "chatInput",
               "value": "={{ $('Lookup & Parse Patient').item.json.chatInput }}",
               "type": "string"
             },
             {
-              "id": "7a46765b-ea35-4cd5-80bf-f9673d3272fd",
+              "id": "9948c80c-6606-4867-a083-7ce2cb68d48d",
               "name": "phone",
               "value": "={{ $('Lookup & Parse Patient').item.json.phone }}",
               "type": "string"
             },
             {
-              "id": "3662912e-86dd-4b9d-bb63-398b6129aa1c",
+              "id": "10ab8805-4c3f-4e73-9606-9c130942e529",
               "name": "conversationId",
               "value": "={{ $('Lookup & Parse Patient').item.json.conversationId }}",
               "type": "string"
             },
             {
-              "id": "3d864fd8-1501-4cbc-8bf1-54e2ca0da4a1",
+              "id": "8513fd02-daa9-469d-b691-017b6eafb994",
               "name": "sessionId",
               "value": "={{ $('Lookup & Parse Patient').item.json.sessionId }}",
               "type": "string"
             },
             {
-              "id": "59face9b-f4a5-4066-a379-e9edcea7aba2",
+              "id": "0988b523-8032-4852-9f17-804e8ec9f374",
               "name": "platform",
               "value": "={{ $('Lookup & Parse Patient').item.json.platform }}",
               "type": "string"
             },
             {
-              "id": "3aef1965-ee46-4414-b1d6-064eaca696fc",
+              "id": "3598c207-3c05-40b8-aa06-6d234b5b74a3",
               "name": "patientName",
               "value": "={{ $('Lookup & Parse Patient').item.json.patientName }}",
               "type": "string"
             },
             {
-              "id": "714e7077-2700-4ebf-9eb3-b9db0bf530de",
+              "id": "a67eecca-7ea4-4b9a-8ae5-b7734886c68e",
               "name": "patientFound",
               "value": "={{ $('Lookup & Parse Patient').item.json.patientFound }}",
               "type": "boolean"
             },
             {
-              "id": "3e849972-799f-4536-af92-bdddde070642",
+              "id": "306516ad-fb50-4ac9-b5fa-2f5ee4c95596",
               "name": "convenioId",
               "value": "={{ $('Lookup & Parse Patient').item.json.convenioId }}",
               "type": "string"
             },
             {
-              "id": "61cae446-d7c2-43bb-b22f-b782316a94d0",
+              "id": "fcc546ef-41f2-45dd-9931-4057c0bbca7c",
               "name": "needsPhone",
               "value": "={{ $('Lookup & Parse Patient').item.json.needsPhone }}",
               "type": "boolean"
             },
             {
-              "id": "626a77a0-3223-4b0a-a875-56d8d69f8bd3",
+              "id": "8d743953-2532-4105-8d83-2667a497ee20",
               "name": "messageReceivedAt",
               "value": "={{ $('Lookup & Parse Patient').item.json.messageReceivedAt }}",
               "type": "string"
             },
             {
-              "id": "41796065-a2f6-42a7-9e3b-d802073463dd",
+              "id": "0ed3c662-49bc-4e67-9431-38a4ca30a7d8",
               "name": "patient",
               "value": "={{ $('Lookup & Parse Patient').item.json.patient }}",
               "type": "object"
             },
             {
-              "id": "a6b393a4-806e-4651-92be-0448163d84f7",
+              "id": "ba4d1f52-b656-42f3-8604-78b3f79db7c1",
               "name": "context",
               "value": "={{ $('Lookup & Parse Patient').item.json.context }}",
               "type": "object"
             },
             {
-              "id": "0d60aba9-5290-4b9f-b5da-44bd3d71f785",
+              "id": "a3b5fd1c-eb55-444b-a370-3651f28f6d6f",
               "name": "appointmentFlow",
               "value": "={{ $('Lookup & Parse Patient').item.json.appointmentFlow }}",
               "type": "object"
             }
           ]
-        }
-      }
+        },
+        "options": {}
+      },
+      "id": "e5be6318-1760-4a97-a9cb-2bce94e1de5e",
+      "name": "Set: Intent Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        18720,
+        13056
+      ]
     },
     {
-      "id": "97cc3fd2-9b5e-4e28-813b-0e1f0beae1e5",
+      "id": "4809121a-9a51-48a8-83ba-6cf8e5c3d191",
       "name": "Set: Pre-Parse Context",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        19250,
-        13392
+        18960,
+        13376
       ],
       "parameters": {
         "mode": "manual",
@@ -1110,85 +1109,85 @@
         "assignments": {
           "assignments": [
             {
-              "id": "97eb9730-b1e7-496c-b939-80620050ec8b",
+              "id": "e808c3f0-e9b9-42f5-a090-9bdc24eace59",
               "name": "agentOutput",
               "value": "={{ $json.output }}",
               "type": "string"
             },
             {
-              "id": "de4d49bd-7f24-4c61-b918-f8f69e8b3783",
+              "id": "5efb8db4-e0d8-479e-a68e-951b2c76db07",
               "name": "chatInput",
               "value": "={{ $('Set: Intent Context').item.json.chatInput }}",
               "type": "string"
             },
             {
-              "id": "11cae670-8425-46d9-8827-5a030e9fbb89",
+              "id": "db76b5ef-845e-4e8a-a1c7-461bef3912b2",
               "name": "phone",
               "value": "={{ $('Set: Intent Context').item.json.phone }}",
               "type": "string"
             },
             {
-              "id": "b8cc3923-2029-4f4c-98f6-0a37fc977e40",
+              "id": "4825271a-4c9d-4b3c-bb27-f7e1058af4be",
               "name": "conversationId",
               "value": "={{ $('Set: Intent Context').item.json.conversationId }}",
               "type": "string"
             },
             {
-              "id": "679640b6-f013-4cdb-8902-0e3f66198769",
+              "id": "97cfef82-8035-4655-ab56-70a6e5feafd0",
               "name": "sessionId",
               "value": "={{ $('Set: Intent Context').item.json.sessionId }}",
               "type": "string"
             },
             {
-              "id": "502585b1-2809-43e4-994e-449d2efae98a",
+              "id": "cdd5ed19-6878-4aa7-8ae7-a055455c6ccd",
               "name": "platform",
               "value": "={{ $('Set: Intent Context').item.json.platform }}",
               "type": "string"
             },
             {
-              "id": "1a33b834-be28-4fce-937c-9a232863d7dc",
+              "id": "d615b195-20c6-4908-b57f-db247bd5a155",
               "name": "patientName",
               "value": "={{ $('Set: Intent Context').item.json.patientName }}",
               "type": "string"
             },
             {
-              "id": "1524c350-ebf9-4f57-9570-5c8ae8ea14e9",
+              "id": "e4a3147d-8864-4074-b5ab-b6a98b639aed",
               "name": "patientFound",
               "value": "={{ $('Set: Intent Context').item.json.patientFound }}",
               "type": "boolean"
             },
             {
-              "id": "7418a153-e8f8-4878-949f-1405c7e8cc75",
+              "id": "baa27165-89b7-4055-a968-580acda2a236",
               "name": "convenioId",
               "value": "={{ $('Set: Intent Context').item.json.convenioId }}",
               "type": "string"
             },
             {
-              "id": "5f4cf268-495c-41d6-8906-b6aaf690c534",
+              "id": "9f46a900-01ee-4157-9dc4-a5c219a5ba07",
               "name": "needsPhone",
               "value": "={{ $('Set: Intent Context').item.json.needsPhone }}",
               "type": "boolean"
             },
             {
-              "id": "9c594f53-eecf-4f8f-9bbc-16b62ade9f2e",
+              "id": "6eb616eb-8170-498b-a4e9-3e61d3e6e488",
               "name": "messageReceivedAt",
               "value": "={{ $('Set: Intent Context').item.json.messageReceivedAt }}",
               "type": "string"
             },
             {
-              "id": "aab8f81e-9ce4-4404-95a9-20b1990a72c7",
+              "id": "05a73967-e871-44a5-9c2b-519f5f8f59aa",
               "name": "patient",
               "value": "={{ $('Set: Intent Context').item.json.patient }}",
               "type": "object"
             },
             {
-              "id": "92345a4b-b42a-4245-b075-4510e85a11d6",
+              "id": "816b634c-541c-442e-9654-dc9454a2162f",
               "name": "context",
               "value": "={{ $('Set: Intent Context').item.json.context }}",
               "type": "object"
             },
             {
-              "id": "67747031-d9ea-4250-99d7-53df9128f9f1",
+              "id": "1e6360e2-59a1-4030-a294-a466784af3ef",
               "name": "appointmentFlow",
               "value": "={{ $('Set: Intent Context').item.json.appointmentFlow }}",
               "type": "object"
@@ -1198,12 +1197,12 @@
       }
     },
     {
-      "id": "91e58241-ed52-4ace-b7bf-1f32a76c5eac",
+      "id": "83860500-f1d8-4014-9378-c19bcd719dd4",
       "name": "Set: Info Context",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        20050,
+        20032,
         12896
       ],
       "parameters": {
@@ -1212,52 +1211,76 @@
         "assignments": {
           "assignments": [
             {
-              "id": "9c6f0dde-8a86-452b-820a-a4dbbfd717bf",
+              "id": "ac39e51d-10fb-4647-81a7-186b031af0f4",
               "name": "agentOutput",
               "value": "={{ $json.output }}",
               "type": "string"
             },
             {
-              "id": "d26a2eac-ae38-439b-8f7e-24b1b3c662f9",
+              "id": "e34f9efa-52a1-4f98-8337-62079ed51378",
               "name": "conversationId",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.conversationId }}",
+              "value": "={{ $('Set: Intent Context').item.json.conversationId }}",
               "type": "string"
             },
             {
-              "id": "b78c2e8c-4b6b-4d5d-a4d7-dc390e082e46",
+              "id": "22136e2f-4808-4511-9f1e-395fd2288825",
               "name": "sessionId",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.sessionId }}",
+              "value": "={{ $('Set: Intent Context').item.json.sessionId }}",
               "type": "string"
             },
             {
-              "id": "51c54314-6fa4-42a1-bfdf-aa06d786873a",
+              "id": "8e574157-8926-4e91-8ad3-9f32b3166079",
               "name": "phone",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.phone }}",
+              "value": "={{ $('Set: Intent Context').item.json.phone }}",
               "type": "string"
             },
             {
-              "id": "68f878ea-4314-4529-99d9-ee5cd9f8c9b3",
+              "id": "722c6b75-2226-46a8-9af4-140598072c74",
               "name": "platform",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.platform }}",
+              "value": "={{ $('Set: Intent Context').item.json.platform }}",
               "type": "string"
             },
             {
-              "id": "4b457287-c6af-49dd-9560-e22c474b9457",
-              "name": "patientName",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.patientName }}",
-              "type": "string"
-            },
-            {
-              "id": "8b867b69-cc6e-48a2-895e-68fc40d4558c",
+              "id": "90db7da9-cda0-44ac-92b3-04987ec4a2ae",
               "name": "messageReceivedAt",
-              "value": "={{ $('Set: Pre-Parse Context').item.json.messageReceivedAt }}",
+              "value": "={{ $('Set: Intent Context').item.json.messageReceivedAt }}",
               "type": "string"
             },
             {
-              "id": "3f9ae9cc-9ce9-4198-bdc3-29367d5bf6ab",
-              "name": "unit",
-              "value": "={{ $('Parse Intent Response').item.json.unit }}",
+              "id": "269ffc34-dbba-42ac-8cbc-384edd129311",
+              "name": "chatInput",
+              "value": "={{ $('Set: Intent Context').item.json.chatInput }}",
               "type": "string"
+            },
+            {
+              "id": "25461955-c60c-4e47-9bfb-35a0622ddc3a",
+              "name": "patientName",
+              "value": "={{ $('Set: Intent Context').item.json.patientName }}",
+              "type": "string"
+            },
+            {
+              "id": "a0520d74-79b5-45a5-9e17-05dac408a4a9",
+              "name": "patientFound",
+              "value": "={{ $('Set: Intent Context').item.json.patientFound }}",
+              "type": "boolean"
+            },
+            {
+              "id": "4a660f5d-4c6b-478d-af35-e65f307554f6",
+              "name": "convenioId",
+              "value": "={{ $('Set: Intent Context').item.json.convenioId }}",
+              "type": "string"
+            },
+            {
+              "id": "0018d195-f35a-4ef1-b364-7b8c54c1066f",
+              "name": "patient",
+              "value": "={{ $('Set: Intent Context').item.json.patient }}",
+              "type": "object"
+            },
+            {
+              "id": "4de66cac-b95a-4614-80b4-097c1d5f95fa",
+              "name": "appointmentFlow",
+              "value": "={{ $('Set: Intent Context').item.json.appointmentFlow }}",
+              "type": "object"
             }
           ]
         }
@@ -1813,9 +1836,9 @@
     "templateCredsSetupCompleted": true
   },
   "pinData": {},
-  "versionId": "12805664-5ac4-4b37-8b27-c57341148c22",
-  "activeVersionId": "12805664-5ac4-4b37-8b27-c57341148c22",
-  "versionCounter": 200,
+  "versionId": "be2e5627-3b6c-408f-9b98-2ec4558b968a",
+  "activeVersionId": "be2e5627-3b6c-408f-9b98-2ec4558b968a",
+  "versionCounter": 209,
   "triggerCount": 1,
   "shared": [
     {
@@ -1877,9 +1900,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-03-25T15:46:51.088Z",
-    "createdAt": "2026-03-25T15:46:51.088Z",
-    "versionId": "12805664-5ac4-4b37-8b27-c57341148c22",
+    "updatedAt": "2026-03-25T20:23:46.672Z",
+    "createdAt": "2026-03-25T20:23:46.672Z",
+    "versionId": "be2e5627-3b6c-408f-9b98-2ec4558b968a",
     "workflowId": "5xTy00n8X2mmwJ7z",
     "nodes": [
       {
@@ -2398,8 +2421,8 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.2,
         "position": [
-          18656,
-          13392
+          18480,
+          13168
         ],
         "onError": "continueRegularOutput"
       },
@@ -2414,8 +2437,8 @@
         "type": "@n8n/n8n-nodes-langchain.agent",
         "typeVersion": 3.1,
         "position": [
-          19000,
-          13376
+          18800,
+          13264
         ],
         "id": "ef05b1f9-a3ca-402d-b58f-d4f5a9f62723",
         "name": "Intent Classifier Agent"
@@ -2452,7 +2475,7 @@
         "typeVersion": 1.3,
         "position": [
           18928,
-          13648
+          13584
         ],
         "id": "d7d19343-38ff-4ac5-a92a-0eef97dfcfec",
         "name": "Postgres Memory Intent",
@@ -2465,13 +2488,13 @@
       },
       {
         "parameters": {
-          "jsCode": "const rawAgent=($json.agentOutput||''); const chatInput=($json.chatInput||''); const conversationId=($json.conversationId||''); const sessionId=($json.sessionId||''); const phone=($json.phone||''); const platform=($json.platform||'whatsapp'); const patientName=($json.patientName||null); const patientFound=($json.patientFound||false); const convenioId=($json.convenioId||null); const needsPhone=($json.needsPhone||false); const patient=($json.patient||{}); const context=($json.context||{}); const messageReceivedAt=$json.messageReceivedAt; const appointmentFlow=($json.appointmentFlow||{patientChecked:false,patientData:null,insuranceValidated:false,step:'initial'});\nfunction extractText(v){if(!v)return'';if(typeof v==='string')return v;if(v.output&&typeof v.output==='string')return v.output;if(v.text)return v.text;if(v.response)return v.response;return JSON.stringify(v);}\nlet rawText=extractText(rawAgent).replace(/^json\\s*\\n?/i,'').trim();\nlet intent='INFORMACAO',confidence=0.5,unit=null,needsUnit=false,parsedResponse=null;\nconst m=rawText.match(/\\{[\\s\\S]*?\\}/);\nif(m){try{const p=JSON.parse(m[0]);intent=p.intent||intent;confidence=p.confidence||confidence;unit=p.unit||null;needsUnit=p.needsUnit??false;parsedResponse=p.response||null;}catch(_){}}\nif(!unit&&chatInput){const lo=chatInput.toLowerCase();if(lo.includes('vieiralves'))unit='Vieiralves';else if(lo.includes('são josé')||lo.includes('sao jose'))unit='São José';}\nif(chatInput){const lo=chatInput.toLowerCase();if(['agendar','marcar','reservar'].some(k=>lo.includes(k))){intent='AGENDAR';confidence=0.9;}else if(['atendente','humano','falar com'].some(k=>lo.includes(k))){intent='FALAR_ATENDENTE';confidence=0.95;}}\nif(!['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'].includes(intent))intent='INFORMACAO';\nif(!unit&&(intent==='AGENDAR'||intent==='INFORMACAO')){needsUnit=true;intent='PEDIR_UNIDADE';}\nreturn [{json:{conversationId,sessionId,intent,confidence,unit,needsUnit,response:parsedResponse||rawText,chatInput,originalMessage:chatInput,phone,platform,needsPhone,patient,patientFound,patientName,convenioId,context,appointmentFlow,messageReceivedAt,success:true}}];"
+          "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          19500,
-          13392
+          19168,
+          13152
         ],
         "id": "aa22d26b-dcbf-4ca0-8229-fe6f1bfbc3b1",
         "name": "Parse Intent Response"
@@ -2595,7 +2618,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\n\nlet message = null;\n\nif (data.response) {\n  if (typeof data.response === 'string') {\n    try {\n      const parsed = JSON.parse(data.response);\n      if (parsed.response) {\n        message = parsed.response;\n      }\n    } catch (e) {\n      message = data.response;\n    }\n  } else {\n    message = data.response;\n  }\n}\n\nif (!message && data.message) {\n  message = data.message;\n}\n\nif (message && typeof message === 'string') {\n  message = message.replace(/^json\\s*\\n?/i, '').trim();\n  const backtick = String.fromCharCode(96);\n  const codeBlockPattern = new RegExp('^' + backtick + backtick + backtick + 'json\\\\s*\\\\n?', 'i');\n  message = message.replace(codeBlockPattern, '').trim();\n  const codeBlockStart = new RegExp('^' + backtick + backtick + backtick + '\\\\s*\\\\n?', 'i');\n  message = message.replace(codeBlockStart, '').trim();\n  const codeBlockEnd = new RegExp(backtick + backtick + backtick + '\\\\s*$', 'i');\n  message = message.replace(codeBlockEnd, '').trim();\n}\n\nif (!message || message.trim() === '') {\n  message = 'Qual unidade você prefere?\\n1 - Vieiralves\\n2 - São José\\n\\nDigite o número da unidade desejada. 😊';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+          "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\n\nlet message = null;\n\nif (data.response) {\n  if (typeof data.response === 'string') {\n    try {\n      const parsed = JSON.parse(data.response);\n      if (parsed.response) message = parsed.response;\n    } catch (e) {\n      message = data.response;\n    }\n  } else {\n    message = data.response;\n  }\n}\n\nif (!message && data.message) message = data.message;\n\nif (message && typeof message === 'string') {\n  message = message.replace(/^json\\s*\\n?/i, '').trim();\n  const bt = String.fromCharCode(96);\n  message = message.replace(new RegExp('^' + bt + bt + bt + 'json\\\\s*\\\\n?', 'i'), '').trim();\n  message = message.replace(new RegExp('^' + bt + bt + bt + '\\\\s*\\\\n?', 'i'), '').trim();\n  message = message.replace(new RegExp(bt + bt + bt + '\\\\s*$', 'i'), '').trim();\n}\n\nif (!message || message.trim() === '') {\n  message = 'Qual unidade você prefere?\\n1 - Vieiralves\\n2 - São José\\n\\nDigite o número da unidade desejada. 😊';\n}\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: message,\n    intent: data.intent || 'PEDIR_UNIDADE',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    appointmentFlow: data.appointmentFlow || null,\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
         },
         "id": "3eab372c-9ebf-46a8-aa8c-7c328fed7c97",
         "name": "Format Ask Unit Response",
@@ -2608,7 +2631,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Transferindo para atendente. Aguarde! 😊',\n    intent: 'FALAR_ATENDENTE',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true,\n    success: true\n  }\n}];\n"
+          "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Transferindo para atendente. Aguarde! 😊',\n    intent: 'FALAR_ATENDENTE',\n    action: 'TRANSFER_TO_HUMAN',\n    requiresHumanIntervention: true,\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true\n  }\n}];\n"
         },
         "id": "a730e79a-1d23-4d3e-bd92-3554eed72ef2",
         "name": "Handler Transfer",
@@ -2622,7 +2645,7 @@
       {
         "parameters": {
           "options": {
-            "systemMessage": "={{ `Você é **Zorah**, assistente de informações do IAAM.\n${ $json.patientName ? `Paciente: ${$json.patientName}.` : '' }\nUNIDADE: ${ $json.unit || 'não informada' }\n\n🚨 REGRA PRIORITÁRIA: Se a mensagem for APENAS seleção de unidade (\"1\",\"2\",\"Vieiralves\",\"São José\" sem pergunta):\n- NÃO consulte tool, NÃO liste preços\n- Responda: \"Ótimo! Você selecionou a unidade **${$json.unit}**. 😊\\nComo posso te ajudar? Precisa de informações sobre procedimentos, valores, convênios ou quer agendar?\"\n\n⚠️ Use APENAS dados das tools. Nunca invente preços.\n\nFLUXO: Sem unidade → perguntar | Só seleção → confirmar e perguntar | Com pergunta específica → consultar tool e responder só o necessário\n\nTOOLS: Vieiralves → \"Base de Informações da Unidade Vieiralves\" | São José → \"Base de Informações da Unidade São José\"\nRespostas compactas, amigável 😊` }}"
+            "systemMessage": "={{ `Você é **Zorah**, assistente de informações do IAAM.\n\n────────────────────────────\n🧑 PACIENTE:\n────────────────────────────\n${ $json.patientName ? `Nome: ${$json.patientName}. Cumprimente-o pelo nome na primeira mensagem da conversa.` : 'Paciente não identificado. NÃO invente o nome.' }\n\n## UNIDADE SELECIONADA:\n${$json.unit ? `Unidade: ${$json.unit}` : 'Unidade não selecionada ainda'}\n\n────────────────────────────\n⚠️ REGRAS ANTI-ALUCINAÇÃO (ABSOLUTAS):\n────────────────────────────\n1. NUNCA invente preços, procedimentos ou convênios. Use APENAS os dados retornados pelas tools.\n2. Se um procedimento não estiver na lista da API, diga: \"No momento não oferecemos esse serviço nesta unidade.\"\n3. Se um convênio não estiver na lista, diga: \"Esse convênio não é aceito nesta unidade.\"\n4. Se um preço não estiver disponível na API, diga: \"Para informações de valor, por favor entre em contato.\"\n5. Use SEMPRE os valores exatos retornados pela API. Não arredonde nem estime.\n6. Consulte OBRIGATORIAMENTE a tool da unidade ANTES de responder qualquer pergunta sobre procedimentos, preços ou convênios.\n\n## REGRAS:\n1. **Se não tem unidade:**\n   → PERGUNTAR: \"Qual unidade você prefere? Vieiralves ou São José?\"\n\n2. **Se tem unidade selecionada:**\n   → Use a tool específica da unidade:\n   - Se unidade = \"Vieiralves\" → use tool \"Base de Informações da Unidade Vieiralves\"\n   - Se unidade = \"São José\" → use tool \"Base de Informações da Unidade São José\"\n   → Responda com informações ESPECÍFICAS daquela unidade\n\n3. **Seja amigável e clara 😊**\n4. **Use as informações da clínica da unidade selecionada**\n5. **Mantenha contexto (memória)**\n6. **Convide para agendar quando relevante**\n7. **Traga sempre informações completas, mas compactas**\n8. **Sempre formate as respostas da melhor forma possível**\n9. **Sempre analise qual tipo de informação o paciente quer, entregue somente o necessário**\n10. Não forneça respostas extensas.\n11. Atente-se sempre somente aos procedimentos que as clínicas possuem.\n\n## EXEMPLOS:\n- Sem unidade: \"Olá! 😊 Para melhor atendê-lo, qual unidade você prefere? Vieiralves ou São José?\"\n- Com unidade: \"Ótimo! Na unidade ${$json.unit}, temos... [informações específicas]\"` }}"
           }
         },
         "type": "@n8n/n8n-nodes-langchain.agent",
@@ -2713,20 +2736,20 @@
       },
       {
         "parameters": {
-          "jsCode": "const agentOutput=($json.agentOutput||''); const conversationId=($json.conversationId||'');\nif(!conversationId)throw new Error('conversationId ausente');\nfunction extractText(v){if(!v)return null;if(typeof v==='string')return v;if(typeof v.output==='string')return v.output;if(v.text)return v.text;return null;}\nconst responseText=extractText(agentOutput)||agentOutput||'Desculpe, não consegui processar.';\nreturn [{json:{conversationId,message:responseText,intent:'INFORMACAO',action:'RESPOND',messageReceivedAt:$json.messageReceivedAt,success:true}}];"
+          "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return null;\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output && typeof res.output.text === 'string') return res.output.text;\n  if (typeof res.text === 'string') return res.text;\n  return null;\n}\n\nconst conversationId = raw.conversationId || '';\nif (!conversationId) throw new Error('conversationId ausente no Parse Information');\n\nconst responseText = extractText(raw) || 'Desculpe, não consegui processar sua pergunta.';\n\nreturn [{\n  json: {\n    conversationId,\n    message: responseText,\n    intent: 'INFORMACAO',\n    action: 'RESPOND',\n    messageReceivedAt: raw.messageReceivedAt,\n    phone: raw.phone || '',\n    platform: raw.platform || 'whatsapp',\n    sessionId: raw.sessionId || '',\n    success: true\n  }\n}];\n"
         },
         "id": "ec48645c-3e77-401d-b0b1-e7cd7649cc41",
         "name": "Parse Information Response",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          20600,
+          20400,
           12896
         ]
       },
       {
         "parameters": {
-          "jsCode": "const data=$json;\nif(!data.conversationId)throw new Error('conversationId obrigatório');\nif(!data.message)throw new Error('message obrigatório');\nconst now=Date.now(); const sentAt=data.messageReceivedAt?(typeof data.messageReceivedAt==='string'?new Date(data.messageReceivedAt).getTime():data.messageReceivedAt):now;\nconst responseTimeMs=Math.max(0,now-sentAt);\nreturn [{json:{conversationId:data.conversationId,message:data.message,intent:(data.intent||'INFORMACAO'),action:(data.action||'RESPOND'),aiProvider:'n8n-gemini-v2.2.4-simple',requiresHumanIntervention:(data.requiresHumanIntervention||false),requiresQueueTransfer:(data.requiresQueueTransfer||false),queueName:(data.queueName||null),appointmentFlow:(data.appointmentFlow||null),metrics:{intent:(data.intent||'INFORMACAO'),responseTimeMs,timestamp:new Date().toISOString(),requiresTransfer:(data.requiresQueueTransfer||false)},success:true,timestamp:new Date().toISOString()}}];"
+          "jsCode": "const data = $json;\n\nif (!data.conversationId) throw new Error('conversationId obrigatório');\nif (!data.message) throw new Error('message obrigatório');\n\nconst now = Date.now();\nconst messageReceivedAt = data.messageReceivedAt || now;\nconst responseTimeMs = now - messageReceivedAt;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId,\n    message: data.message,\n    intent: data.intent || 'INFORMACAO',\n    action: data.action || 'RESPOND',\n    aiProvider: 'n8n-gemini-v2.2.4-simple',\n    requiresHumanIntervention: data.requiresHumanIntervention || false,\n    requiresQueueTransfer: data.requiresQueueTransfer || false,\n    queueName: data.queueName || null,\n    appointmentFlow: data.appointmentFlow || null,\n    metrics: {\n      intent: data.intent || 'INFORMACAO',\n      responseTimeMs: responseTimeMs,\n      timestamp: new Date().toISOString(),\n      requiresTransfer: data.requiresQueueTransfer || false\n    },\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
         },
         "id": "3facf87f-c290-4205-97a2-7e29af6ab5ef",
         "name": "Format Final Response",
@@ -2774,7 +2797,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const data=$json;\nreturn [{json:{conversationId:(data.conversationId||''),message:'Entendi que você deseja agendar! Vou transferir você para nossa equipe de atendimento agora. Aguarde um momento! 😊',intent:'AGENDAR',action:'TRANSFER_TO_QUEUE',requiresQueueTransfer:true,queueName:'Principal',messageReceivedAt:data.messageReceivedAt,success:true}}];"
+          "jsCode": "const data = $json;\n\nreturn [{\n  json: {\n    conversationId: data.conversationId || '',\n    message: 'Entendi que você deseja agendar um procedimento. Vou transferir você para nossa equipe de atendimento que irá auxiliá-lo com o agendamento. Aguarde um momento! 😊',\n    intent: 'AGENDAR',\n    action: 'TRANSFER_TO_QUEUE',\n    requiresQueueTransfer: true,\n    queueName: 'Principal',\n    messageReceivedAt: data.messageReceivedAt,\n    phone: data.phone || '',\n    platform: data.platform || 'whatsapp',\n    success: true\n  }\n}];\n"
         },
         "id": "2f564920-9c34-4eaa-8a3d-a43fe7b06989",
         "name": "Handle Appointment Request",
@@ -2875,109 +2898,108 @@
         "webhookId": "d152cfe1-4e45-4c68-af81-e69e6d4fa2f6"
       },
       {
-        "id": "7f2a67ed-149f-4442-bd3d-f73bf6cea588",
-        "name": "Set: Intent Context",
-        "type": "n8n-nodes-base.set",
-        "typeVersion": 3.4,
-        "position": [
-          18816,
-          13392
-        ],
         "parameters": {
-          "mode": "manual",
-          "includeOtherFields": false,
           "assignments": {
             "assignments": [
               {
-                "id": "5625d017-a51e-455d-9234-b5dc86c19281",
+                "id": "4ee087cf-b94f-42fc-b0a1-e84fbc6d74ce",
                 "name": "chatInput",
                 "value": "={{ $('Lookup & Parse Patient').item.json.chatInput }}",
                 "type": "string"
               },
               {
-                "id": "7a46765b-ea35-4cd5-80bf-f9673d3272fd",
+                "id": "9948c80c-6606-4867-a083-7ce2cb68d48d",
                 "name": "phone",
                 "value": "={{ $('Lookup & Parse Patient').item.json.phone }}",
                 "type": "string"
               },
               {
-                "id": "3662912e-86dd-4b9d-bb63-398b6129aa1c",
+                "id": "10ab8805-4c3f-4e73-9606-9c130942e529",
                 "name": "conversationId",
                 "value": "={{ $('Lookup & Parse Patient').item.json.conversationId }}",
                 "type": "string"
               },
               {
-                "id": "3d864fd8-1501-4cbc-8bf1-54e2ca0da4a1",
+                "id": "8513fd02-daa9-469d-b691-017b6eafb994",
                 "name": "sessionId",
                 "value": "={{ $('Lookup & Parse Patient').item.json.sessionId }}",
                 "type": "string"
               },
               {
-                "id": "59face9b-f4a5-4066-a379-e9edcea7aba2",
+                "id": "0988b523-8032-4852-9f17-804e8ec9f374",
                 "name": "platform",
                 "value": "={{ $('Lookup & Parse Patient').item.json.platform }}",
                 "type": "string"
               },
               {
-                "id": "3aef1965-ee46-4414-b1d6-064eaca696fc",
+                "id": "3598c207-3c05-40b8-aa06-6d234b5b74a3",
                 "name": "patientName",
                 "value": "={{ $('Lookup & Parse Patient').item.json.patientName }}",
                 "type": "string"
               },
               {
-                "id": "714e7077-2700-4ebf-9eb3-b9db0bf530de",
+                "id": "a67eecca-7ea4-4b9a-8ae5-b7734886c68e",
                 "name": "patientFound",
                 "value": "={{ $('Lookup & Parse Patient').item.json.patientFound }}",
                 "type": "boolean"
               },
               {
-                "id": "3e849972-799f-4536-af92-bdddde070642",
+                "id": "306516ad-fb50-4ac9-b5fa-2f5ee4c95596",
                 "name": "convenioId",
                 "value": "={{ $('Lookup & Parse Patient').item.json.convenioId }}",
                 "type": "string"
               },
               {
-                "id": "61cae446-d7c2-43bb-b22f-b782316a94d0",
+                "id": "fcc546ef-41f2-45dd-9931-4057c0bbca7c",
                 "name": "needsPhone",
                 "value": "={{ $('Lookup & Parse Patient').item.json.needsPhone }}",
                 "type": "boolean"
               },
               {
-                "id": "626a77a0-3223-4b0a-a875-56d8d69f8bd3",
+                "id": "8d743953-2532-4105-8d83-2667a497ee20",
                 "name": "messageReceivedAt",
                 "value": "={{ $('Lookup & Parse Patient').item.json.messageReceivedAt }}",
                 "type": "string"
               },
               {
-                "id": "41796065-a2f6-42a7-9e3b-d802073463dd",
+                "id": "0ed3c662-49bc-4e67-9431-38a4ca30a7d8",
                 "name": "patient",
                 "value": "={{ $('Lookup & Parse Patient').item.json.patient }}",
                 "type": "object"
               },
               {
-                "id": "a6b393a4-806e-4651-92be-0448163d84f7",
+                "id": "ba4d1f52-b656-42f3-8604-78b3f79db7c1",
                 "name": "context",
                 "value": "={{ $('Lookup & Parse Patient').item.json.context }}",
                 "type": "object"
               },
               {
-                "id": "0d60aba9-5290-4b9f-b5da-44bd3d71f785",
+                "id": "a3b5fd1c-eb55-444b-a370-3651f28f6d6f",
                 "name": "appointmentFlow",
                 "value": "={{ $('Lookup & Parse Patient').item.json.appointmentFlow }}",
                 "type": "object"
               }
             ]
-          }
-        }
+          },
+          "options": {}
+        },
+        "id": "e5be6318-1760-4a97-a9cb-2bce94e1de5e",
+        "name": "Set: Intent Context",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          18720,
+          13056
+        ]
       },
       {
-        "id": "97cc3fd2-9b5e-4e28-813b-0e1f0beae1e5",
+        "id": "4809121a-9a51-48a8-83ba-6cf8e5c3d191",
         "name": "Set: Pre-Parse Context",
         "type": "n8n-nodes-base.set",
         "typeVersion": 3.4,
         "position": [
-          19250,
-          13392
+          18960,
+          13376
         ],
         "parameters": {
           "mode": "manual",
@@ -2985,85 +3007,85 @@
           "assignments": {
             "assignments": [
               {
-                "id": "97eb9730-b1e7-496c-b939-80620050ec8b",
+                "id": "e808c3f0-e9b9-42f5-a090-9bdc24eace59",
                 "name": "agentOutput",
                 "value": "={{ $json.output }}",
                 "type": "string"
               },
               {
-                "id": "de4d49bd-7f24-4c61-b918-f8f69e8b3783",
+                "id": "5efb8db4-e0d8-479e-a68e-951b2c76db07",
                 "name": "chatInput",
                 "value": "={{ $('Set: Intent Context').item.json.chatInput }}",
                 "type": "string"
               },
               {
-                "id": "11cae670-8425-46d9-8827-5a030e9fbb89",
+                "id": "db76b5ef-845e-4e8a-a1c7-461bef3912b2",
                 "name": "phone",
                 "value": "={{ $('Set: Intent Context').item.json.phone }}",
                 "type": "string"
               },
               {
-                "id": "b8cc3923-2029-4f4c-98f6-0a37fc977e40",
+                "id": "4825271a-4c9d-4b3c-bb27-f7e1058af4be",
                 "name": "conversationId",
                 "value": "={{ $('Set: Intent Context').item.json.conversationId }}",
                 "type": "string"
               },
               {
-                "id": "679640b6-f013-4cdb-8902-0e3f66198769",
+                "id": "97cfef82-8035-4655-ab56-70a6e5feafd0",
                 "name": "sessionId",
                 "value": "={{ $('Set: Intent Context').item.json.sessionId }}",
                 "type": "string"
               },
               {
-                "id": "502585b1-2809-43e4-994e-449d2efae98a",
+                "id": "cdd5ed19-6878-4aa7-8ae7-a055455c6ccd",
                 "name": "platform",
                 "value": "={{ $('Set: Intent Context').item.json.platform }}",
                 "type": "string"
               },
               {
-                "id": "1a33b834-be28-4fce-937c-9a232863d7dc",
+                "id": "d615b195-20c6-4908-b57f-db247bd5a155",
                 "name": "patientName",
                 "value": "={{ $('Set: Intent Context').item.json.patientName }}",
                 "type": "string"
               },
               {
-                "id": "1524c350-ebf9-4f57-9570-5c8ae8ea14e9",
+                "id": "e4a3147d-8864-4074-b5ab-b6a98b639aed",
                 "name": "patientFound",
                 "value": "={{ $('Set: Intent Context').item.json.patientFound }}",
                 "type": "boolean"
               },
               {
-                "id": "7418a153-e8f8-4878-949f-1405c7e8cc75",
+                "id": "baa27165-89b7-4055-a968-580acda2a236",
                 "name": "convenioId",
                 "value": "={{ $('Set: Intent Context').item.json.convenioId }}",
                 "type": "string"
               },
               {
-                "id": "5f4cf268-495c-41d6-8906-b6aaf690c534",
+                "id": "9f46a900-01ee-4157-9dc4-a5c219a5ba07",
                 "name": "needsPhone",
                 "value": "={{ $('Set: Intent Context').item.json.needsPhone }}",
                 "type": "boolean"
               },
               {
-                "id": "9c594f53-eecf-4f8f-9bbc-16b62ade9f2e",
+                "id": "6eb616eb-8170-498b-a4e9-3e61d3e6e488",
                 "name": "messageReceivedAt",
                 "value": "={{ $('Set: Intent Context').item.json.messageReceivedAt }}",
                 "type": "string"
               },
               {
-                "id": "aab8f81e-9ce4-4404-95a9-20b1990a72c7",
+                "id": "05a73967-e871-44a5-9c2b-519f5f8f59aa",
                 "name": "patient",
                 "value": "={{ $('Set: Intent Context').item.json.patient }}",
                 "type": "object"
               },
               {
-                "id": "92345a4b-b42a-4245-b075-4510e85a11d6",
+                "id": "816b634c-541c-442e-9654-dc9454a2162f",
                 "name": "context",
                 "value": "={{ $('Set: Intent Context').item.json.context }}",
                 "type": "object"
               },
               {
-                "id": "67747031-d9ea-4250-99d7-53df9128f9f1",
+                "id": "1e6360e2-59a1-4030-a294-a466784af3ef",
                 "name": "appointmentFlow",
                 "value": "={{ $('Set: Intent Context').item.json.appointmentFlow }}",
                 "type": "object"
@@ -3073,12 +3095,12 @@
         }
       },
       {
-        "id": "91e58241-ed52-4ace-b7bf-1f32a76c5eac",
+        "id": "83860500-f1d8-4014-9378-c19bcd719dd4",
         "name": "Set: Info Context",
         "type": "n8n-nodes-base.set",
         "typeVersion": 3.4,
         "position": [
-          20050,
+          20032,
           12896
         ],
         "parameters": {
@@ -3087,52 +3109,76 @@
           "assignments": {
             "assignments": [
               {
-                "id": "9c6f0dde-8a86-452b-820a-a4dbbfd717bf",
+                "id": "ac39e51d-10fb-4647-81a7-186b031af0f4",
                 "name": "agentOutput",
                 "value": "={{ $json.output }}",
                 "type": "string"
               },
               {
-                "id": "d26a2eac-ae38-439b-8f7e-24b1b3c662f9",
+                "id": "e34f9efa-52a1-4f98-8337-62079ed51378",
                 "name": "conversationId",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.conversationId }}",
+                "value": "={{ $('Set: Intent Context').item.json.conversationId }}",
                 "type": "string"
               },
               {
-                "id": "b78c2e8c-4b6b-4d5d-a4d7-dc390e082e46",
+                "id": "22136e2f-4808-4511-9f1e-395fd2288825",
                 "name": "sessionId",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.sessionId }}",
+                "value": "={{ $('Set: Intent Context').item.json.sessionId }}",
                 "type": "string"
               },
               {
-                "id": "51c54314-6fa4-42a1-bfdf-aa06d786873a",
+                "id": "8e574157-8926-4e91-8ad3-9f32b3166079",
                 "name": "phone",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.phone }}",
+                "value": "={{ $('Set: Intent Context').item.json.phone }}",
                 "type": "string"
               },
               {
-                "id": "68f878ea-4314-4529-99d9-ee5cd9f8c9b3",
+                "id": "722c6b75-2226-46a8-9af4-140598072c74",
                 "name": "platform",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.platform }}",
+                "value": "={{ $('Set: Intent Context').item.json.platform }}",
                 "type": "string"
               },
               {
-                "id": "4b457287-c6af-49dd-9560-e22c474b9457",
-                "name": "patientName",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.patientName }}",
-                "type": "string"
-              },
-              {
-                "id": "8b867b69-cc6e-48a2-895e-68fc40d4558c",
+                "id": "90db7da9-cda0-44ac-92b3-04987ec4a2ae",
                 "name": "messageReceivedAt",
-                "value": "={{ $('Set: Pre-Parse Context').item.json.messageReceivedAt }}",
+                "value": "={{ $('Set: Intent Context').item.json.messageReceivedAt }}",
                 "type": "string"
               },
               {
-                "id": "3f9ae9cc-9ce9-4198-bdc3-29367d5bf6ab",
-                "name": "unit",
-                "value": "={{ $('Parse Intent Response').item.json.unit }}",
+                "id": "269ffc34-dbba-42ac-8cbc-384edd129311",
+                "name": "chatInput",
+                "value": "={{ $('Set: Intent Context').item.json.chatInput }}",
                 "type": "string"
+              },
+              {
+                "id": "25461955-c60c-4e47-9bfb-35a0622ddc3a",
+                "name": "patientName",
+                "value": "={{ $('Set: Intent Context').item.json.patientName }}",
+                "type": "string"
+              },
+              {
+                "id": "a0520d74-79b5-45a5-9e17-05dac408a4a9",
+                "name": "patientFound",
+                "value": "={{ $('Set: Intent Context').item.json.patientFound }}",
+                "type": "boolean"
+              },
+              {
+                "id": "4a660f5d-4c6b-478d-af35-e65f307554f6",
+                "name": "convenioId",
+                "value": "={{ $('Set: Intent Context').item.json.convenioId }}",
+                "type": "string"
+              },
+              {
+                "id": "0018d195-f35a-4ef1-b364-7b8c54c1066f",
+                "name": "patient",
+                "value": "={{ $('Set: Intent Context').item.json.patient }}",
+                "type": "object"
+              },
+              {
+                "id": "4de66cac-b95a-4614-80b4-097c1d5f95fa",
+                "name": "appointmentFlow",
+                "value": "={{ $('Set: Intent Context').item.json.appointmentFlow }}",
+                "type": "object"
               }
             ]
           }
@@ -3683,18 +3729,10 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-03-25T15:46:52.224Z",
-        "id": 45,
+        "createdAt": "2026-03-25T20:23:46.832Z",
+        "id": 49,
         "workflowId": "5xTy00n8X2mmwJ7z",
-        "versionId": "12805664-5ac4-4b37-8b27-c57341148c22",
-        "event": "activated",
-        "userId": "4ab24550-688d-4044-9dc0-ff30ff49555f"
-      },
-      {
-        "createdAt": "2026-03-25T15:46:54.042Z",
-        "id": 46,
-        "workflowId": "5xTy00n8X2mmwJ7z",
-        "versionId": "12805664-5ac4-4b37-8b27-c57341148c22",
+        "versionId": "be2e5627-3b6c-408f-9b98-2ec4558b968a",
         "event": "activated",
         "userId": "4ab24550-688d-4044-9dc0-ff30ff49555f"
       }
