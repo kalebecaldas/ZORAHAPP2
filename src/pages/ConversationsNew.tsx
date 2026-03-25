@@ -148,12 +148,18 @@ const ConversationsPage: React.FC = () => {
         return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
     }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
 
+    const isClosingRef = React.useRef(false);
+
     const triggerCloseAnimation = useCallback((callback?: () => void) => {
+        // Evita duplo disparo (handleClose + evento socket conversation:closed)
+        if (isClosingRef.current) return;
+        isClosingRef.current = true;
         setIsClosingConversation(true);
         setTimeout(() => {
             setSelectedConversation(null);
             setMessages([]);
             setIsClosingConversation(false);
+            isClosingRef.current = false;
             // Limpa a URL para evitar que o useEffect re-selecione a conversa encerrada
             navigate('/conversations', { replace: true });
             callback?.();
