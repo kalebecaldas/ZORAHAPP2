@@ -76,6 +76,7 @@ model Patient {
   emergencyContact String?
   insuranceCompany String?
   insuranceNumber  String?
+  clinicaAgilId    String?
   preferences      Json?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

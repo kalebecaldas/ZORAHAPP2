@@ -513,7 +513,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({\n  phone: $json.phone,\n  name: $json.patientName || 'Novo Paciente',\n  email: $json.email || null,\n  insuranceCompany: $json.convenioId ? String($json.convenioId) : null,\n  source: 'bot'\n}) }}",
+        "jsonBody": "={{ JSON.stringify({\n  phone: $json.phone,\n  name: $json.patientName || 'Novo Paciente',\n  email: $json.email || null,\n  insuranceCompany: $json.convenioId ? String($json.convenioId) : null,\n  clinicaAgilId: $json.clinicaAgilId || null,\n  source: 'bot'\n}) }}",
         "options": {
           "timeout": 8000
         }
@@ -533,7 +533,7 @@
         "promptType": "define",
         "text": "={{ $json.chatInput }}",
         "options": {
-          "systemMessage": "={{ `Você é **Zorah**, a IA classificadora de intenções do IAAM.\nVocê opera exclusivamente em conversas de **WhatsApp e Instagram**.\n\n────────────────────────────\n🧑 PACIENTE IDENTIFICADO:\n────────────────────────────\n${ $json.patientName ? `Nome do paciente: ${$json.patientName}. Use o nome ao cumprimentar.` : 'Paciente ainda não identificado. NÃO invente o nome.' }\n\n────────────────────────────\n⚠️ REGRAS GERAIS OBRIGATÓRIAS\n────────────────────────────\n- Sempre identifique-se como assistente virtual Zorah do IAAM\n- Sempre responda em português (Brasil)\n- Sempre utilize linguagem clara, educada e humana\n- Sempre formate respostas para chat\n- Sempre retorne um JSON válido no formato definido ao final\n- NÃO invente dados\n- NÃO pule etapas do fluxo\n\n────────────────────────────\n🎯 MISSÃO PRINCIPAL\n────────────────────────────\n1. Verificar se a **UNIDADE** foi informada\n2. Se não foi informada → perguntar a unidade\n3. Somente após isso → classificar a intenção\n\n────────────────────────────\n🏥 UNIDADES DISPONÍVEIS\n────────────────────────────\n1 - Unidade Vieiralves  \n2 - Unidade São José  \n\n────────────────────────────\n🔁 FLUXO OBRIGATÓRIO\n────────────────────────────\n\n### 1️⃣ VERIFICAR UNIDADE\nSe a mensagem do paciente **NÃO mencionar explicitamente**:\n- Vieiralves\n- São José\n\nENTÃO:\n- NÃO classifique outra intenção\n- Defina intent = PEDIR_UNIDADE\n- Defina needsUnit = true\n- Responda perguntando a unidade da forma abaixo:\n\n\"Para qual unidade você deseja atendimento? 😊  \nPor favor, escolha uma opção:  \n1️⃣ Vieiralves  \n2️⃣ São José\"\n\n---\n\nSe a unidade **JÁ estiver mencionada**, prossiga para a classificação de intenção.\n\n────────────────────────────\n### 2️⃣ CLASSIFICAÇÃO DE INTENÇÃO\n────────────────────────────\nClassifique a mensagem em **apenas UMA** das intenções abaixo:\n\n🔹 **INFORMACAO**\n- Perguntas gerais\n- Procedimentos\n- Valores\n- Convênios\n- Localização\n- Horários\n- Cumprimentos (oi, olá, bom dia)\n- Dúvidas ou curiosidade\n\n🔹 **AGENDAR**\n⚠️ SOMENTE se houver palavras EXPLÍCITAS:\n- \"agendar\"\n- \"marcar\"\n- \"reservar\"\n\n➡️ Se não houver essas palavras, NÃO classificar como AGENDAR  \n➡️ Confiança mínima: 0.90\n\n🔹 **FALAR_ATENDENTE**\n- Pedido para falar com humano\n- Solicitação de atendimento pessoal\n- Reclamação do robô\n\n🔹 **PEDIR_UNIDADE**\n- Sempre que for necessário perguntar a unidade\n\n────────────────────────────\n📌 REGRAS DE DECISÃO\n────────────────────────────\n- Unidade SEMPRE vem antes da intenção\n- Cumprimento simples = INFORMACAO (após unidade)\n- Em dúvida → INFORMACAO\n- Nunca assumir agendamento\n- Nunca misturar intenções\n\n────────────────────────────\n📤 FORMATO DE RESPOSTA (OBRIGATÓRIO)\n────────────────────────────\n\nResponda SEMPRE neste formato JSON:\n\n{\n  \"intent\": \"INFORMACAO | AGENDAR | FALAR_ATENDENTE | PEDIR_UNIDADE\",\n  \"confidence\": 0.95,\n  \"unit\": \"Vieiralves | São José | null\",\n  \"response\": \"Mensagem clara, gentil e adequada ao paciente\",\n  \"needsUnit\": true | false\n}\n\n}` }}"
+          "systemMessage": "={{ `Você é **Zorah**, a IA classificadora de intenções do IAAM.\nVocê opera exclusivamente em conversas de **WhatsApp e Instagram**.\n\n────────────────────────────\n🧑 PACIENTE IDENTIFICADO:\n────────────────────────────\n${ $json.patientName ? `Nome do paciente: ${$json.patientName}. Use o nome ao cumprimentar.` : 'Paciente ainda não identificado. NÃO invente o nome.' }\n\n────────────────────────────\n⚠️ REGRAS GERAIS OBRIGATÓRIAS\n────────────────────────────\n- Sempre identifique-se como assistente virtual Zorah do IAAM\n- Sempre responda em português (Brasil)\n- Sempre utilize linguagem clara, educada e humana\n- Sempre formate respostas para chat\n- Sempre retorne um JSON válido no formato definido ao final\n- NÃO invente dados\n- NÃO pule etapas do fluxo\n\n────────────────────────────\n🎯 MISSÃO PRINCIPAL\n────────────────────────────\n1. Verificar se a **UNIDADE** foi informada\n2. Se não foi informada → perguntar a unidade\n3. Somente após isso → classificar a intenção\n\n────────────────────────────\n🏥 UNIDADES DISPONÍVEIS\n────────────────────────────\n1 - Unidade Vieiralves  \n2 - Unidade São José  \n\n────────────────────────────\n🔁 FLUXO OBRIGATÓRIO\n────────────────────────────\n\n### 1️⃣ VERIFICAR UNIDADE\nSe a mensagem do paciente **NÃO mencionar explicitamente**:\n- Vieiralves\n- São José\n\nENTÃO:\n- NÃO classifique outra intenção\n- Defina intent = PEDIR_UNIDADE\n- Defina needsUnit = true\n- Responda perguntando a unidade da forma abaixo:\n\n\"Para qual unidade você deseja atendimento? 😊  \nPor favor, escolha uma opção:  \n1️⃣ Vieiralves  \n2️⃣ São José\"\n\n---\n\nSe a unidade **JÁ estiver mencionada**, prossiga para a classificação de intenção.\n\n────────────────────────────\n### 2️⃣ CLASSIFICAÇÃO DE INTENÇÃO\n────────────────────────────\nClassifique a mensagem em **apenas UMA** das intenções abaixo:\n\n🔹 **INFORMACAO**\n- Perguntas gerais\n- Procedimentos\n- Valores\n- Convênios\n- Localização\n- Horários\n- Cumprimentos (oi, olá, bom dia)\n- Dúvidas ou curiosidade\n\n🔹 **AGENDAR**\n⚠️ SOMENTE se houver palavras EXPLÍCITAS:\n- \"agendar\"\n- \"marcar\"\n- \"reservar\"\n\n➡️ Se não houver essas palavras, NÃO classificar como AGENDAR  \n➡️ Confiança mínima: 0.90\n\n🔹 **FALAR_ATENDENTE**\n- Pedido para falar com humano\n- Solicitação de atendimento pessoal\n- Reclamação do robô\n\n🔹 **CONFIRMAR_CONSULTA**\n- \"minha consulta\", \"meu horário\", \"quando é minha sessão\"\n- \"ver meus agendamentos\", \"próxima sessão\", \"tenho consulta\"\n- Qualquer pedido de listar ou ver agendamentos futuros do paciente\n\n🔹 **PEDIR_UNIDADE**\n- Sempre que for necessário perguntar a unidade\n\n────────────────────────────\n📌 REGRAS DE DECISÃO\n────────────────────────────\n- Unidade SEMPRE vem antes da intenção\n- Cumprimento simples = INFORMACAO (após unidade)\n- Em dúvida → INFORMACAO\n- Nunca assumir agendamento\n- Nunca misturar intenções\n\n────────────────────────────\n📤 FORMATO DE RESPOSTA (OBRIGATÓRIO)\n────────────────────────────\n\nResponda SEMPRE neste formato JSON:\n\n{\n  \"intent\": \"INFORMACAO | AGENDAR | FALAR_ATENDENTE | CONFIRMAR_CONSULTA | PEDIR_UNIDADE\",\n  \"confidence\": 0.95,\n  \"unit\": \"Vieiralves | São José | null\",\n  \"response\": \"Mensagem clara, gentil e adequada ao paciente\",\n  \"needsUnit\": true | false\n}\n\n}` }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
@@ -590,7 +590,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
+        "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    clinicaAgilId: raw.clinicaAgilId || null,\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -679,6 +679,31 @@
               },
               "renameOutput": true,
               "outputKey": "transfer"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "confirmar-condition",
+                    "leftValue": "={{ $json.intent }}",
+                    "rightValue": "CONFIRMAR_CONSULTA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "confirmar_consulta"
             },
             {
               "conditions": {
@@ -952,7 +977,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// $json = Extract Data output — sem cross-node reference\nconst ex = $json;\nconst phone = ex.phone || '';\nlet patientFound = false, patientName = null, convenioId = null,\n    email = null, clinicaAgilId = null;\n\nif (phone) {\n  try {\n    const fd = new FormData();\n    fd.append('numero_paciente', phone);\n    const resp = await fetch(\n      'https://app2.clinicaagil.com.br/api/integration/patient_data',\n      {\n        method: 'POST',\n        headers: {\n          'X-API-KEY': 'a5dcc76d202fdc2eb86646c9e57754b19f34fff30332b865b19cca44232b460b-c1a-5468970561',\n          'X-API-METHOD': 'Ch4tB0tW4tsS4v3QRc0d3'\n        },\n        body: fd,\n        signal: AbortSignal.timeout(5000)\n      }\n    );\n    if (resp.ok) {\n      const data = await resp.json();\n      if (data.status === 'success' && data.data) {\n        patientFound  = true;\n        patientName   = data.data.paciente_nome || null;\n        convenioId    = data.data.convenio_id   || null;\n        email         = data.data.email          || null;\n        clinicaAgilId = data.data.paciente_id    || null;\n      }\n    }\n  } catch(_) { /* timeout ou erro — continua sem dados do paciente */ }\n}\n\nreturn [{ json: { ...ex, patientFound, patientName, convenioId, email, clinicaAgilId } }];"
+        "jsCode": "// $json = Extract Data output — sem cross-node reference\n// Chama o proxy seguro do backend (chave da Clínica Ágil fica no Railway env var)\nconst ex = $json;\nconst phone = ex.phone || '';\nlet patientFound = false, patientName = null, convenioId = null,\n    email = null, clinicaAgilId = null;\n\nconst BOT_KEY = $env.N8N_BOT_API_KEY || '';\n\nif (phone) {\n  try {\n    const resp = await fetch(\n      'https://zorahapp2-production.up.railway.app/api/clinica-agil/patient-bot',\n      {\n        method: 'POST',\n        headers: {\n          'x-bot-key': BOT_KEY,\n          'Content-Type': 'application/json'\n        },\n        body: JSON.stringify({ phone }),\n        signal: AbortSignal.timeout(8000)\n      }\n    );\n    if (resp.ok) {\n      const data = await resp.json();\n      if (data.status === 'success' && data.data) {\n        patientFound  = true;\n        patientName   = data.data.paciente_nome || null;\n        convenioId    = data.data.convenio_id   || null;\n        email         = data.data.email          || null;\n        clinicaAgilId = data.data.paciente_id    || null;\n      }\n    }\n  } catch(_) { /* timeout ou erro — continua sem dados do paciente */ }\n}\n\nreturn [{ json: { ...ex, patientFound, patientName, convenioId, email, clinicaAgilId } }];"
       },
       "id": "a2f5475c-b22f-4ab0-879a-c379b5ee59c1",
       "name": "Lookup & Parse Patient",
@@ -1080,6 +1105,12 @@
               "name": "appointmentFlow",
               "value": "={{ $('Lookup & Parse Patient').item.json.appointmentFlow }}",
               "type": "object"
+            },
+            {
+              "id": "c1a91ca2-4b3d-4f8e-a1b2-clinicaagilid0",
+              "name": "clinicaAgilId",
+              "value": "={{ $('Lookup & Parse Patient').item.json.clinicaAgilId }}",
+              "type": "string"
             }
           ]
         },
@@ -1285,6 +1316,54 @@
           ]
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zorahapp2-production.up.railway.app/api/clinica-agil/appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-bot-key",
+              "value": "=8c84cf63c3b91fc2a3c74902280e68b4422e42486d47f0d8f3c19bae8d05b6ea"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ clinicaAgilId: $json.clinicaAgilId }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "b3f7a1c2-8d4e-4f9a-b2c1-appointments01",
+      "name": "HTTP: Buscar Agendamentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        21040,
+        13692
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst conversationId = $('Set: Intent Context').item.json.conversationId || '';\nconst patientName    = $('Set: Intent Context').item.json.patientName    || null;\nconst phone          = $('Set: Intent Context').item.json.phone          || '';\nconst platform       = $('Set: Intent Context').item.json.platform       || 'whatsapp';\nconst messageReceivedAt = $('Set: Intent Context').item.json.messageReceivedAt;\n\nlet message = '';\n\n// Verificar se clinicaAgilId estava disponível\nconst clinicaAgilId = $('Set: Intent Context').item.json.clinicaAgilId;\nif (!clinicaAgilId) {\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  message = nome\n    ? `${nome}, não encontrei seu cadastro na clínica para consultar os agendamentos. 🙏\\nPor favor, entre em contato diretamente conosco.`\n    : 'Não encontrei seu cadastro na clínica para consultar os agendamentos. 🙏\\nPor favor, entre em contato diretamente conosco.';\n} else if (!data || data.status === 'error' || !data.data || data.data.length === 0) {\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  message = nome\n    ? `${nome}, não encontrei agendamentos futuros para você nos próximos 30 dias. 📅\\nGostaria de agendar uma consulta?`\n    : 'Não encontrei agendamentos futuros nos próximos 30 dias. 📅\\nGostaria de agendar uma consulta?';\n} else {\n  const appointments = Array.isArray(data.data) ? data.data : [data.data];\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  const greeting = nome ? `${nome}, aqui estão` : 'Aqui estão';\n  const lines = appointments.map(a => {\n    const date = a.data_agendamento || a.data || a.date || '';\n    const time = a.hora_agendamento || a.hora || a.time || '';\n    const prof = a.profissional     || a.professional || '';\n    const proc = a.procedimento     || a.procedure    || '';\n    return `📅 ${date} às ${time}${prof ? ' — ' + prof : ''}${proc ? '\\n   ' + proc : ''}`;\n  });\n  message = `${greeting} seus próximos agendamentos:\\n\\n${lines.join('\\n\\n')}\\n\\nPosso ajudar com mais alguma coisa? 😊`;\n}\n\nreturn [{\n  json: {\n    conversationId,\n    message,\n    intent: 'CONFIRMAR_CONSULTA',\n    action: 'RESPOND',\n    aiProvider: 'zorah-appointments',\n    requiresHumanIntervention: false,\n    phone,\n    platform,\n    messageReceivedAt,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001",
+      "name": "Formatar Agendamentos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        21240,
+        13692
+      ],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -1818,6 +1897,42 @@
         [
           {
             "node": "Parse Information Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "231a0010-a0ac-4be1-abc3-21509486ac77": {
+      "main": [
+        [],
+        [],
+        [],
+        [
+          {
+            "node": "b3f7a1c2-8d4e-4f9a-b2c1-appointments01",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "b3f7a1c2-8d4e-4f9a-b2c1-appointments01": {
+      "main": [
+        [
+          {
+            "node": "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001": {
+      "main": [
+        [
+          {
+            "node": "3facf87f-c290-4205-97a2-7e29af6ab5ef",
             "type": "main",
             "index": 0
           }
@@ -2411,7 +2526,7 @@
           },
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify({\n  phone: $json.phone,\n  name: $json.patientName || 'Novo Paciente',\n  email: $json.email || null,\n  insuranceCompany: $json.convenioId ? String($json.convenioId) : null,\n  source: 'bot'\n}) }}",
+          "jsonBody": "={{ JSON.stringify({\n  phone: $json.phone,\n  name: $json.patientName || 'Novo Paciente',\n  email: $json.email || null,\n  insuranceCompany: $json.convenioId ? String($json.convenioId) : null,\n  clinicaAgilId: $json.clinicaAgilId || null,\n  source: 'bot'\n}) }}",
           "options": {
             "timeout": 8000
           }
@@ -2431,7 +2546,7 @@
           "promptType": "define",
           "text": "={{ $json.chatInput }}",
           "options": {
-            "systemMessage": "={{ `Você é **Zorah**, a IA classificadora de intenções do IAAM.\nVocê opera exclusivamente em conversas de **WhatsApp e Instagram**.\n\n────────────────────────────\n🧑 PACIENTE IDENTIFICADO:\n────────────────────────────\n${ $json.patientName ? `Nome do paciente: ${$json.patientName}. Use o nome ao cumprimentar.` : 'Paciente ainda não identificado. NÃO invente o nome.' }\n\n────────────────────────────\n⚠️ REGRAS GERAIS OBRIGATÓRIAS\n────────────────────────────\n- Sempre identifique-se como assistente virtual Zorah do IAAM\n- Sempre responda em português (Brasil)\n- Sempre utilize linguagem clara, educada e humana\n- Sempre formate respostas para chat\n- Sempre retorne um JSON válido no formato definido ao final\n- NÃO invente dados\n- NÃO pule etapas do fluxo\n\n────────────────────────────\n🎯 MISSÃO PRINCIPAL\n────────────────────────────\n1. Verificar se a **UNIDADE** foi informada\n2. Se não foi informada → perguntar a unidade\n3. Somente após isso → classificar a intenção\n\n────────────────────────────\n🏥 UNIDADES DISPONÍVEIS\n────────────────────────────\n1 - Unidade Vieiralves  \n2 - Unidade São José  \n\n────────────────────────────\n🔁 FLUXO OBRIGATÓRIO\n────────────────────────────\n\n### 1️⃣ VERIFICAR UNIDADE\nSe a mensagem do paciente **NÃO mencionar explicitamente**:\n- Vieiralves\n- São José\n\nENTÃO:\n- NÃO classifique outra intenção\n- Defina intent = PEDIR_UNIDADE\n- Defina needsUnit = true\n- Responda perguntando a unidade da forma abaixo:\n\n\"Para qual unidade você deseja atendimento? 😊  \nPor favor, escolha uma opção:  \n1️⃣ Vieiralves  \n2️⃣ São José\"\n\n---\n\nSe a unidade **JÁ estiver mencionada**, prossiga para a classificação de intenção.\n\n────────────────────────────\n### 2️⃣ CLASSIFICAÇÃO DE INTENÇÃO\n────────────────────────────\nClassifique a mensagem em **apenas UMA** das intenções abaixo:\n\n🔹 **INFORMACAO**\n- Perguntas gerais\n- Procedimentos\n- Valores\n- Convênios\n- Localização\n- Horários\n- Cumprimentos (oi, olá, bom dia)\n- Dúvidas ou curiosidade\n\n🔹 **AGENDAR**\n⚠️ SOMENTE se houver palavras EXPLÍCITAS:\n- \"agendar\"\n- \"marcar\"\n- \"reservar\"\n\n➡️ Se não houver essas palavras, NÃO classificar como AGENDAR  \n➡️ Confiança mínima: 0.90\n\n🔹 **FALAR_ATENDENTE**\n- Pedido para falar com humano\n- Solicitação de atendimento pessoal\n- Reclamação do robô\n\n🔹 **PEDIR_UNIDADE**\n- Sempre que for necessário perguntar a unidade\n\n────────────────────────────\n📌 REGRAS DE DECISÃO\n────────────────────────────\n- Unidade SEMPRE vem antes da intenção\n- Cumprimento simples = INFORMACAO (após unidade)\n- Em dúvida → INFORMACAO\n- Nunca assumir agendamento\n- Nunca misturar intenções\n\n────────────────────────────\n📤 FORMATO DE RESPOSTA (OBRIGATÓRIO)\n────────────────────────────\n\nResponda SEMPRE neste formato JSON:\n\n{\n  \"intent\": \"INFORMACAO | AGENDAR | FALAR_ATENDENTE | PEDIR_UNIDADE\",\n  \"confidence\": 0.95,\n  \"unit\": \"Vieiralves | São José | null\",\n  \"response\": \"Mensagem clara, gentil e adequada ao paciente\",\n  \"needsUnit\": true | false\n}\n\n}` }}"
+            "systemMessage": "={{ `Você é **Zorah**, a IA classificadora de intenções do IAAM.\nVocê opera exclusivamente em conversas de **WhatsApp e Instagram**.\n\n────────────────────────────\n🧑 PACIENTE IDENTIFICADO:\n────────────────────────────\n${ $json.patientName ? `Nome do paciente: ${$json.patientName}. Use o nome ao cumprimentar.` : 'Paciente ainda não identificado. NÃO invente o nome.' }\n\n────────────────────────────\n⚠️ REGRAS GERAIS OBRIGATÓRIAS\n────────────────────────────\n- Sempre identifique-se como assistente virtual Zorah do IAAM\n- Sempre responda em português (Brasil)\n- Sempre utilize linguagem clara, educada e humana\n- Sempre formate respostas para chat\n- Sempre retorne um JSON válido no formato definido ao final\n- NÃO invente dados\n- NÃO pule etapas do fluxo\n\n────────────────────────────\n🎯 MISSÃO PRINCIPAL\n────────────────────────────\n1. Verificar se a **UNIDADE** foi informada\n2. Se não foi informada → perguntar a unidade\n3. Somente após isso → classificar a intenção\n\n────────────────────────────\n🏥 UNIDADES DISPONÍVEIS\n────────────────────────────\n1 - Unidade Vieiralves  \n2 - Unidade São José  \n\n────────────────────────────\n🔁 FLUXO OBRIGATÓRIO\n────────────────────────────\n\n### 1️⃣ VERIFICAR UNIDADE\nSe a mensagem do paciente **NÃO mencionar explicitamente**:\n- Vieiralves\n- São José\n\nENTÃO:\n- NÃO classifique outra intenção\n- Defina intent = PEDIR_UNIDADE\n- Defina needsUnit = true\n- Responda perguntando a unidade da forma abaixo:\n\n\"Para qual unidade você deseja atendimento? 😊  \nPor favor, escolha uma opção:  \n1️⃣ Vieiralves  \n2️⃣ São José\"\n\n---\n\nSe a unidade **JÁ estiver mencionada**, prossiga para a classificação de intenção.\n\n────────────────────────────\n### 2️⃣ CLASSIFICAÇÃO DE INTENÇÃO\n────────────────────────────\nClassifique a mensagem em **apenas UMA** das intenções abaixo:\n\n🔹 **INFORMACAO**\n- Perguntas gerais\n- Procedimentos\n- Valores\n- Convênios\n- Localização\n- Horários\n- Cumprimentos (oi, olá, bom dia)\n- Dúvidas ou curiosidade\n\n🔹 **AGENDAR**\n⚠️ SOMENTE se houver palavras EXPLÍCITAS:\n- \"agendar\"\n- \"marcar\"\n- \"reservar\"\n\n➡️ Se não houver essas palavras, NÃO classificar como AGENDAR  \n➡️ Confiança mínima: 0.90\n\n🔹 **FALAR_ATENDENTE**\n- Pedido para falar com humano\n- Solicitação de atendimento pessoal\n- Reclamação do robô\n\n🔹 **CONFIRMAR_CONSULTA**\n- \"minha consulta\", \"meu horário\", \"quando é minha sessão\"\n- \"ver meus agendamentos\", \"próxima sessão\", \"tenho consulta\"\n- Qualquer pedido de listar ou ver agendamentos futuros do paciente\n\n🔹 **PEDIR_UNIDADE**\n- Sempre que for necessário perguntar a unidade\n\n────────────────────────────\n📌 REGRAS DE DECISÃO\n────────────────────────────\n- Unidade SEMPRE vem antes da intenção\n- Cumprimento simples = INFORMACAO (após unidade)\n- Em dúvida → INFORMACAO\n- Nunca assumir agendamento\n- Nunca misturar intenções\n\n────────────────────────────\n📤 FORMATO DE RESPOSTA (OBRIGATÓRIO)\n────────────────────────────\n\nResponda SEMPRE neste formato JSON:\n\n{\n  \"intent\": \"INFORMACAO | AGENDAR | FALAR_ATENDENTE | CONFIRMAR_CONSULTA | PEDIR_UNIDADE\",\n  \"confidence\": 0.95,\n  \"unit\": \"Vieiralves | São José | null\",\n  \"response\": \"Mensagem clara, gentil e adequada ao paciente\",\n  \"needsUnit\": true | false\n}\n\n}` }}"
           }
         },
         "type": "@n8n/n8n-nodes-langchain.agent",
@@ -2488,7 +2603,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
+          "jsCode": "const raw = $json;\n\nfunction extractText(res) {\n  if (!res) return '';\n  if (typeof res === 'string') return res;\n  if (typeof res.agentOutput === 'string') return res.agentOutput;\n  if (typeof res.output === 'string') return res.output;\n  if (res.output?.text) return res.output.text;\n  if (res.text) return res.text;\n  if (res.response) return res.response;\n  if (res.message) return res.message;\n  return '';\n}\n\nlet rawText = extractText(raw).replace(/^json\\s*\\n?/i, '').trim();\n\nconst conversationId = raw.conversationId || '';\nconst chatInput      = raw.chatInput      || '';\nconst sessionId      = raw.sessionId      || '';\n\nlet intent = 'INFORMACAO', confidence = 0.5, unit = null,\n    needsUnit = false, parsedResponse = null, reasoning = '';\n\nconst m = rawText.match(/\\{[\\s\\S]*?\\}/);\nif (m) {\n  try {\n    const p = JSON.parse(m[0]);\n    intent         = p.intent      || intent;\n    confidence     = p.confidence  || confidence;\n    reasoning      = p.reasoning   || '';\n    unit           = p.unit        || null;\n    needsUnit      = p.needsUnit   ?? false;\n    parsedResponse = p.response    || null;\n  } catch(_) {}\n}\n\nif (raw.intent) {\n  intent     = raw.intent;\n  confidence = raw.confidence || confidence;\n  unit       = raw.unit || unit;\n}\n\nif (!unit && chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (lo.includes('vieiralves'))                               unit = 'Vieiralves';\n  else if (lo.includes('são josé') || lo.includes('sao jose')) unit = 'São José';\n}\n\nif (chatInput) {\n  const lo = chatInput.toLowerCase();\n  if (['agendar','marcar','reservar'].some(k => lo.includes(k)))         { intent = 'AGENDAR';         confidence = 0.9;  }\n  else if (['atendente','humano','falar com'].some(k => lo.includes(k))) { intent = 'FALAR_ATENDENTE'; confidence = 0.95; }\n}\n\nconst validIntents = ['INFORMACAO','AGENDAR','FALAR_ATENDENTE','PEDIR_UNIDADE'];\nif (!validIntents.includes(intent)) intent = 'INFORMACAO';\n\nif (!unit && (intent === 'AGENDAR' || intent === 'INFORMACAO')) {\n  needsUnit = true;\n  intent    = 'PEDIR_UNIDADE';\n}\n\nreturn [{\n  json: {\n    conversationId,\n    sessionId,\n    intent,\n    confidence,\n    reasoning,\n    unit,\n    needsUnit,\n    response:        parsedResponse || rawText,\n    chatInput,\n    originalMessage: chatInput,\n    phone:           raw.phone           || '',\n    platform:        raw.platform        || 'whatsapp',\n    needsPhone:      raw.needsPhone      || false,\n    patient:         raw.patient         || {},\n    patientFound:    raw.patientFound    || false,\n    patientName:     raw.patientName     || null,\n    convenioId:      raw.convenioId      || null,\n    context:         raw.context         || {},\n    appointmentFlow: raw.appointmentFlow || {\n      patientChecked: false, patientData: null,\n      insuranceValidated: false, step: 'initial'\n    },\n    clinicaAgilId: raw.clinicaAgilId || null,\n    messageReceivedAt: raw.messageReceivedAt,\n    success: true\n  }\n}];\n"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -2577,6 +2692,31 @@
                 },
                 "renameOutput": true,
                 "outputKey": "transfer"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 1
+                  },
+                  "conditions": [
+                    {
+                      "id": "confirmar-condition",
+                      "leftValue": "={{ $json.intent }}",
+                      "rightValue": "CONFIRMAR_CONSULTA",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "confirmar_consulta"
               },
               {
                 "conditions": {
@@ -2850,7 +2990,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// $json = Extract Data output — sem cross-node reference\nconst ex = $json;\nconst phone = ex.phone || '';\nlet patientFound = false, patientName = null, convenioId = null,\n    email = null, clinicaAgilId = null;\n\nif (phone) {\n  try {\n    const fd = new FormData();\n    fd.append('numero_paciente', phone);\n    const resp = await fetch(\n      'https://app2.clinicaagil.com.br/api/integration/patient_data',\n      {\n        method: 'POST',\n        headers: {\n          'X-API-KEY': 'a5dcc76d202fdc2eb86646c9e57754b19f34fff30332b865b19cca44232b460b-c1a-5468970561',\n          'X-API-METHOD': 'Ch4tB0tW4tsS4v3QRc0d3'\n        },\n        body: fd,\n        signal: AbortSignal.timeout(5000)\n      }\n    );\n    if (resp.ok) {\n      const data = await resp.json();\n      if (data.status === 'success' && data.data) {\n        patientFound  = true;\n        patientName   = data.data.paciente_nome || null;\n        convenioId    = data.data.convenio_id   || null;\n        email         = data.data.email          || null;\n        clinicaAgilId = data.data.paciente_id    || null;\n      }\n    }\n  } catch(_) { /* timeout ou erro — continua sem dados do paciente */ }\n}\n\nreturn [{ json: { ...ex, patientFound, patientName, convenioId, email, clinicaAgilId } }];"
+          "jsCode": "// $json = Extract Data output — sem cross-node reference\n// Chama o proxy seguro do backend (chave da Clínica Ágil fica no Railway env var)\nconst ex = $json;\nconst phone = ex.phone || '';\nlet patientFound = false, patientName = null, convenioId = null,\n    email = null, clinicaAgilId = null;\n\nconst BOT_KEY = $env.N8N_BOT_API_KEY || '';\n\nif (phone) {\n  try {\n    const resp = await fetch(\n      'https://zorahapp2-production.up.railway.app/api/clinica-agil/patient-bot',\n      {\n        method: 'POST',\n        headers: {\n          'x-bot-key': BOT_KEY,\n          'Content-Type': 'application/json'\n        },\n        body: JSON.stringify({ phone }),\n        signal: AbortSignal.timeout(8000)\n      }\n    );\n    if (resp.ok) {\n      const data = await resp.json();\n      if (data.status === 'success' && data.data) {\n        patientFound  = true;\n        patientName   = data.data.paciente_nome || null;\n        convenioId    = data.data.convenio_id   || null;\n        email         = data.data.email          || null;\n        clinicaAgilId = data.data.paciente_id    || null;\n      }\n    }\n  } catch(_) { /* timeout ou erro — continua sem dados do paciente */ }\n}\n\nreturn [{ json: { ...ex, patientFound, patientName, convenioId, email, clinicaAgilId } }];"
         },
         "id": "a2f5475c-b22f-4ab0-879a-c379b5ee59c1",
         "name": "Lookup & Parse Patient",
@@ -2978,6 +3118,12 @@
                 "name": "appointmentFlow",
                 "value": "={{ $('Lookup & Parse Patient').item.json.appointmentFlow }}",
                 "type": "object"
+              },
+              {
+                "id": "c1a91ca2-4b3d-4f8e-a1b2-clinicaagilid0",
+                "name": "clinicaAgilId",
+                "value": "={{ $('Lookup & Parse Patient').item.json.clinicaAgilId }}",
+                "type": "string"
               }
             ]
           },
@@ -3183,6 +3329,54 @@
             ]
           }
         }
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://zorahapp2-production.up.railway.app/api/clinica-agil/appointments",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "x-bot-key",
+                "value": "=8c84cf63c3b91fc2a3c74902280e68b4422e42486d47f0d8f3c19bae8d05b6ea"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ clinicaAgilId: $json.clinicaAgilId }) }}",
+          "options": {
+            "timeout": 10000
+          }
+        },
+        "id": "b3f7a1c2-8d4e-4f9a-b2c1-appointments01",
+        "name": "HTTP: Buscar Agendamentos",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          21040,
+          13692
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "const data = $json;\nconst conversationId = $('Set: Intent Context').item.json.conversationId || '';\nconst patientName    = $('Set: Intent Context').item.json.patientName    || null;\nconst phone          = $('Set: Intent Context').item.json.phone          || '';\nconst platform       = $('Set: Intent Context').item.json.platform       || 'whatsapp';\nconst messageReceivedAt = $('Set: Intent Context').item.json.messageReceivedAt;\n\nlet message = '';\n\n// Verificar se clinicaAgilId estava disponível\nconst clinicaAgilId = $('Set: Intent Context').item.json.clinicaAgilId;\nif (!clinicaAgilId) {\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  message = nome\n    ? `${nome}, não encontrei seu cadastro na clínica para consultar os agendamentos. 🙏\\nPor favor, entre em contato diretamente conosco.`\n    : 'Não encontrei seu cadastro na clínica para consultar os agendamentos. 🙏\\nPor favor, entre em contato diretamente conosco.';\n} else if (!data || data.status === 'error' || !data.data || data.data.length === 0) {\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  message = nome\n    ? `${nome}, não encontrei agendamentos futuros para você nos próximos 30 dias. 📅\\nGostaria de agendar uma consulta?`\n    : 'Não encontrei agendamentos futuros nos próximos 30 dias. 📅\\nGostaria de agendar uma consulta?';\n} else {\n  const appointments = Array.isArray(data.data) ? data.data : [data.data];\n  const nome = patientName ? patientName.split(' ')[0] : null;\n  const greeting = nome ? `${nome}, aqui estão` : 'Aqui estão';\n  const lines = appointments.map(a => {\n    const date = a.data_agendamento || a.data || a.date || '';\n    const time = a.hora_agendamento || a.hora || a.time || '';\n    const prof = a.profissional     || a.professional || '';\n    const proc = a.procedimento     || a.procedure    || '';\n    return `📅 ${date} às ${time}${prof ? ' — ' + prof : ''}${proc ? '\\n   ' + proc : ''}`;\n  });\n  message = `${greeting} seus próximos agendamentos:\\n\\n${lines.join('\\n\\n')}\\n\\nPosso ajudar com mais alguma coisa? 😊`;\n}\n\nreturn [{\n  json: {\n    conversationId,\n    message,\n    intent: 'CONFIRMAR_CONSULTA',\n    action: 'RESPOND',\n    aiProvider: 'zorah-appointments',\n    requiresHumanIntervention: false,\n    phone,\n    platform,\n    messageReceivedAt,\n    success: true,\n    timestamp: new Date().toISOString()\n  }\n}];\n"
+        },
+        "id": "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001",
+        "name": "Formatar Agendamentos",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          21240,
+          13692
+        ],
+        "onError": "continueRegularOutput"
       }
     ],
     "connections": {
@@ -3716,6 +3910,42 @@
           [
             {
               "node": "Parse Information Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "231a0010-a0ac-4be1-abc3-21509486ac77": {
+        "main": [
+          [],
+          [],
+          [],
+          [
+            {
+              "node": "b3f7a1c2-8d4e-4f9a-b2c1-appointments01",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "b3f7a1c2-8d4e-4f9a-b2c1-appointments01": {
+        "main": [
+          [
+            {
+              "node": "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "d4e8b2f1-9c5a-4e2b-c3d2-formatappt001": {
+        "main": [
+          [
+            {
+              "node": "3facf87f-c290-4205-97a2-7e29af6ab5ef",
               "type": "main",
               "index": 0
             }

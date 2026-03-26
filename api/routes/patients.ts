@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express'
 import { Prisma } from '@prisma/client'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
+import { botKeyMiddleware } from '../utils/botAuth.js'
 
 const router = Router()
 
@@ -288,21 +289,6 @@ function cleanPhone(phone: string): string {
   return phone.replace(/\D/g, '')
 }
 
-// Middleware para autenticação via API key do bot (N8N)
-function botKeyMiddleware(req: Request, res: Response, next: any): void {
-  const botKey = process.env.N8N_BOT_API_KEY
-  if (!botKey) {
-    res.status(503).json({ error: 'N8N_BOT_API_KEY não configurada no servidor' })
-    return
-  }
-  const provided = req.headers['x-bot-key']
-  if (!provided || provided !== botKey) {
-    res.status(401).json({ error: 'Não autorizado' })
-    return
-  }
-  next()
-}
-
 /**
  * POST /api/patients/upsert-from-bot
  * Cria ou retorna paciente existente pelo telefone.
@@ -311,7 +297,7 @@ function botKeyMiddleware(req: Request, res: Response, next: any): void {
  */
 router.post('/upsert-from-bot', botKeyMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, name, email, insuranceCompany, source } = req.body
+    const { phone, name, email, insuranceCompany, clinicaAgilId, source } = req.body
 
     if (!phone) {
       res.status(400).json({ error: 'phone é obrigatório' })
@@ -331,13 +317,13 @@ router.post('/upsert-from-bot', botKeyMiddleware, async (req: Request, res: Resp
     const existing = await prisma.patient.findFirst({ where: { phone: cleaned } })
 
     if (existing) {
-      // Atualizar apenas campos que chegaram com valor real
-      const updateData: Record<string, any> = {}
+      const updateData: Record<string, unknown> = {}
       if (name && name.trim() && name !== 'Novo Paciente' && existing.name.startsWith('Paciente Bot')) {
         updateData.name = name.trim()
       }
       if (email && !existing.email) updateData.email = email.toLowerCase().trim()
       if (insuranceCompany && !existing.insuranceCompany) updateData.insuranceCompany = String(insuranceCompany).trim()
+      if (clinicaAgilId && !existing.clinicaAgilId) updateData.clinicaAgilId = String(clinicaAgilId).trim()
 
       const updated = Object.keys(updateData).length > 0
         ? await prisma.patient.update({ where: { id: existing.id }, data: updateData })
@@ -353,6 +339,7 @@ router.post('/upsert-from-bot', botKeyMiddleware, async (req: Request, res: Resp
         name: safeName,
         email: email ? email.toLowerCase().trim() : null,
         insuranceCompany: insuranceCompany ? String(insuranceCompany).trim() : null,
+        clinicaAgilId: clinicaAgilId ? String(clinicaAgilId).trim() : null,
         preferences: { source: source || 'bot' },
       }
     })
@@ -367,7 +354,7 @@ router.post('/upsert-from-bot', botKeyMiddleware, async (req: Request, res: Resp
     })
 
     res.status(201).json({ patient, created: true })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Erro ao upsert paciente via bot:', error)
     res.status(500).json({ error: 'Erro interno' })
   }

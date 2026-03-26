@@ -151,6 +151,8 @@ const ConversationsPage: React.FC = () => {
     // Ref com o ID da conversa que está sendo encerrada (sincronizado imediatamente,
     // sem depender do batch do React — evita duplo disparo com socket em produção)
     const closingConvIdRef = React.useRef<string | null>(null);
+    // IDs encerrados recentemente: impede re-seleção via useEffect de URL mesmo após a animação
+    const recentlyClosedIdsRef = React.useRef<Set<string>>(new Set());
 
     const triggerCloseAnimation = useCallback((conversationId?: string, callback?: () => void) => {
         const idToClose = conversationId ?? closingConvIdRef.current;
@@ -163,6 +165,12 @@ const ConversationsPage: React.FC = () => {
         setIsClosingConversation(true);
 
         setTimeout(() => {
+            // Marca como "fechado recentemente" por 3s para bloquear re-seleção via useEffect de URL
+            const closedId = closingConvIdRef.current;
+            if (closedId) {
+                recentlyClosedIdsRef.current.add(closedId);
+                setTimeout(() => recentlyClosedIdsRef.current.delete(closedId), 3000);
+            }
             setSelectedConversation(null);
             setMessages([]);
             setIsClosingConversation(false);
@@ -883,14 +891,18 @@ const ConversationsPage: React.FC = () => {
                         });
                     }
                     // ✅ Se for expiração de sessão, não remover imediatamente (aguardar nova conversa)
-                    // A nova conversa será adicionada pelo evento conversation:updated
                     if (isSessionExpired) {
                         console.log('⏳ Conversa expirada - aguardando nova conversa antes de remover da lista');
-                        // Remover apenas após pequeno delay para dar tempo da nova conversa aparecer
                         setTimeout(() => {
                             setConversations(prevList => prevList.filter(c => c.id !== data.conversationId));
                         }, 1000);
-                        return prev; // Não remover ainda
+                        return prev;
+                    }
+                    // ✅ Se a animação de encerramento está rodando para esta conversa, NÃO remover ainda.
+                    // Remover agora causaria re-seleção via useEffect de URL params (conversa reaparecia).
+                    // O fetchConversations() no callback da animação limpará a lista corretamente.
+                    if (closingConvIdRef.current === data.conversationId) {
+                        return prev;
                     }
                     return prev.filter(c => c.id !== data.conversationId);
                 });
@@ -1259,6 +1271,11 @@ const ConversationsPage: React.FC = () => {
             // ✅ Ler conversationId da URL usando useLocation (reativo)
             const urlParams = new URLSearchParams(location.search);
             const conversationId = urlParams.get('conversationId');
+
+            // Guard: não re-selecionar enquanto estamos encerrando esta conversa
+            if (conversationId && closingConvIdRef.current !== null) return;
+            // Guard: não re-selecionar conversa fechada recentemente (evita flash pós-animação)
+            if (conversationId && recentlyClosedIdsRef.current.has(conversationId)) return;
 
             console.log('🔍 [useEffect] phone:', phone, 'conversationId:', conversationId, 'conversations.length:', conversations.length, 'location.search:', location.search);
 

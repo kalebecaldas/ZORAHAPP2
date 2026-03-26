@@ -1,93 +1,101 @@
 # Skill: Integração Clínica Ágil API
 
 ## Quando usar esta skill
-Ao modificar qualquer código relacionado à integração com a Clínica Ágil: endpoint proxy no backend, tool do N8N, ou fluxo de identificação/cadastro de pacientes via bot.
+Ao modificar qualquer código relacionado à integração com a Clínica Ágil: endpoint proxy no backend, workflow n8n, ou fluxo de identificação/cadastro/agendamentos de pacientes via bot.
 
 ---
 
 ## Visão geral
 
-O ZoraH integra com a API da Clínica Ágil para identificar pacientes pelo telefone antes do atendimento.
+O ZoraH integra com a API da Clínica Ágil para identificar pacientes pelo telefone antes do atendimento e, no intent `CONFIRMAR_CONSULTA`, retornar os próximos 30 dias de agendamentos do paciente.
 
 ### Arquivos relevantes
 - `api/routes/clinicaAgil.ts` — proxy seguro (backend → Clínica Ágil)
+- `api/utils/botAuth.ts` — `botKeyMiddleware` compartilhado
 - `api/routes/patients.ts` — endpoint `POST /api/patients/upsert-from-bot`
-- `n8n/Zorah bot n8n ativo.json` — nodes "Lookup Patient", "Parse Patient Data", "Upsert Patient ZoraH"
+- `prisma/schema.prisma` — model `Patient` (campo `clinicaAgilId`)
+- `n8n/Zorah bot n8n ativo.json` — nodes "Lookup & Parse Patient", "Upsert Patient ZoraH", "HTTP: Buscar Agendamentos", "Formatar Agendamentos"
 
 ---
 
-## API da Clínica Ágil
+## Endpoints da Clínica Ágil utilizados
 
-### Endpoint de consulta
-```
-POST https://app2.clinicaagil.com.br/api/integration/patient_data
-Headers:
-  X-API-KEY: <CLINICA_AGIL_API_KEY>
-  X-API-METHOD: Ch4tB0tW4tsS4v3QRc0d3
-  accept: application/json
-  content-type: multipart/form-data
-Body (multipart):
-  numero_paciente: <telefone somente dígitos>
-```
-
-### Resposta — paciente encontrado
-```json
-{
-  "status": "success",
-  "data": {
-    "paciente_id": "78",
-    "paciente_nome": "Maria Fernanda Kikuda Rodrigues",
-    "telefone1": "(92) 99359-6706",
-    "convenio_id": "4",
-    "email": "fernandakikuda@iaamazonas.com.br"
-  }
-}
-```
-
-### Resposta — não encontrado
-```json
-{ "status": "not_found" }
-```
+| Endpoint | X-API-METHOD | Uso |
+|----------|-------------|-----|
+| `POST /patient_data` | `Ch4tB0tW4tsS4v3QRc0d3` | Lookup do paciente pelo telefone |
+| `POST /get_patient_appointments` | `Ch4tB0tW4tsa4g4lyT9` | Próximos 30 dias de agendamentos |
 
 ---
 
-## Fluxo no N8N (determinístico)
+## Proxy Backend
+
+### `POST /api/clinica-agil/patient` — dashboard (authMiddleware)
+Uso pelo frontend ZoraH. Requer JWT de usuário logado. A `CLINICA_AGIL_API_KEY` nunca é exposta ao frontend.
+
+### `POST /api/clinica-agil/patient-bot` — n8n (botKeyMiddleware)
+Uso pelo workflow n8n no node "Lookup & Parse Patient". Requer header `x-bot-key: N8N_BOT_API_KEY`.
+Body: `{ phone: string }`
+
+### `POST /api/clinica-agil/appointments` — n8n (botKeyMiddleware)
+Uso pelo workflow n8n no node "HTTP: Buscar Agendamentos" (intent CONFIRMAR_CONSULTA).
+Body: `{ clinicaAgilId: string }`
+Retorna: próximos 30 dias de agendamentos do paciente na Clínica Ágil.
+
+---
+
+## Fluxo no N8N (fluxo principal)
 
 ```
 Webhook Start → Extract Data
-  → Lookup Patient   (HTTP Request direto, onError: continueRegularOutput)
-  → Parse Patient Data (Code: extrai patientName, convenioId, email, clinicaAgilId)
-  → Upsert Patient ZoraH (POST /api/patients/upsert-from-bot)
+  → Lookup & Parse Patient   (Code: chama /api/clinica-agil/patient-bot via x-bot-key)
+  → Upsert Patient ZoraH     (POST /api/patients/upsert-from-bot, inclui clinicaAgilId)
+  → Set: Intent Context      (propaga patientName, clinicaAgilId, etc.)
   → Intent Classifier Agent
+  → Parse Intent Response
+  → Intent Router
+      ├── INFORMACAO         → Information Agent → ...
+      ├── AGENDAR            → Fila agendamento
+      ├── FALAR_ATENDENTE    → Transferência humana
+      ├── CONFIRMAR_CONSULTA → HTTP: Buscar Agendamentos
+      │                          → Formatar Agendamentos
+      │                          → Format Final Response
+      └── PEDIR_UNIDADE      → Format Ask Unit Response → ...
 ```
 
-### Node "Lookup Patient"
-- Tipo: `n8n-nodes-base.httpRequest` (NÃO `httpRequestTool`)
-- Roda 100% das vezes, independente do AI
+### Node "Lookup & Parse Patient"
+- Tipo: `n8n-nodes-base.code`
+- Chama `POST /api/clinica-agil/patient-bot` com `x-bot-key: $env.N8N_BOT_API_KEY`
 - `onError: continueRegularOutput` — não bloqueia o fluxo se a API falhar
+- Campos extraídos: `patientFound`, `patientName`, `convenioId`, `email`, `clinicaAgilId`
 
-### Node "Parse Patient Data" — campos extraídos
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| `patientFound` | boolean | true se Clínica Ágil retornou status: success |
-| `patientName` | string \| null | Nome completo do paciente |
-| `convenioId` | string \| null | ID do convênio na Clínica Ágil |
-| `email` | string \| null | Email cadastrado |
-| `clinicaAgilId` | string \| null | ID do paciente na Clínica Ágil |
-
-### Node "Upsert Patient ZoraH"
-- `POST /api/patients/upsert-from-bot`
-- Header: `x-bot-key: N8N_BOT_API_KEY`
-- Cria paciente se não existe; atualiza nome/email/convênio se existir com dados temporários
+### Node "HTTP: Buscar Agendamentos"
+- Tipo: `n8n-nodes-base.httpRequest`
+- Chama `POST /api/clinica-agil/appointments` com `x-bot-key`
+- Body: `{ clinicaAgilId }` (vindo do contexto)
+- `onError: continueRegularOutput`
 
 ---
 
-## Proxy Backend (`/api/clinica-agil/patient`)
+## Model Patient (Prisma)
 
-Endpoint para uso do dashboard ZoraH (não do N8N).
-- Requer `authMiddleware` (JWT de usuário logado)
-- A `CLINICA_AGIL_API_KEY` nunca é exposta ao frontend
-- Timeout de 10 segundos
+```prisma
+model Patient {
+  id               String    @id @default(cuid())
+  phone            String    @unique
+  name             String
+  cpf              String?   @unique
+  email            String?
+  birthDate        DateTime?
+  address          String?
+  emergencyContact String?
+  insuranceCompany String?   // convenio_id da Clínica Ágil (string)
+  insuranceNumber  String?
+  clinicaAgilId    String?   // paciente_id da Clínica Ágil
+  preferences      Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+```
 
 ---
 
@@ -96,15 +104,9 @@ Endpoint para uso do dashboard ZoraH (não do N8N).
 | Variável | Onde configurar | Descrição |
 |----------|-----------------|-----------|
 | `CLINICA_AGIL_API_KEY` | Railway | Chave de autenticação da Clínica Ágil |
-| `N8N_BOT_API_KEY` | Railway + N8N (env var) | Chave para N8N chamar `/api/patients/upsert-from-bot` |
+| `N8N_BOT_API_KEY` | Railway + N8N (env var `$env.N8N_BOT_API_KEY`) | Chave para N8N chamar endpoints bot do backend |
 
-**Importante**: Nunca hardcodar as chaves. Validar no startup com `if (!process.env.CLINICA_AGIL_API_KEY) throw new Error(...)`.
-
----
-
-## Mapeamento convenio_id
-
-O campo `convenio_id` da Clínica Ágil é um ID numérico (ex: `"4"`). O ZoraH armazena como string no campo `insuranceCompany` do paciente. Para exibir o nome do convênio, consultar a lista de convênios da própria Clínica Ágil (endpoint ainda não documentado) ou manter mapeamento manual.
+**Importante**: Nunca hardcodar as chaves. Validar no startup.
 
 ---
 
@@ -112,8 +114,18 @@ O campo `convenio_id` da Clínica Ágil é um ID numérico (ex: `"4"`). O ZoraH 
 
 | Cenário | Comportamento |
 |---------|---------------|
-| API Clínica Ágil timeout | `onError: continueRegularOutput` no N8N; fluxo prossegue com `patientFound: false` |
+| API Clínica Ágil timeout | `onError: continueRegularOutput`; fluxo prossegue com `patientFound: false` |
 | API Clínica Ágil status != success | `patientFound: false`; bot atende normalmente sem nome |
 | Upsert ZoraH falha | `onError: continueRegularOutput`; paciente não é cadastrado neste ciclo |
+| `clinicaAgilId` ausente no CONFIRMAR_CONSULTA | Formatar Agendamentos retorna mensagem amigável orientando contato direto |
 | `N8N_BOT_API_KEY` ausente | 503 com mensagem de erro |
 | `CLINICA_AGIL_API_KEY` ausente | 503 com mensagem de erro |
+
+---
+
+## Expansão futura
+
+O endpoint `get_patient_treatments` pode ser adicionado seguindo o mesmo padrão:
+- Nova rota `POST /api/clinica-agil/treatments` em `clinicaAgil.ts`
+- X-API-METHOD: `Ch4tB0tW4tsamn92TT9`
+- Novo node no n8n para intent `CONFIRMAR_TRATAMENTO`
