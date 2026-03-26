@@ -965,6 +965,12 @@ const ConversationsPage: React.FC = () => {
                             );
                         });
                     }
+                    
+                    // ✅ GUARD: Prevent removing se animação está rodando!
+                    if (closingConvIdRef.current === data.conversationId) {
+                        return prev;
+                    }
+
                     return prev.filter(c => c.id !== data.conversationId);
                 });
 
@@ -1650,6 +1656,14 @@ const ConversationsPage: React.FC = () => {
             // ✅ Se a conversa foi encerrada e é a selecionada, limpar seleção
             if (data.status === 'FECHADA' && selectedConversation &&
                 (selectedConversation.id === data.conversationId || selectedConversation.phone === data.phone)) {
+                
+                // ✅ GUARD: If this conversation is currently being smoothly closed, do NOT clear it abruptly
+                if (closingConvIdRef.current !== null && 
+                    (closingConvIdRef.current === data.conversationId || closingConvIdRef.current === data.phone)) {
+                    console.log('🔒 (conversation:updated) Animação já está em andamento. Ignorando limpar seleção abruptamente.');
+                    return; // Retorna para manter a animação de fading e slide down rolando, preservando a conversa ativa
+                }
+
                 console.log('🔒 Conversa selecionada foi encerrada - limpando seleção');
                 setSelectedConversation(null);
                 setMessages([]);
@@ -1730,6 +1744,12 @@ const ConversationsPage: React.FC = () => {
                             // Atualizar contador
                             setClosedTotal(prev => prev + 1);
                         }
+                        
+                        // ✅ GUARD: Prevent removing se animação está rodando!
+                        if (closingConvIdRef.current === data.conversationId) {
+                            return prev;
+                        }
+
                         // Remover da lista ativa
                         return prev.filter(c => c.id !== data.conversationId);
                     });
@@ -1803,6 +1823,12 @@ const ConversationsPage: React.FC = () => {
                         // Atualizar contador
                         setClosedTotal(prev => prev + 1);
                     }
+                    
+                    // ✅ GUARD: Prevent removing se animação está rodando!
+                    if (closingConvIdRef.current === data.conversationId) {
+                        return prev;
+                    }
+
                     return prev.filter(c => c.id !== data.conversationId);
                 });
 
