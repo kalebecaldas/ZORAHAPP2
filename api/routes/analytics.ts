@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { APPOINTMENT_CLOSE_CATEGORIES, isAppointmentCloseCategory } from '../constants/analytics.js'
 
 const router = Router()
 
@@ -61,7 +62,8 @@ async function calculateCurrentValue(goal: any) {
             const count = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
-                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    status: 'FECHADA',
+                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
                     closedAt: { gte: startDate, lte: endDate }
                 }
             })
@@ -79,7 +81,7 @@ async function calculateCurrentValue(goal: any) {
             const converted = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
-                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
                     closedAt: { gte: startDate, lte: endDate }
                 }
             })
@@ -196,7 +198,6 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
         startDate.setDate(startDate.getDate() - days)
 
         const closedWhere = { createdAt: { gte: startDate }, status: 'FECHADA' } as const
-        const scheduledCategories = ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] as const
 
         const [
             totalClosed,
@@ -207,24 +208,38 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
             humanConverted,
             totalConversations,
             humanTransferred,
+            resolutionTimeResult,
         ] = await Promise.all([
             // Total fechadas
             prisma.conversation.count({ where: { ...closedWhere } }),
             // Total convertidas (bot + atendente)
-            prisma.conversation.count({ where: { ...closedWhere, closeCategory: { in: [...scheduledCategories] } } }),
+            prisma.conversation.count({ where: { ...closedWhere, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
             // Bot: assignedToId null
             prisma.conversation.count({ where: { ...closedWhere, assignedToId: null } }),
             // Bot convertidas
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null, closeCategory: { in: [...scheduledCategories] } } }),
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
             // Humano: assignedToId preenchido
             prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null } } }),
             // Humano convertidas
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null }, closeCategory: { in: [...scheduledCategories] } } }),
+            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null }, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
             // Total de conversas no período
             prisma.conversation.count({ where: { createdAt: { gte: startDate } } }),
             // Transferidas para humano
             prisma.conversation.count({ where: { createdAt: { gte: startDate }, assignedToId: { not: null } } }),
+            // Tempo médio de resolução: AVG(closedAt - createdAt) em minutos
+            // Usa createdAt >= startDate para ser consistente com closedWhere e totalClosed
+            prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
+                SELECT AVG(EXTRACT(EPOCH FROM ("closedAt" - "createdAt"))) / 60 AS avg_minutes
+                FROM "Conversation"
+                WHERE status = 'FECHADA'
+                  AND "closedAt" IS NOT NULL
+                  AND "createdAt" >= ${startDate}
+            `.catch(() => [{ avg_minutes: null }]),
         ])
+
+        const avgResolutionTimeMinutes = resolutionTimeResult[0]?.avg_minutes != null
+            ? Math.round(resolutionTimeResult[0].avg_minutes * 10) / 10
+            : 0
 
         const result = {
             totalConversionRate: totalClosed > 0 ? (totalConverted / totalClosed) * 100 : 0,
@@ -239,7 +254,7 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
             humanConverted,
             totalBotConversations: botClosed,
             conversationsWithAppointment: totalConverted,
-            avgResolutionTimeMinutes: 0,
+            avgResolutionTimeMinutes,
         }
 
         console.log('📊 [Analytics/Conversion] Métricas calculadas:', result)
@@ -408,8 +423,9 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
         const agentStats = await Promise.all(agents.map(async (agent) => {
             const conversations = agent.conversations
             const closedConversations = conversations.filter(c => c.status === 'FECHADA')
-            const withAppointment = conversations.filter(c =>
-                c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
+            // Conversion = appointment only among closed conversations (same spirit as CONVERSION_RATE goals)
+            const closedWithAppointment = closedConversations.filter(c =>
+                isAppointmentCloseCategory(c.closeCategory)
             )
 
             // Calcular tempo médio de resposta CORRETO (entre mensagens)
@@ -421,12 +437,12 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                 userId: agent.id,
                 totalConversations: conversations.length,
                 closedConversations: closedConversations.length,
-                closedWithAppointment: withAppointment.length,
+                closedWithAppointment: closedWithAppointment.length,
                 closeRate: conversations.length > 0
                     ? (closedConversations.length / conversations.length) * 100
                     : 0,
-                conversionRate: conversations.length > 0
-                    ? (withAppointment.length / conversations.length) * 100
+                conversionRate: closedConversations.length > 0
+                    ? (closedWithAppointment.length / closedConversations.length) * 100
                     : 0,
                 avgResponseTimeMinutes: avgResponseTime
             }
@@ -507,9 +523,7 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
         // Calcular métricas pessoais
         const closed = myConversations.filter(c => c.status === 'FECHADA')
-        const withAppointment = myConversations.filter(c =>
-            c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
-        )
+        const withAppointment = closed.filter(c => isAppointmentCloseCategory(c.closeCategory))
 
         // Calcular tempo médio de resposta CORRETO (entre mensagens)
         const avgResponseTime = await calculateAvgResponseTime(userId, startDate)
@@ -549,7 +563,7 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
             conversations.forEach(c => {
                 if (c.status === 'FECHADA') teamTotalClosed++
-                if (c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR') teamTotalWithAppointment++
+                if (c.status === 'FECHADA' && isAppointmentCloseCategory(c.closeCategory)) teamTotalWithAppointment++
             })
         })
 
@@ -564,8 +578,8 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             ? teamResponseTimes.reduce((sum, time) => sum + time, 0) / teamResponseTimes.length
             : 0
 
-        const teamAvgConversionRate = teamTotalConversations > 0
-            ? (teamTotalWithAppointment / teamTotalConversations) * 100
+        const teamAvgConversionRate = teamTotalClosed > 0
+            ? (teamTotalWithAppointment / teamTotalClosed) * 100
             : 0
 
         const teamAvgCloseRate = teamTotalConversations > 0
@@ -576,18 +590,12 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
         const agentStats = allAgents.map(agent => {
             const conversations = agent.conversations
             const agentClosed = conversations.filter(c => c.status === 'FECHADA')
-            const agentWithAppointment = conversations.filter(c =>
-                c.closeCategory === 'AGENDAMENTO' || c.closeCategory === 'AGENDAMENTO_PARTICULAR'
+            const agentClosedWithAppointment = agentClosed.filter(c =>
+                isAppointmentCloseCategory(c.closeCategory)
             )
 
-            const agentAvgResponseTime = conversations.reduce((sum, c) => {
-                const duration = (new Date(c.updatedAt).getTime() -
-                    new Date(c.createdAt).getTime()) / 1000 / 60
-                return sum + duration
-            }, 0) / (conversations.length || 1)
-
-            const conversionRate = conversations.length > 0
-                ? (agentWithAppointment.length / conversations.length) * 100
+            const conversionRate = agentClosed.length > 0
+                ? (agentClosedWithAppointment.length / agentClosed.length) * 100
                 : 0
 
             return {
@@ -663,8 +671,8 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                 totalConversations: myConversations.length,
                 closedConversations: closed.length,
                 withAppointment: withAppointment.length,
-                conversionRate: myConversations.length > 0
-                    ? (withAppointment.length / myConversations.length) * 100
+                conversionRate: closed.length > 0
+                    ? (withAppointment.length / closed.length) * 100
                     : 0,
                 avgResponseTimeMinutes: Math.round(avgResponseTime),
                 closeRate: myConversations.length > 0

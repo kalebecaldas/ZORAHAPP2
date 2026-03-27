@@ -109,8 +109,8 @@ Crie um arquivo `.env` na raiz do projeto com as seguintes variáveis:
 # Banco de Dados
 DATABASE_URL="postgresql://usuario:senha@localhost:5432/clinic_db"
 
-# JWT
-JWT_SECRET="sua-chave-secreta-super-segura"
+# JWT (obrigatório para auth nas rotas /api — use o mesmo valor no login)
+AUTH_JWT_SECRET="sua-chave-secreta-super-segura"
 
 # OpenAI
 OPENAI_API_KEY="sk-sua-chave-openai"

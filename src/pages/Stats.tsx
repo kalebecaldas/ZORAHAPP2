@@ -40,12 +40,13 @@ import {
 interface StatsData {
   totalConversations: number;
   totalPatients: number;
-  avgResponseTime: number;
+  /** Seconds — from GET /api/stats performance.avgResponseTime */
+  avgResponseTimeSeconds: number;
   satisfactionRate: number;
   conversationsByStatus: Array<{ name: string; value: number }>;
   conversationsByDay: Array<{ date: string; conversations: number; bot: number; human: number }>;
   topInsuranceCompanies: Array<{ name: string; count: number }>;
-  agentPerformance: Array<{ name: string; conversations: number; avgResponseTime: number; satisfaction: number }>;
+  agentPerformance: Array<{ name: string; conversations: number; avgDurationMinutes: number; satisfaction: number }>;
 }
 
 interface AnalyticsData {
@@ -58,13 +59,24 @@ interface AnalyticsData {
   closureCategories: any;
 }
 
+
+/** Label for /api/stats performance.avgResponseTime (seconds). */
+function formatAvgResponseTimeLabel(secondsRaw: number | string | undefined): string {
+  const seconds = typeof secondsRaw === 'string' ? parseFloat(secondsRaw) : Number(secondsRaw ?? 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0 s';
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  const minutes = seconds / 60;
+  if (minutes < 10) return `${minutes.toFixed(1)} min`;
+  return `${Math.round(minutes)} min`;
+}
+
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
 const Stats: React.FC = () => {
   const [stats, setStats] = useState<StatsData>({
     totalConversations: 0,
     totalPatients: 0,
-    avgResponseTime: 0,
+    avgResponseTimeSeconds: 0,
     satisfactionRate: 0,
     conversationsByStatus: [],
     conversationsByDay: [],
@@ -103,7 +115,7 @@ const Stats: React.FC = () => {
       setStats({
         totalConversations: summary.conversations?.total || 0,
         totalPatients: summary.patients?.total || 0,
-        avgResponseTime: Math.round((summary.performance?.avgResponseTime || 0) / 60),
+        avgResponseTimeSeconds: Number(summary.performance?.avgResponseTime) || 0,
         satisfactionRate: 0,
         conversationsByStatus: [
           { name: 'BOT', value: summary.conversations?.bot || 0 },
@@ -120,7 +132,7 @@ const Stats: React.FC = () => {
         agentPerformance: agents.map((a: any) => ({
           name: a.name,
           conversations: Number(a.conversations) || 0,
-          avgResponseTime: Math.round((a.avg_duration_hours || 0) * 60),
+          avgDurationMinutes: Math.round((a.avg_duration_hours || 0) * 60),
           satisfaction: 0,
         })),
       });
@@ -196,15 +208,17 @@ const Stats: React.FC = () => {
         />
         <StatCard
           title="Tempo Médio de Resposta"
-          value={`${stats.avgResponseTime}min`}
+          value={formatAvgResponseTimeLabel(stats.avgResponseTimeSeconds)}
           icon={Clock}
           color="warning"
+          subtitle="Entre mensagem recebida e primeira resposta enviada"
         />
         <StatCard
-          title="Taxa de Conversão"
-          value={`${(analytics?.conversion?.botConversionRate || 0).toFixed(1)}%`}
+          title="Taxa de conversão"
+          value={`${(analytics?.conversion?.totalConversionRate ?? 0).toFixed(1)}%`}
           icon={Target}
           color="purple"
+          subtitle="% das conversas encerradas no período com agendamento"
         />
       </div>
 

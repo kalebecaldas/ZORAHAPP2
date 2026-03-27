@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import prisma from '../prisma/client.js'
 import { authMiddleware, authorize } from '../utils/auth.js'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { APPOINTMENT_CLOSE_CATEGORIES } from '../constants/analytics.js'
 
 const router = Router()
 
@@ -59,11 +60,12 @@ async function calculateCurrentValue(goal: any) {
         }
             
         case 'APPOINTMENTS': {
-            // Número de agendamentos realizados
+            // Número de agendamentos realizados (conversa encerrada com categoria de agendamento)
             const count = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
-                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    status: 'FECHADA',
+                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
                     closedAt: { gte: startDate, lte: endDate }
                 }
             })
@@ -82,7 +84,7 @@ async function calculateCurrentValue(goal: any) {
             const converted = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
-                    closeCategory: { in: ['AGENDAMENTO', 'AGENDAMENTO_PARTICULAR'] },
+                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
                     closedAt: { gte: startDate, lte: endDate }
                 }
             })
@@ -273,13 +275,24 @@ router.get('/users/:userId/progress', async (req: Request, res: Response): Promi
         // Calcular progresso para cada meta
         const progress = await Promise.all(goals.map(async (goal) => {
             const current = await calculateCurrentValue(goal)
-            const percentage = goal.target > 0 ? (current / goal.target) * 100 : 0
-            
+            const isResponseTime = goal.type === 'RESPONSE_TIME'
+
+            // Para RESPONSE_TIME, menor é melhor: percentual = (meta / atual) * 100
+            // Para os demais, maior é melhor: percentual = (atual / meta) * 100
+            const percentage = isResponseTime
+                ? (current > 0 && goal.target > 0 ? (goal.target / current) * 100 : 0)
+                : (goal.target > 0 ? (current / goal.target) * 100 : 0)
+
+            // Para RESPONSE_TIME, meta atingida = atual <= alvo (e deve haver dados)
+            const achieved = isResponseTime
+                ? current > 0 && current <= goal.target
+                : current >= goal.target
+
             return {
                 ...goal,
                 current,
                 percentage: Math.round(percentage * 10) / 10,
-                achieved: current >= goal.target
+                achieved
             }
         }))
         

@@ -161,13 +161,15 @@ const GoalsProgress: React.FC<GoalsProgressProps> = ({ userId, period }) => {
                 <span className={`text-xs font-medium ${
                   goal.achieved ? `text-${config.color}-600` : 'text-gray-600'
                 }`}>
-                  {percentage.toFixed(0)}% completo
+                  {goal.type === 'RESPONSE_TIME'
+                    ? (goal.achieved ? 'Meta atingida' : `${percentage.toFixed(0)}% do alvo`)
+                    : `${percentage.toFixed(0)}% completo`}
                 </span>
 
                 {isOverachieving && (
                   <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
-                    +{(goal.percentage - 100).toFixed(0)}%
+                    {goal.type === 'RESPONSE_TIME' ? 'Abaixo da meta!' : `+${(goal.percentage - 100).toFixed(0)}%`}
                   </span>
                 )}
               </div>

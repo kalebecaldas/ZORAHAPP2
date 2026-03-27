@@ -774,9 +774,10 @@ router.post('/actions', actionsAuth, async (req: Request, res: Response): Promis
           }
         }
 
+        // Keep assignedToId so agent analytics (User.conversations relation) still attribute closed threads.
+        // Inbox lists exclude FECHADA when filtering by assignee.
         updateData = {
           status: 'FECHADA',
-          assignedToId: null,
           sessionStatus: 'closed',
           closeCategory: req.body.category,           // ✅ Salvar categoria
           closedAt: new Date(),                       // ✅ Data do encerramento
@@ -1761,7 +1762,9 @@ export async function processIncomingMessage(
             data: {
               sessionStatus: 'expired',
               status: 'FECHADA',
-              lastUserActivity: now
+              lastUserActivity: now,
+              closedAt: now,
+              closeCategory: 'SESSAO_EXPIRADA'
             }
           })
 
@@ -3710,7 +3713,9 @@ router.post('/:phone/close', authMiddleware, async (req: Request, res: Response)
       where: { id: conversation.id },
       data: {
         status: 'FECHADA',
-        sessionStatus: 'closed'
+        sessionStatus: 'closed',
+        closedAt: new Date(),
+        closedByUserId: userId || null
       },
       include: { assignedTo: true }
     })

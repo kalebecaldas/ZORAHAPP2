@@ -286,11 +286,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ user }) => {
           subtitle={`${personalStats.activeNow} ativas agora`}
         />
         <StatCard
-          title="Taxa de Conversão"
+          title="Taxa de conversão"
           value={`${personalStats.conversionRate.toFixed(1)}%`}
           icon={Target}
           color="success"
-          subtitle={`${personalStats.withAppointment} agendamentos`}
+          subtitle={`${personalStats.withAppointment} agend. em ${personalStats.closedConversations} encerradas`}
         />
         <StatCard
           title="Tempo de Resposta"

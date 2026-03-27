@@ -9,7 +9,9 @@ import {
   Award,
   AlertCircle,
   ArrowUpRight,
-  RefreshCw
+  RefreshCw,
+  CheckCircle,
+  CalendarCheck
 } from 'lucide-react';
 import { useSocket } from '../../hooks/useSocket';
 import { api } from '../../lib/utils';
@@ -105,12 +107,14 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
     ? agents.reduce((sum, a) => sum + a.avgResponseTimeMinutes, 0) / agents.length
     : 0;
 
-  const teamAvgConversionRate = agents.length > 0
-    ? agents.reduce((sum, a) => sum + a.conversionRate, 0) / agents.length
-    : 0;
-
   const totalTeamConversations = agents.reduce((sum, a) => sum + a.totalConversations, 0);
   const totalTeamClosed = agents.reduce((sum, a) => sum + a.closedConversations, 0);
+  const totalTeamClosedWithAppointment = agents.reduce((sum, a) => sum + (a.closedWithAppointment ?? 0), 0);
+
+  // Taxa ponderada real: agendamentos / encerradas (evita distorção da média aritmética de taxas)
+  const teamConversionRate = totalTeamClosed > 0
+    ? (totalTeamClosedWithAppointment / totalTeamClosed) * 100
+    : 0;
 
   // Identificar atendentes com atenção necessária
   const needsAttention = agents.filter(a =>
@@ -150,7 +154,7 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
       </div>
 
       {/* KPIs Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-8">
         <StatCard
           title="Conversas Ativas"
           value={stats?.conversations?.active || 0}
@@ -174,10 +178,24 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
         />
         <StatCard
           title="Conversão da Equipe"
-          value={`${teamAvgConversionRate.toFixed(1)}%`}
+          value={`${teamConversionRate.toFixed(1)}%`}
           icon={Target}
           color="success"
-          subtitle="Taxa de agendamento"
+          subtitle="% de encerradas com agendamento"
+        />
+        <StatCard
+          title="Conversas Encerradas"
+          value={totalTeamClosed}
+          icon={CheckCircle}
+          color="warning"
+          subtitle="No período selecionado"
+        />
+        <StatCard
+          title="Agendamentos"
+          value={totalTeamClosedWithAppointment}
+          icon={CalendarCheck}
+          color="primary"
+          subtitle="Conversas encerradas com agendamento"
         />
       </div>
 

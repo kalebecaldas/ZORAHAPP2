@@ -90,34 +90,47 @@ router.get('/', statsAuth, async (req: Request, res: Response): Promise<void> =>
         }
       }),
       
-      // Average response time (cross-db safe)
+      // Average response time — uses first SENT reply per RECEIVED turn (consistent with analytics.ts)
       (async () => {
         try {
-          // Detectar tipo de banco de dados
           const isPostgres = process.env.DATABASE_URL?.includes('postgresql')
-          
+
           if (isPostgres) {
-            // Query para PostgreSQL
-            const result = await prisma.$queryRaw<any[]>`
-              SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) as avg_time
-              FROM messages m1
-              JOIN messages m2 ON m1."conversationId" = m2."conversationId"
-              WHERE m1.direction = 'RECEIVED'
+            const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
+              SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) AS avg_time
+              FROM "Message" m1
+              INNER JOIN "Message" m2
+                ON m1."conversationId" = m2."conversationId"
                 AND m2.direction = 'SENT'
-                AND m1.timestamp >= ${startDate}
                 AND m2.timestamp > m1.timestamp
+              WHERE m1.direction = 'RECEIVED'
+                AND m1.timestamp >= ${startDate}
+                AND m2.timestamp = (
+                  SELECT MIN(m3.timestamp)
+                  FROM "Message" m3
+                  WHERE m3."conversationId" = m1."conversationId"
+                    AND m3.direction = 'SENT'
+                    AND m3.timestamp > m1.timestamp
+                )
             `
             return result
           } else {
-            // Query para SQLite
-            const result = await prisma.$queryRaw<any[]>`
-              SELECT AVG(CAST((strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) as avg_time
+            // SQLite fallback
+            const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
+              SELECT AVG(CAST((strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) AS avg_time
               FROM messages m1
-              JOIN messages m2 ON m1.conversationId = m2.conversationId
+              INNER JOIN messages m2 ON m1.conversationId = m2.conversationId
               WHERE m1.direction = 'RECEIVED'
                 AND m2.direction = 'SENT'
                 AND m1.timestamp >= ${startDate}
                 AND m2.timestamp > m1.timestamp
+                AND m2.timestamp = (
+                  SELECT MIN(m3.timestamp)
+                  FROM messages m3
+                  WHERE m3.conversationId = m1.conversationId
+                    AND m3.direction = 'SENT'
+                    AND m3.timestamp > m1.timestamp
+                )
             `
             return result
           }
