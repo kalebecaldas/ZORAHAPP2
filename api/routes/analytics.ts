@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import prisma from '../prisma/client.js'
 import { authMiddleware } from '../utils/auth.js'
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
@@ -153,21 +154,33 @@ async function calculateAvgResponseTime(userId: string, startDate: Date): Promis
 }
 
 /**
- * Helper: Calcular tempo médio de resposta para lista de conversas
+ * Tempo médio de resposta (min) por atendente em uma única query.
+ * Evita N round-trips no GET /agents e /agents/me (dashboard gerencial).
  */
-async function calculateAvgResponseTimeForConversations(conversationIds: string[]): Promise<number> {
-    if (conversationIds.length === 0) return 0
-    
+async function calculateAvgResponseTimeByAssignedUser(
+    agentUserIds: string[],
+    startDate: Date
+): Promise<Map<string, number>> {
+    const out = new Map<string, number>()
+    if (agentUserIds.length === 0) return out
+
     try {
-        const result = await prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
-            SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) / 60 as avg_minutes
+        const idList = Prisma.join(
+            agentUserIds.map((id) => Prisma.sql`${id}`)
+        )
+        const rows = await prisma.$queryRaw<Array<{ userId: string; avg_minutes: number | null }>>`
+            SELECT c."assignedToId" AS "userId",
+                   AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) / 60 AS avg_minutes
             FROM "Message" m1
-            INNER JOIN "Message" m2 
+            INNER JOIN "Message" m2
                 ON m1."conversationId" = m2."conversationId"
                 AND m2.timestamp > m1.timestamp
                 AND m2.direction = 'SENT'
+            INNER JOIN "Conversation" c
+                ON c.id = m1."conversationId"
             WHERE m1.direction = 'RECEIVED'
-                AND m1."conversationId" = ANY(${conversationIds}::text[])
+                AND c."createdAt" >= ${startDate}
+                AND c."assignedToId" IN (${idList})
                 AND m2.timestamp = (
                     SELECT MIN(m3.timestamp)
                     FROM "Message" m3
@@ -175,13 +188,17 @@ async function calculateAvgResponseTimeForConversations(conversationIds: string[
                         AND m3.direction = 'SENT'
                         AND m3.timestamp > m1.timestamp
                 )
+            GROUP BY c."assignedToId"
         `
-        
-        return result[0]?.avg_minutes ? Math.round(result[0].avg_minutes) : 0
+        for (const row of rows) {
+            if (row.userId != null && row.avg_minutes != null) {
+                out.set(row.userId, Math.round(Number(row.avg_minutes)))
+            }
+        }
     } catch (error) {
-        console.error('Erro ao calcular tempo de resposta:', error)
-        return 0
+        console.error('Erro ao calcular tempo de resposta por atendente:', error)
     }
+    return out
 }
 
 /**
@@ -422,7 +439,10 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
             }
         })
 
-        const agentStats = await Promise.all(agents.map(async (agent) => {
+        const agentIds = agents.map((a) => a.id)
+        const avgResponseByUser = await calculateAvgResponseTimeByAssignedUser(agentIds, startDate)
+
+        const agentStats = agents.map((agent) => {
             const conversations = agent.conversations
             const closedConversations = conversations.filter(c => c.status === 'FECHADA')
             // Conversion: closeCategory = AGENDAMENTO/AGENDAMENTO_PARTICULAR OR appointment JSON filled by agent tabulação
@@ -432,9 +452,7 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                 c.privateAppointment != null
             )
 
-            // Calcular tempo médio de resposta CORRETO (entre mensagens)
-            const conversationIds = conversations.map(c => c.id)
-            const avgResponseTime = await calculateAvgResponseTimeForConversations(conversationIds)
+            const avgResponseTime = avgResponseByUser.get(agent.id) ?? 0
 
             return {
                 name: agent.name,
@@ -450,7 +468,7 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                     : 0,
                 avgResponseTimeMinutes: avgResponseTime
             }
-        }))
+        })
 
         // Ordenar por taxa de conversão
         const sortedAgents = agentStats.sort((a, b) => b.conversionRate - a.conversionRate)
@@ -585,13 +603,10 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             })
         })
 
-        // Calcular tempo médio de resposta da equipe (apenas agentes com dados)
-        const teamResponseTimes = await Promise.all(
-            agentsWithData.map(async (agent) => {
-                const conversationIds = agent.conversations.map(c => c.id)
-                return await calculateAvgResponseTimeForConversations(conversationIds)
-            })
-        )
+        // Tempo médio da equipe: uma query para todos os atendentes com conversas no período
+        const teamAgentIds = agentsWithData.map((a) => a.id)
+        const teamAvgByUser = await calculateAvgResponseTimeByAssignedUser(teamAgentIds, startDate)
+        const teamResponseTimes = agentsWithData.map((agent) => teamAvgByUser.get(agent.id) ?? 0)
         const teamAvgResponseTime = teamResponseTimes.length > 0
             ? teamResponseTimes.reduce((sum, time) => sum + time, 0) / teamResponseTimes.length
             : 0

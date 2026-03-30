@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users,
@@ -50,7 +50,7 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
   const [stats, setStats] = useState<any>(null);
   const [conversion, setConversion] = useState<any>(null);
 
-  const fetchDashboardData = async (showRefreshing = false) => {
+  const fetchDashboardData = useCallback(async (showRefreshing = false) => {
     try {
       if (showRefreshing) setRefreshing(true);
       else setLoading(true);
@@ -72,28 +72,40 @@ const ManagerDashboard: React.FC<ManagerDashboardProps> = ({ user }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
   }, [period]);
 
-  // Real-time updates
   useEffect(() => {
-    if (socket) {
-      socket.on('stats_update', () => fetchDashboardData(true));
-      socket.on('new_conversation', () => fetchDashboardData(true));
-      socket.on('conversation_updated', () => fetchDashboardData(true));
-    }
+    void fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const socketRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleSocketRefresh = useCallback(() => {
+    if (socketRefreshTimerRef.current) clearTimeout(socketRefreshTimerRef.current);
+    socketRefreshTimerRef.current = setTimeout(() => {
+      socketRefreshTimerRef.current = null;
+      void fetchDashboardData(true);
+    }, 1500);
+  }, [fetchDashboardData]);
+
+  // Real-time updates (debounced: evita N requisições pesadas em rajada)
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on('stats_update', scheduleSocketRefresh);
+    socket.on('new_conversation', scheduleSocketRefresh);
+    socket.on('conversation_updated', scheduleSocketRefresh);
 
     return () => {
-      if (socket) {
-        socket.off('stats_update');
-        socket.off('new_conversation');
-        socket.off('conversation_updated');
+      if (socketRefreshTimerRef.current) {
+        clearTimeout(socketRefreshTimerRef.current);
+        socketRefreshTimerRef.current = null;
       }
+      socket.off('stats_update', scheduleSocketRefresh);
+      socket.off('new_conversation', scheduleSocketRefresh);
+      socket.off('conversation_updated', scheduleSocketRefresh);
     };
-  }, [socket, period]);
+  }, [socket, scheduleSocketRefresh]);
 
   if (loading) {
     return (
