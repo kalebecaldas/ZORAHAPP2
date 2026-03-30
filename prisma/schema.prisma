@@ -126,6 +126,13 @@ model Conversation {
   closedBy   User?    @relation("ConversationClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
   patient    Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   messages   Message[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([createdAt])
+  @@index([closedAt])
+  @@index([assignedToId, status, createdAt])
+  @@index([closeCategory])
 }
 
 model Message {
@@ -146,6 +153,11 @@ model Message {
   systemMetadata    Json?    // { agentName, queueName, targetAgentName, reason }
   
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([conversationId])
+  @@index([timestamp])
+  @@index([direction])
+  @@index([conversationId, direction, timestamp])
 }
 
 model PatientInteraction {

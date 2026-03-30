@@ -120,33 +120,28 @@ async function calculateCurrentValue(goal: any) {
 }
 
 /**
- * Helper: Calcular tempo médio de resposta correto
- * Calcula o tempo entre mensagem RECEBIDA do paciente e ENVIADA pelo atendente
+ * Helper: Calcular tempo médio de resposta de um único atendente.
+ * Usa DISTINCT ON para evitar subquery correlacionada (O(N log N)).
  */
 async function calculateAvgResponseTime(userId: string, startDate: Date): Promise<number> {
     try {
         const result = await prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
-            SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) / 60 as avg_minutes
-            FROM "Message" m1
-            INNER JOIN "Message" m2 
-                ON m1."conversationId" = m2."conversationId"
-                AND m2.timestamp > m1.timestamp
-                AND m2.direction = 'SENT'
-            INNER JOIN "Conversation" c
-                ON c.id = m1."conversationId"
-            WHERE m1.direction = 'RECEIVED'
-                AND c."assignedToId" = ${userId}
-                AND c."createdAt" >= ${startDate}
-                AND m2.timestamp = (
-                    SELECT MIN(m3.timestamp)
-                    FROM "Message" m3
-                    WHERE m3."conversationId" = m1."conversationId"
-                        AND m3.direction = 'SENT'
-                        AND m3.timestamp > m1.timestamp
-                )
+            SELECT AVG(diff_seconds) / 60 AS avg_minutes FROM (
+                SELECT DISTINCT ON (m1.id)
+                    EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp)) AS diff_seconds
+                FROM "Message" m1
+                INNER JOIN "Message" m2
+                    ON m1."conversationId" = m2."conversationId"
+                    AND m2.direction = 'SENT'
+                    AND m2.timestamp > m1.timestamp
+                INNER JOIN "Conversation" c ON c.id = m1."conversationId"
+                WHERE m1.direction = 'RECEIVED'
+                    AND c."assignedToId" = ${userId}
+                    AND c."createdAt" >= ${startDate}
+                ORDER BY m1.id, m2.timestamp ASC
+            ) sub
         `
-        
-        return result[0]?.avg_minutes ? Math.round(result[0].avg_minutes) : 0
+        return result[0]?.avg_minutes ? Math.round(Number(result[0].avg_minutes)) : 0
     } catch (error) {
         console.error('Erro ao calcular tempo de resposta:', error)
         return 0
@@ -155,7 +150,8 @@ async function calculateAvgResponseTime(userId: string, startDate: Date): Promis
 
 /**
  * Tempo médio de resposta (min) por atendente em uma única query.
- * Evita N round-trips no GET /agents e /agents/me (dashboard gerencial).
+ * Usa DISTINCT ON para evitar subquery correlacionada (O(N log N)).
+ * Retorna Map<userId, avgMinutes>.
  */
 async function calculateAvgResponseTimeByAssignedUser(
     agentUserIds: string[],
@@ -169,26 +165,22 @@ async function calculateAvgResponseTimeByAssignedUser(
             agentUserIds.map((id) => Prisma.sql`${id}`)
         )
         const rows = await prisma.$queryRaw<Array<{ userId: string; avg_minutes: number | null }>>`
-            SELECT c."assignedToId" AS "userId",
-                   AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) / 60 AS avg_minutes
-            FROM "Message" m1
-            INNER JOIN "Message" m2
-                ON m1."conversationId" = m2."conversationId"
-                AND m2.timestamp > m1.timestamp
-                AND m2.direction = 'SENT'
-            INNER JOIN "Conversation" c
-                ON c.id = m1."conversationId"
-            WHERE m1.direction = 'RECEIVED'
-                AND c."createdAt" >= ${startDate}
-                AND c."assignedToId" IN (${idList})
-                AND m2.timestamp = (
-                    SELECT MIN(m3.timestamp)
-                    FROM "Message" m3
-                    WHERE m3."conversationId" = m1."conversationId"
-                        AND m3.direction = 'SENT'
-                        AND m3.timestamp > m1.timestamp
-                )
-            GROUP BY c."assignedToId"
+            SELECT "userId", AVG(diff_seconds) / 60 AS avg_minutes FROM (
+                SELECT DISTINCT ON (m1.id)
+                    c."assignedToId" AS "userId",
+                    EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp)) AS diff_seconds
+                FROM "Message" m1
+                INNER JOIN "Message" m2
+                    ON m1."conversationId" = m2."conversationId"
+                    AND m2.direction = 'SENT'
+                    AND m2.timestamp > m1.timestamp
+                INNER JOIN "Conversation" c ON c.id = m1."conversationId"
+                WHERE m1.direction = 'RECEIVED'
+                    AND c."createdAt" >= ${startDate}
+                    AND c."assignedToId" IN (${idList})
+                ORDER BY m1.id, m2.timestamp ASC
+            ) sub
+            GROUP BY "userId"
         `
         for (const row of rows) {
             if (row.userId != null && row.avg_minutes != null) {

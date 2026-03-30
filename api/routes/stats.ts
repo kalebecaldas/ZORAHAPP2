@@ -90,55 +90,60 @@ router.get('/', statsAuth, async (req: Request, res: Response): Promise<void> =>
         }
       }),
       
-      // Average response time — uses first SENT reply per RECEIVED turn (consistent with analytics.ts)
-      (async () => {
-        try {
-          const isPostgres = process.env.DATABASE_URL?.includes('postgresql')
+      // Average response time — DISTINCT ON avoids correlated subquery (O(N log N) instead of O(N*M))
+      // Hard timeout of 4s so a slow query never blocks the whole stats endpoint
+      Promise.race([
+        (async () => {
+          try {
+            const isPostgres = process.env.DATABASE_URL?.includes('postgresql')
 
-          if (isPostgres) {
-            const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
-              SELECT AVG(EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp))) AS avg_time
-              FROM "Message" m1
-              INNER JOIN "Message" m2
-                ON m1."conversationId" = m2."conversationId"
-                AND m2.direction = 'SENT'
-                AND m2.timestamp > m1.timestamp
-              WHERE m1.direction = 'RECEIVED'
-                AND m1.timestamp >= ${startDate}
-                AND m2.timestamp = (
-                  SELECT MIN(m3.timestamp)
-                  FROM "Message" m3
-                  WHERE m3."conversationId" = m1."conversationId"
-                    AND m3.direction = 'SENT'
-                    AND m3.timestamp > m1.timestamp
-                )
-            `
-            return result
-          } else {
-            // SQLite fallback
-            const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
-              SELECT AVG(CAST((strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) AS avg_time
-              FROM messages m1
-              INNER JOIN messages m2 ON m1.conversationId = m2.conversationId
-              WHERE m1.direction = 'RECEIVED'
-                AND m2.direction = 'SENT'
-                AND m1.timestamp >= ${startDate}
-                AND m2.timestamp > m1.timestamp
-                AND m2.timestamp = (
-                  SELECT MIN(m3.timestamp)
-                  FROM messages m3
-                  WHERE m3.conversationId = m1.conversationId
-                    AND m3.direction = 'SENT'
-                    AND m3.timestamp > m1.timestamp
-                )
-            `
-            return result
+            if (isPostgres) {
+              const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
+                SELECT AVG(diff_seconds) AS avg_time FROM (
+                  SELECT DISTINCT ON (m1.id)
+                    EXTRACT(EPOCH FROM (m2.timestamp - m1.timestamp)) AS diff_seconds
+                  FROM "Message" m1
+                  INNER JOIN "Message" m2
+                    ON m1."conversationId" = m2."conversationId"
+                    AND m2.direction = 'SENT'
+                    AND m2.timestamp > m1.timestamp
+                  WHERE m1.direction = 'RECEIVED'
+                    AND m1.timestamp >= ${startDate}
+                  ORDER BY m1.id, m2.timestamp ASC
+                ) sub
+              `
+              return result
+            } else {
+              // SQLite fallback (sem DISTINCT ON)
+              const result = await prisma.$queryRaw<Array<{ avg_time: number | null }>>`
+                SELECT AVG(CAST((strftime('%s', m2.timestamp) - strftime('%s', m1.timestamp)) AS REAL)) AS avg_time
+                FROM messages m1
+                INNER JOIN messages m2 ON m1.conversationId = m2.conversationId
+                WHERE m1.direction = 'RECEIVED'
+                  AND m2.direction = 'SENT'
+                  AND m1.timestamp >= ${startDate}
+                  AND m2.timestamp > m1.timestamp
+                  AND m2.timestamp = (
+                    SELECT MIN(m3.timestamp) FROM messages m3
+                    WHERE m3.conversationId = m1.conversationId
+                      AND m3.direction = 'SENT'
+                      AND m3.timestamp > m1.timestamp
+                  )
+              `
+              return result
+            }
+          } catch (error) {
+            console.error('Erro ao calcular tempo médio de resposta:', error)
+            return [{ avg_time: 0 }]
           }
-        } catch (error) {
-          console.error('Erro ao calcular tempo médio de resposta:', error)
-          return [{ avg_time: 0 }]
-        }
-      })(),
+        })(),
+        new Promise<Array<{ avg_time: number | null }>>(resolve =>
+          setTimeout(() => {
+            console.warn('⚠️ [Stats] avgResponseTime query timeout (4s) — returning 0')
+            resolve([{ avg_time: 0 }])
+          }, 4000)
+        )
+      ]),
       
       // Top intents - fallback since aILearningData table doesn't exist
       Promise.resolve([{ intent: 'agendamento', _count: { intent: 5 } }]),
