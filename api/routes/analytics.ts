@@ -194,6 +194,70 @@ async function calculateAvgResponseTimeByAssignedUser(
 }
 
 /**
+ * Identifica conversas que resultaram em agendamento usando três sinais em ordem de prioridade:
+ *  1. closeCategory = AGENDAMENTO / AGENDAMENTO_PARTICULAR (tabulação manual do agente)
+ *  2. normalAppointment / privateAppointment preenchidos (JSON do modal de tabulação)
+ *  3. Paciente da conversa tem um Appointment criado DENTRO da janela da conversa
+ *
+ * Retorna um Set com os IDs das conversas consideradas conversão.
+ */
+async function getConvertedConversationIds(
+    conversations: Array<{
+        id: string
+        status: string
+        closeCategory: string | null
+        normalAppointment: unknown
+        privateAppointment: unknown
+        patientId: string | null
+        createdAt: Date
+        closedAt: Date | null
+    }>
+): Promise<Set<string>> {
+    const converted = new Set<string>()
+    const needsPatientCheck: Array<typeof conversations[0]> = []
+
+    for (const c of conversations) {
+        if (c.status !== 'FECHADA') continue
+
+        if (
+            isAppointmentCloseCategory(c.closeCategory) ||
+            c.normalAppointment != null ||
+            c.privateAppointment != null
+        ) {
+            converted.add(c.id)
+        } else if (c.patientId) {
+            needsPatientCheck.push(c)
+        }
+    }
+
+    if (needsPatientCheck.length > 0) {
+        const patientIds = [...new Set(needsPatientCheck.map(c => c.patientId!))]
+        const appointments = await prisma.appointment.findMany({
+            where: { patientId: { in: patientIds } },
+            select: { patientId: true, createdAt: true }
+        })
+
+        const aptsByPatient = new Map<string, Date[]>()
+        for (const apt of appointments) {
+            const list = aptsByPatient.get(apt.patientId) ?? []
+            list.push(apt.createdAt)
+            aptsByPatient.set(apt.patientId, list)
+        }
+
+        for (const c of needsPatientCheck) {
+            const apts = aptsByPatient.get(c.patientId!)
+            if (!apts) continue
+            const convEnd = c.closedAt ?? new Date()
+            if (apts.some(d => d >= c.createdAt && d <= convEnd)) {
+                converted.add(c.id)
+            }
+        }
+    }
+
+    return converted
+}
+
+/**
  * 📊 GET /api/analytics/conversion
  * Métricas de conversão do bot
  */
@@ -206,45 +270,46 @@ router.get('/conversion', async (req: Request, res: Response): Promise<void> => 
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
 
-        const closedWhere = { createdAt: { gte: startDate }, status: 'FECHADA' } as const
+        const [closedConversations, totalConversations, humanTransferred, resolutionTimeResult] =
+            await Promise.all([
+                // Load all closed conversations with enough data for the conversion helper
+                prisma.conversation.findMany({
+                    where: { createdAt: { gte: startDate }, status: 'FECHADA' },
+                    select: {
+                        id: true,
+                        status: true,
+                        assignedToId: true,
+                        closeCategory: true,
+                        normalAppointment: true,
+                        privateAppointment: true,
+                        patientId: true,
+                        createdAt: true,
+                        closedAt: true,
+                    }
+                }),
+                prisma.conversation.count({ where: { createdAt: { gte: startDate } } }),
+                prisma.conversation.count({ where: { createdAt: { gte: startDate }, assignedToId: { not: null } } }),
+                prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
+                    SELECT AVG(EXTRACT(EPOCH FROM ("closedAt" - "createdAt"))) / 60 AS avg_minutes
+                    FROM "Conversation"
+                    WHERE status = 'FECHADA'
+                      AND "closedAt" IS NOT NULL
+                      AND "createdAt" >= ${startDate}
+                `.catch(() => [{ avg_minutes: null }]),
+            ])
 
-        const [
-            totalClosed,
-            totalConverted,
-            botClosed,
-            botConverted,
-            humanClosed,
-            humanConverted,
-            totalConversations,
-            humanTransferred,
-            resolutionTimeResult,
-        ] = await Promise.all([
-            // Total fechadas
-            prisma.conversation.count({ where: { ...closedWhere } }),
-            // Total convertidas (bot + atendente)
-            prisma.conversation.count({ where: { ...closedWhere, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
-            // Bot: assignedToId null
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null } }),
-            // Bot convertidas
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: null, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
-            // Humano: assignedToId preenchido
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null } } }),
-            // Humano convertidas
-            prisma.conversation.count({ where: { ...closedWhere, assignedToId: { not: null }, closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } } }),
-            // Total de conversas no período
-            prisma.conversation.count({ where: { createdAt: { gte: startDate } } }),
-            // Transferidas para humano
-            prisma.conversation.count({ where: { createdAt: { gte: startDate }, assignedToId: { not: null } } }),
-            // Tempo médio de resolução: AVG(closedAt - createdAt) em minutos
-            // Usa createdAt >= startDate para ser consistente com closedWhere e totalClosed
-            prisma.$queryRaw<Array<{ avg_minutes: number | null }>>`
-                SELECT AVG(EXTRACT(EPOCH FROM ("closedAt" - "createdAt"))) / 60 AS avg_minutes
-                FROM "Conversation"
-                WHERE status = 'FECHADA'
-                  AND "closedAt" IS NOT NULL
-                  AND "createdAt" >= ${startDate}
-            `.catch(() => [{ avg_minutes: null }]),
-        ])
+        const totalClosed = closedConversations.length
+        const botConversations = closedConversations.filter(c => c.assignedToId === null)
+        const humanConversations = closedConversations.filter(c => c.assignedToId !== null)
+
+        // Use full conversion check: tabulação + JSON fields + Appointment table via patientId
+        const convertedIds = await getConvertedConversationIds(closedConversations)
+
+        const totalConverted = convertedIds.size
+        const botConverted = botConversations.filter(c => convertedIds.has(c.id)).length
+        const humanConverted = humanConversations.filter(c => convertedIds.has(c.id)).length
+        const botClosed = botConversations.length
+        const humanClosed = humanConversations.length
 
         const avgResolutionTimeMinutes = resolutionTimeResult[0]?.avg_minutes != null
             ? Math.round(resolutionTimeResult[0].avg_minutes * 10) / 10
@@ -423,9 +488,11 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                         status: true,
                         createdAt: true,
                         updatedAt: true,
+                        closedAt: true,
                         closeCategory: true,
                         normalAppointment: true,
-                        privateAppointment: true
+                        privateAppointment: true,
+                        patientId: true
                     }
                 }
             }
@@ -434,15 +501,14 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
         const agentIds = agents.map((a) => a.id)
         const avgResponseByUser = await calculateAvgResponseTimeByAssignedUser(agentIds, startDate)
 
+        // Single batch appointment lookup for all conversations across all agents
+        const allConversations = agents.flatMap(a => a.conversations)
+        const convertedIds = await getConvertedConversationIds(allConversations)
+
         const agentStats = agents.map((agent) => {
             const conversations = agent.conversations
             const closedConversations = conversations.filter(c => c.status === 'FECHADA')
-            // Conversion: closeCategory = AGENDAMENTO/AGENDAMENTO_PARTICULAR OR appointment JSON filled by agent tabulação
-            const closedWithAppointment = closedConversations.filter(c =>
-                isAppointmentCloseCategory(c.closeCategory) ||
-                c.normalAppointment != null ||
-                c.privateAppointment != null
-            )
+            const closedWithAppointment = closedConversations.filter(c => convertedIds.has(c.id))
 
             const avgResponseTime = avgResponseByUser.get(agent.id) ?? 0
 
@@ -508,9 +574,11 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                 status: true,
                 createdAt: true,
                 updatedAt: true,
+                closedAt: true,
                 closeCategory: true,
                 normalAppointment: true,
-                privateAppointment: true
+                privateAppointment: true,
+                patientId: true
             }
         })
 
@@ -537,13 +605,10 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             return
         }
 
-        // Calcular métricas pessoais
+        // Calcular métricas pessoais usando o helper completo (tabulação + JSON + Appointment table)
+        const myConvertedIds = await getConvertedConversationIds(myConversations)
         const closed = myConversations.filter(c => c.status === 'FECHADA')
-        const withAppointment = closed.filter(c =>
-            isAppointmentCloseCategory(c.closeCategory) ||
-            c.normalAppointment != null ||
-            c.privateAppointment != null
-        )
+        const withAppointment = closed.filter(c => myConvertedIds.has(c.id))
 
         // Calcular tempo médio de resposta CORRETO (entre mensagens)
         const avgResponseTime = await calculateAvgResponseTime(userId, startDate)
@@ -564,9 +629,11 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                         status: true,
                         createdAt: true,
                         updatedAt: true,
+                        closedAt: true,
                         closeCategory: true,
                         normalAppointment: true,
-                        privateAppointment: true
+                        privateAppointment: true,
+                        patientId: true
                     }
                 }
             }
@@ -574,6 +641,10 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
         // Calcular média da equipe (filtrar agentes sem conversas)
         const agentsWithData = allAgents.filter(agent => agent.conversations.length > 0)
+
+        // Batch appointment lookup para toda a equipe
+        const allTeamConversations = agentsWithData.flatMap(a => a.conversations)
+        const teamConvertedIds = await getConvertedConversationIds(allTeamConversations)
         
         let teamTotalConversations = 0
         let teamTotalClosed = 0
@@ -584,14 +655,10 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             teamTotalConversations += conversations.length
 
             conversations.forEach(c => {
-                if (c.status === 'FECHADA') teamTotalClosed++
-                if (
-                    c.status === 'FECHADA' && (
-                        isAppointmentCloseCategory(c.closeCategory) ||
-                        c.normalAppointment != null ||
-                        c.privateAppointment != null
-                    )
-                ) teamTotalWithAppointment++
+                if (c.status === 'FECHADA') {
+                    teamTotalClosed++
+                    if (teamConvertedIds.has(c.id)) teamTotalWithAppointment++
+                }
             })
         })
 
@@ -611,18 +678,14 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             ? (teamTotalClosed / teamTotalConversations) * 100
             : 0
 
-        // Calcular rank (posição do usuário)
+        // Calcular rank (posição do usuário) — reusa teamConvertedIds já calculado
         const agentStats = allAgents.map(agent => {
             const conversations = agent.conversations
             const agentClosed = conversations.filter(c => c.status === 'FECHADA')
-            const agentClosedWithAppointment = agentClosed.filter(c =>
-                isAppointmentCloseCategory(c.closeCategory) ||
-                c.normalAppointment != null ||
-                c.privateAppointment != null
-            )
+            const agentConverted = agentClosed.filter(c => teamConvertedIds.has(c.id))
 
             const conversionRate = agentClosed.length > 0
-                ? (agentClosedWithAppointment.length / agentClosed.length) * 100
+                ? (agentConverted.length / agentClosed.length) * 100
                 : 0
 
             return {
