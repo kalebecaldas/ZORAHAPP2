@@ -127,7 +127,7 @@ export default function App() {
     <Router>
       <Layout>
         <AppRoutes />
-        <Toaster position="top-right" />
+        <Toaster position="top-right" richColors closeButton />
       </Layout>
     </Router>
   );

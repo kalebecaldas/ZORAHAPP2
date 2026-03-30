@@ -11,7 +11,7 @@ import { InstagramService } from '../services/instagram.js'
 import { AIService } from '../services/ai.js'
 import type { AIContext } from '../services/ai.js'
 import axios from 'axios'
-import { getRealtime } from '../realtime.js'
+import { getRealtime, emitToUser } from '../realtime.js'
 import { upload, FileValidationService } from '../services/fileValidation.js'
 import { transcodeToMp3, transcodeToOggOpus, transcodeToAacM4a } from '../utils/audioTranscode.js'
 // Old engine (kept for backward compatibility)
@@ -2055,6 +2055,21 @@ export async function processIncomingMessage(
       console.log(`📢 Badge atualizado: ${conversation.id} unreadCount=${updatedConversation.unreadCount}`)
     } catch (e) {
       console.warn('⚠️ Erro ao emitir badge update:', e)
+    }
+
+    // ✅ Notificar atendente dono da conversa ("Minhas Conversas") sobre nova mensagem
+    if (conversation.assignedToId) {
+      try {
+        emitToUser(conversation.assignedToId, 'myconv:new_message', {
+          conversationId: conversation.id,
+          phone: conversation.phone,
+          patientName: patient?.name ?? conversation.phone,
+          messageText: text,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (e) {
+        console.warn('⚠️ Erro ao emitir notificação individual:', e)
+      }
     }
 
     // IMPORTANTE: Emitir evento Socket.IO IMEDIATAMENTE após criar a mensagem

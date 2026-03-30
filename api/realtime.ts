@@ -101,9 +101,7 @@ export function emitToAll(event: string, data: any) {
   io.emit(event, data)
 }
 
-export function emitToUser(userId: string, event: string, data: any) {
+export function emitToUser(userId: string, event: string, data: unknown) {
   const { io } = getRealtime()
-  // This would require mapping user IDs to socket IDs
-  // For now, we'll broadcast to all
-  io.emit(event, { ...data, userId })
+  io.to(`user_${userId}`).emit(event, data)
 }

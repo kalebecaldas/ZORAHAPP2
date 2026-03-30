@@ -4,12 +4,12 @@ import {
     Phone, User, Bot, Clock, Users, UserCheck, Archive,
     Send, Paperclip, Mic, StopCircle, X, Image as ImageIcon,
     File, Trash2, Video, MoreVertical, PhoneCall, AlertCircle,
-    Shield, CheckCircle2, History, FileText, Zap
+    Shield, CheckCircle2, History, FileText, Zap, Info
 } from 'lucide-react';
 import { api } from '../lib/utils';
 import { useAuth } from '../hooks/useAuth';
 import { useSocket } from '../hooks/useSocket';
-import { toast, Toaster } from 'sonner';
+import { toast } from 'sonner';
 import ConversationHistoryModal from '../components/ConversationHistoryModal';
 import QuickRepliesModal from '../components/QuickRepliesModal';
 import '../styles/minimal-theme.css'; // ✅ Importar CSS do badge
@@ -30,6 +30,13 @@ import type { Conversation } from '../hooks/conversations/useConversations';
 import type { Message } from '../hooks/conversations/useMessages';
 
 type QueueType = 'BOT_QUEUE' | 'PRINCIPAL' | 'EM_ATENDIMENTO' | 'MINHAS_CONVERSAS' | 'ENCERRADOS';
+
+type MyConvNotifyPayload = {
+    conversationId: string;
+    phone: string;
+    patientName: string;
+    messageText: string;
+};
 
 const ConversationsPage: React.FC = () => {
     const { phone } = useParams<{ phone: string }>();
@@ -123,6 +130,9 @@ const ConversationsPage: React.FC = () => {
     const processedMessageIdsRef = useRef<Set<string>>(new Set());
     const isUserScrollingRef = useRef(false);
     const shouldAutoScrollRef = useRef(true);
+    const selectedConversationRef = useRef(selectedConversation);
+    const myConvNotifyQueueRef = useRef<MyConvNotifyPayload[]>([]);
+    const myConvNotifyBusyRef = useRef(false);
 
     // ✅ Verificar se sessão expirou
     const isSessionExpired = useMemo(() => {
@@ -147,6 +157,9 @@ const ConversationsPage: React.FC = () => {
     const canSend = useMemo(() => {
         return (newMessage.trim() || pendingFiles.length > 0 || audioBlob) && !sending && canWrite;
     }, [newMessage, pendingFiles.length, audioBlob, sending, canWrite]);
+
+    // Manter ref sincronizada com o estado para uso em handlers de socket
+    selectedConversationRef.current = selectedConversation;
 
     // Ref com o ID da conversa que está sendo encerrada (sincronizado imediatamente,
     // sem depender do batch do React — evita duplo disparo com socket em produção)
@@ -1876,6 +1889,88 @@ const ConversationsPage: React.FC = () => {
         };
     }, [socket, selectedConversation?.id]);
 
+    // ✅ Notificação individual (fila): uma de cada vez; demais aguardam na fila
+    useEffect(() => {
+        if (!socket) return;
+
+        const drainMyConvNotifyQueue = (): void => {
+            if (myConvNotifyBusyRef.current) return;
+
+            while (myConvNotifyQueueRef.current.length > 0) {
+                const peek = myConvNotifyQueueRef.current[0];
+                if (selectedConversationRef.current?.id === peek.conversationId) {
+                    myConvNotifyQueueRef.current.shift();
+                    continue;
+                }
+                break;
+            }
+
+            const next = myConvNotifyQueueRef.current.shift();
+            if (!next) return;
+
+            myConvNotifyBusyRef.current = true;
+            let finalized = false;
+            const finalize = (): void => {
+                if (finalized) return;
+                finalized = true;
+                myConvNotifyBusyRef.current = false;
+                drainMyConvNotifyQueue();
+            };
+
+            const preview = next.messageText.slice(0, 80);
+            const moreInQueue = myConvNotifyQueueRef.current.length;
+
+            toast.custom(
+                (toastId) => (
+                    <button
+                        type="button"
+                        className="flex w-full max-w-[356px] cursor-pointer items-start gap-3 rounded-lg border border-blue-100/50 bg-blue-50/90 px-3 py-2.5 text-left shadow-[0_4px_14px_rgba(59,130,246,0.10),inset_0_1px_0_rgba(255,255,255,0.5)] backdrop-blur-sm transition-colors hover:bg-blue-100/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
+                        onClick={() => {
+                            toast.dismiss(toastId);
+                            setActiveQueue('MINHAS_CONVERSAS');
+                            navigate(`/conversations/${next.phone}?conversationId=${next.conversationId}`);
+                        }}
+                    >
+                        <span className="mt-0.5 shrink-0 text-blue-400" aria-hidden>
+                            <Info className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-medium text-blue-900">
+                                {next.patientName} enviou uma mensagem
+                            </span>
+                            <span className="mt-0.5 block text-xs text-blue-600">{preview}</span>
+                            {moreInQueue > 0 ? (
+                                <span className="mt-1 block text-[10px] font-medium text-blue-500/90">
+                                    Mais {moreInQueue} {moreInQueue === 1 ? 'notificação' : 'notificações'} na fila
+                                </span>
+                            ) : (
+                                <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-blue-500/80">
+                                    Clique para abrir
+                                </span>
+                            )}
+                        </span>
+                    </button>
+                ),
+                {
+                    duration: 6000,
+                    onDismiss: finalize,
+                    onAutoClose: finalize,
+                }
+            );
+        };
+
+        const onMyConvNewMessage = (data: MyConvNotifyPayload) => {
+            if (selectedConversationRef.current?.id === data.conversationId) return;
+            myConvNotifyQueueRef.current.push(data);
+            drainMyConvNotifyQueue();
+        };
+
+        socket.on('myconv:new_message', onMyConvNewMessage);
+        return () => {
+            socket.off('myconv:new_message', onMyConvNewMessage);
+        };
+    }, [socket, navigate, setActiveQueue]);
+
     // ✅ Heartbeat para manter conversa ativa (atualiza lastAgentActivity)
     useEffect(() => {
         if (!selectedConversation) return;
@@ -2158,12 +2253,6 @@ const ConversationsPage: React.FC = () => {
             {/* Main Chat Area */}
             {selectedConversation ? (
                 <div className={`flex-1 flex flex-col relative${isClosingConversation ? ' conversation-closing' : ''}`}>
-                    {/* ✅ Toaster específico para notificações na área do chat (topo direito) */}
-                    <Toaster
-                        position="top-right"
-                        richColors
-                        closeButton
-                    />
                     {/* Chat Header - REFATORADO ✅ */}
                     <ConversationHeader
                         conversation={selectedConversation}
