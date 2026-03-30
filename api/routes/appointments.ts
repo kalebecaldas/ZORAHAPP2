@@ -413,6 +413,19 @@ router.post('/', async (req, res) => {
       // Continue even if bot fails - appointment was created successfully
     }
 
+    // Mark the linked conversation as converted (AGENDAMENTO) so analytics counts it
+    if (appointmentData.conversationId) {
+      try {
+        await prisma.conversation.update({
+          where: { id: appointmentData.conversationId },
+          data: { closeCategory: 'AGENDAMENTO' }
+        })
+        console.log(`✅ [Appointment] Conversa ${appointmentData.conversationId} marcada como AGENDAMENTO`)
+      } catch (convErr) {
+        console.warn('⚠️ [Appointment] Falha ao marcar closeCategory na conversa (appointment salvo):', convErr)
+      }
+    }
+
     // Emit real-time update
     const { io } = getRealtime();
     io.emit('appointment:created', {

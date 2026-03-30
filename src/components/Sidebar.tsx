@@ -17,6 +17,16 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { usePermissions } from '../hooks/usePermissions';
 import { api } from '../lib/utils';
+import type { Conversation } from '../hooks/conversations/useConversations';
+
+/** Matches ConversationsNew principal queue: PRINCIPAL | AGUARDANDO, unassigned only */
+function countPrincipalQueueWaiting(conversations: Conversation[]): number {
+  return conversations.filter((c) => {
+    const isPrincipal =
+      c.status === 'PRINCIPAL' || c.status === 'AGUARDANDO';
+    return isPrincipal && !c.assignedToId;
+  }).length;
+}
 
 const Sidebar: React.FC = () => {
   const location = useLocation();
@@ -47,16 +57,14 @@ const Sidebar: React.FC = () => {
     sessionStorage.setItem('sidebarCollapsed', String(isCollapsed));
   }, [isCollapsed]);
 
-  // ✅ Buscar número de conversas da fila PRINCIPAL (TODAS, não apenas não atribuídas)
+  // Same definition as "Fila principal" in ConversationsNew (unassigned PRINCIPAL | AGUARDANDO)
   useEffect(() => {
     const fetchPendingCount = async () => {
       try {
         const response = await api.get('/api/conversations?status=ACTIVE&limit=100');
-        const conversations = response.data.conversations || [];
-        // ✅ Contar TODAS as conversas com status PRINCIPAL (com ou sem assignedToId)
-        const principalQueue = conversations.filter((c: any) => c.status === 'PRINCIPAL');
-        setPendingCount(principalQueue.length);
-      } catch (error: any) {
+        const conversations: Conversation[] = response.data.conversations ?? [];
+        setPendingCount(countPrincipalQueueWaiting(conversations));
+      } catch (error: unknown) {
         console.error('Erro ao buscar conversas da fila principal:', error);
       }
     };

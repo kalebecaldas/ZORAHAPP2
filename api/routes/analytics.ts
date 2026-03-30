@@ -414,7 +414,9 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
                         status: true,
                         createdAt: true,
                         updatedAt: true,
-                        closeCategory: true
+                        closeCategory: true,
+                        normalAppointment: true,
+                        privateAppointment: true
                     }
                 }
             }
@@ -423,9 +425,11 @@ router.get('/agents', async (req: Request, res: Response): Promise<void> => {
         const agentStats = await Promise.all(agents.map(async (agent) => {
             const conversations = agent.conversations
             const closedConversations = conversations.filter(c => c.status === 'FECHADA')
-            // Conversion = appointment only among closed conversations (same spirit as CONVERSION_RATE goals)
+            // Conversion: closeCategory = AGENDAMENTO/AGENDAMENTO_PARTICULAR OR appointment JSON filled by agent tabulação
             const closedWithAppointment = closedConversations.filter(c =>
-                isAppointmentCloseCategory(c.closeCategory)
+                isAppointmentCloseCategory(c.closeCategory) ||
+                c.normalAppointment != null ||
+                c.privateAppointment != null
             )
 
             // Calcular tempo médio de resposta CORRETO (entre mensagens)
@@ -494,7 +498,9 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                 status: true,
                 createdAt: true,
                 updatedAt: true,
-                closeCategory: true
+                closeCategory: true,
+                normalAppointment: true,
+                privateAppointment: true
             }
         })
 
@@ -523,7 +529,11 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
         // Calcular métricas pessoais
         const closed = myConversations.filter(c => c.status === 'FECHADA')
-        const withAppointment = closed.filter(c => isAppointmentCloseCategory(c.closeCategory))
+        const withAppointment = closed.filter(c =>
+            isAppointmentCloseCategory(c.closeCategory) ||
+            c.normalAppointment != null ||
+            c.privateAppointment != null
+        )
 
         // Calcular tempo médio de resposta CORRETO (entre mensagens)
         const avgResponseTime = await calculateAvgResponseTime(userId, startDate)
@@ -544,7 +554,9 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
                         status: true,
                         createdAt: true,
                         updatedAt: true,
-                        closeCategory: true
+                        closeCategory: true,
+                        normalAppointment: true,
+                        privateAppointment: true
                     }
                 }
             }
@@ -563,7 +575,13 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
 
             conversations.forEach(c => {
                 if (c.status === 'FECHADA') teamTotalClosed++
-                if (c.status === 'FECHADA' && isAppointmentCloseCategory(c.closeCategory)) teamTotalWithAppointment++
+                if (
+                    c.status === 'FECHADA' && (
+                        isAppointmentCloseCategory(c.closeCategory) ||
+                        c.normalAppointment != null ||
+                        c.privateAppointment != null
+                    )
+                ) teamTotalWithAppointment++
             })
         })
 
@@ -591,7 +609,9 @@ router.get('/agents/me', async (req: Request, res: Response): Promise<void> => {
             const conversations = agent.conversations
             const agentClosed = conversations.filter(c => c.status === 'FECHADA')
             const agentClosedWithAppointment = agentClosed.filter(c =>
-                isAppointmentCloseCategory(c.closeCategory)
+                isAppointmentCloseCategory(c.closeCategory) ||
+                c.normalAppointment != null ||
+                c.privateAppointment != null
             )
 
             const conversionRate = agentClosed.length > 0

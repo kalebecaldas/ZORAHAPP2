@@ -60,13 +60,17 @@ async function calculateCurrentValue(goal: any) {
         }
             
         case 'APPOINTMENTS': {
-            // Número de agendamentos realizados (conversa encerrada com categoria de agendamento)
+            // Conversas encerradas com agendamento: closeCategory OU campos JSON preenchidos pelo modal
             const count = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
                     status: 'FECHADA',
-                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
-                    closedAt: { gte: startDate, lte: endDate }
+                    closedAt: { gte: startDate, lte: endDate },
+                    OR: [
+                        { closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } },
+                        { normalAppointment: { not: null } },
+                        { privateAppointment: { not: null } }
+                    ]
                 }
             })
             return count
@@ -84,8 +88,13 @@ async function calculateCurrentValue(goal: any) {
             const converted = await prisma.conversation.count({
                 where: {
                     assignedToId: userId,
-                    closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] },
-                    closedAt: { gte: startDate, lte: endDate }
+                    status: 'FECHADA',
+                    closedAt: { gte: startDate, lte: endDate },
+                    OR: [
+                        { closeCategory: { in: [...APPOINTMENT_CLOSE_CATEGORIES] } },
+                        { normalAppointment: { not: null } },
+                        { privateAppointment: { not: null } }
+                    ]
                 }
             })
             return total > 0 ? (converted / total) * 100 : 0
