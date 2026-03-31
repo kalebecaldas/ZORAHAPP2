@@ -1,6 +1,7 @@
 import { createServer } from 'http'
 import { initRealtime } from './realtime.js'
 import { startInactivityMonitor, stopInactivityMonitor } from './services/inactivityMonitor.js'
+import prisma from './prisma/client.js'
 
 /**
  * Mensagens de arranque no stderr: com concurrently/npm pipes, stdout costuma ficar
@@ -88,6 +89,27 @@ httpServer.listen(PORT, async () => {
     await startInactivityMonitor()
   } catch (error) {
     console.error('⚠️ Erro ao iniciar monitor de inatividade:', error)
+  }
+
+  // One-time fix: restore conversations that were moved to PRINCIPAL when their
+  // WhatsApp session expired but still had an assigned agent (session expiry bug).
+  // Runs on every startup — idempotent, safe to keep long-term.
+  try {
+    const stuck = await prisma.conversation.findMany({
+      where: { status: 'PRINCIPAL', assignedToId: { not: null } },
+      select: { id: true, phone: true, assignedToId: true }
+    })
+    if (stuck.length > 0) {
+      await prisma.conversation.updateMany({
+        where: { id: { in: stuck.map(c => c.id) } },
+        data: { status: 'EM_ATENDIMENTO' }
+      })
+      bootLog(`🔧 [startup-fix] Corrigidas ${stuck.length} conversa(s) com status inconsistente (PRINCIPAL + assignedToId): ${stuck.map(c => c.phone).join(', ')}`)
+    } else {
+      bootLog('🔧 [startup-fix] Nenhuma conversa com status inconsistente encontrada.')
+    }
+  } catch (error) {
+    console.error('⚠️ Erro no startup-fix de conversas presas:', error)
   }
 })
 
