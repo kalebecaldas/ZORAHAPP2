@@ -267,11 +267,19 @@ export class ConversationSessionManager {
         transferCount: session.transferCount
       });
 
-      // Update conversation status in database
+      // Update conversation status in database.
+      // If a human agent is already assigned, keep the conversation in EM_ATENDIMENTO
+      // so it stays in the agent's queue. Only move to PRINCIPAL when unassigned.
+      const conv = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { assignedToId: true }
+      });
+
       await prisma.conversation.update({
         where: { id: conversationId },
         data: {
-          status: 'PRINCIPAL'
+          ...(conv?.assignedToId ? {} : { status: 'PRINCIPAL' }),
+          sessionStatus: 'expired'
         }
       });
 
@@ -282,7 +290,7 @@ export class ConversationSessionManager {
         this.warningTimers.delete(conversationId);
       }
 
-      sessionLogger.info(`Session expired for conversation ${conversationId}`);
+      sessionLogger.info(`Session expired for conversation ${conversationId} (assignedToId: ${conv?.assignedToId ?? 'none'}, status kept: ${conv?.assignedToId ? 'EM_ATENDIMENTO' : 'PRINCIPAL'})`);
 
     } catch (error) {
       sessionLogger.error('Error handling session expiry', { error });

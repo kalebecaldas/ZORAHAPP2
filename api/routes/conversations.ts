@@ -1342,26 +1342,37 @@ async function sendN8NFailureFallback(
   }
 
   try {
-    await prisma.conversation.update({
+    // Only move to PRINCIPAL if the conversation is not already being handled by a human agent.
+    // Resetting EM_ATENDIMENTO conversations would silently eject them from the agent's queue.
+    const current = await prisma.conversation.findUnique({
       where: { id: conversation.id },
-      data: { status: 'PRINCIPAL', assignedToId: null, awaitingInput: true }
+      select: { status: true, assignedToId: true }
     })
+
+    if (current?.status !== 'EM_ATENDIMENTO') {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { status: 'PRINCIPAL', assignedToId: null, awaitingInput: true }
+      })
+
+      try {
+        const realtime = getRealtime()
+        if (realtime?.io) {
+          realtime.io.emit('conversation:updated', {
+            id: conversation.id,
+            status: 'PRINCIPAL',
+            reason: 'n8n_failure_fallback'
+          })
+        }
+      } catch (_) {}
+
+      console.log(`⚠️ N8N indisponível — mensagem de boas-vindas enviada e conversa ${conversation.id} movida para PRINCIPAL`)
+    } else {
+      console.log(`⚠️ N8N indisponível — conversa ${conversation.id} mantida em EM_ATENDIMENTO (atendente: ${current.assignedToId})`)
+    }
   } catch (e) {
     console.warn('sendN8NFailureFallback: erro ao atualizar conversa', e)
   }
-
-  try {
-    const realtime = getRealtime()
-    if (realtime?.io) {
-      realtime.io.emit('conversation:updated', {
-        id: conversation.id,
-        status: 'PRINCIPAL',
-        reason: 'n8n_failure_fallback'
-      })
-    }
-  } catch (_) {}
-
-  console.log(`⚠️ N8N indisponível — mensagem de boas-vindas enviada e conversa ${conversation.id} movida para PRINCIPAL`)
 }
 
 export async function processIncomingMessage(
@@ -3832,6 +3843,52 @@ router.post('/:phone/close', authMiddleware, async (req: Request, res: Response)
   } catch (error) {
     console.error('Erro ao encerrar conversa:', error)
     res.status(500).json({ error: 'Erro ao encerrar conversa' })
+  }
+})
+
+// One-time admin fix: restore conversations that were incorrectly moved to PRINCIPAL
+// when their WhatsApp session expired but still had an assigned agent.
+// Safe to run multiple times (idempotent). Can be removed after confirming fix.
+router.post('/admin/fix-session-queue-bug', authMiddleware, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const stuck = await prisma.conversation.findMany({
+      where: {
+        status: 'PRINCIPAL',
+        assignedToId: { not: null }
+      },
+      select: { id: true, phone: true, assignedToId: true, sessionStatus: true }
+    })
+
+    if (stuck.length === 0) {
+      res.json({ fixed: 0, message: 'Nenhuma conversa com estado inconsistente encontrada.' })
+      return
+    }
+
+    const ids = stuck.map(c => c.id)
+
+    await prisma.conversation.updateMany({
+      where: { id: { in: ids } },
+      data: { status: 'EM_ATENDIMENTO' }
+    })
+
+    try {
+      const realtime = getRealtime()
+      for (const conv of stuck) {
+        realtime.io.emit('conversation:updated', {
+          conversationId: conv.id,
+          phone: conv.phone,
+          status: 'EM_ATENDIMENTO',
+          assignedToId: conv.assignedToId,
+          reason: 'session_queue_bug_fix'
+        })
+      }
+    } catch (_) {}
+
+    console.log(`🔧 [admin/fix-session-queue-bug] Corrigidas ${stuck.length} conversas:`, ids)
+    res.json({ fixed: stuck.length, conversations: stuck })
+  } catch (error) {
+    console.error('Erro em fix-session-queue-bug:', error)
+    res.status(500).json({ error: 'Erro interno' })
   }
 })
 
