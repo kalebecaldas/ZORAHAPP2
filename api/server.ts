@@ -1,5 +1,5 @@
 import { createServer } from 'http'
-import { initRealtime } from './realtime.js'
+import { initRealtime, getRealtime } from './realtime.js'
 import { startInactivityMonitor, stopInactivityMonitor } from './services/inactivityMonitor.js'
 import prisma from './prisma/client.js'
 
@@ -91,8 +91,9 @@ httpServer.listen(PORT, async () => {
     console.error('⚠️ Erro ao iniciar monitor de inatividade:', error)
   }
 
-  // One-time fix: restore conversations that were moved to PRINCIPAL when their
+  // Startup fix: restore conversations that were moved to PRINCIPAL when their
   // WhatsApp session expired but still had an assigned agent (session expiry bug).
+  // Emits conversation:updated events so the frontend syncs without requiring a page refresh.
   // Runs on every startup — idempotent, safe to keep long-term.
   try {
     const stuck = await prisma.conversation.findMany({
@@ -105,6 +106,23 @@ httpServer.listen(PORT, async () => {
         data: { status: 'EM_ATENDIMENTO' }
       })
       bootLog(`🔧 [startup-fix] Corrigidas ${stuck.length} conversa(s) com status inconsistente (PRINCIPAL + assignedToId): ${stuck.map(c => c.phone).join(', ')}`)
+
+      // Emit Socket.IO events so connected frontends update without needing a page refresh
+      try {
+        const realtime = getRealtime()
+        for (const conv of stuck) {
+          realtime.io.emit('conversation:updated', {
+            conversationId: conv.id,
+            phone: conv.phone,
+            status: 'EM_ATENDIMENTO',
+            assignedToId: conv.assignedToId,
+            reason: 'session_queue_bug_fix'
+          })
+        }
+        bootLog(`🔧 [startup-fix] Eventos conversation:updated emitidos para ${stuck.length} conversa(s)`)
+      } catch (realtimeErr) {
+        console.error('⚠️ [startup-fix] Erro ao emitir eventos Socket.IO:', realtimeErr)
+      }
     } else {
       bootLog('🔧 [startup-fix] Nenhuma conversa com status inconsistente encontrada.')
     }
