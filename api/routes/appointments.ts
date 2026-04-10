@@ -369,6 +369,7 @@ router.post('/', async (req, res) => {
         time: appointmentData.timeSlot,
         notes: appointmentData.notes || '',
         status: 'SCHEDULED',
+        conversationId: appointmentData.conversationId ?? null,
       },
       include: { patient: true }
     });

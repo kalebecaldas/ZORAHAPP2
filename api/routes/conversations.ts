@@ -1153,26 +1153,34 @@ router.post('/:id/request', authMiddleware, async (req: Request, res: Response):
 // Send message (OTIMIZADO: envia para WhatsApp e banco em paralelo)
 router.post('/send', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, text, from = 'AGENT', mediaUrl, mediaType } = req.body
+    const { phone, text, from = 'AGENT', mediaUrl, mediaType, channel: bodyChannelRaw } = req.body
 
     if (!phone || !text) {
       res.status(400).json({ error: 'Telefone e mensagem são obrigatórios' })
       return
     }
 
+    const bodyChannel: 'whatsapp' | 'instagram' | undefined =
+      bodyChannelRaw === 'instagram' || bodyChannelRaw === 'whatsapp' ? bodyChannelRaw : undefined
+
+    // Fonte de verdade: canal persistido na conversa (evita confundir DDD BR com IGSID do Instagram)
+    let conversation = await prisma.conversation.findFirst({
+      where: { phone },
+      orderBy: { createdAt: 'desc' }
+    })
+    const dbChannel: 'whatsapp' | 'instagram' =
+      conversation?.channel === 'instagram' ? 'instagram' : 'whatsapp'
+    const resolvedChannel: 'whatsapp' | 'instagram' = bodyChannel ?? dbChannel
+
     // OTIMIZAÇÃO CRÍTICA: Enviar mensagem PRIMEIRO (mais importante para latência)
     const startTime = Date.now()
     let messageSent = false
     let messageError: any = null
-    let platform = 'whatsapp'
-
-    // Detectar plataforma pelo formato do phone/userId
-    // Instagram user IDs são numéricos longos, WhatsApp são números de telefone
-    const isInstagram = /^\d{10,}$/.test(phone) && phone.length > 10 && !phone.startsWith('55')
+    let platform: 'whatsapp' | 'instagram' = resolvedChannel
 
     // Enviar mensagem IMEDIATAMENTE (não esperar banco)
     try {
-      if (isInstagram && process.env.INSTAGRAM_ACCESS_TOKEN) {
+      if (resolvedChannel === 'instagram' && process.env.INSTAGRAM_ACCESS_TOKEN) {
         platform = 'instagram'
         const instagramService = new InstagramService(
           process.env.INSTAGRAM_ACCESS_TOKEN,
@@ -1183,6 +1191,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
         const messageTime = Date.now() - startTime
         console.log(`⚡ [FAST] Instagram enviado em ${messageTime}ms`)
       } else {
+        platform = 'whatsapp'
         await whatsappService.sendTextMessage(phone, text)
         messageSent = true
         const messageTime = Date.now() - startTime
@@ -1193,13 +1202,7 @@ router.post('/send', authMiddleware, async (req: Request, res: Response): Promis
       console.error(`❌ Erro ao enviar via ${platform}:`, error)
     }
 
-    // Enquanto isso, fazer operações de banco (podem ser feitas depois)
-    // ✅ IMPORTANTE: Sempre buscar a conversa mais recente para evitar salvar em conversa errada
-    let conversation = await prisma.conversation.findFirst({
-      where: { phone },
-      orderBy: { createdAt: 'desc' } // ✅ Sempre pegar a mais recente
-    })
-
+    // Persistência (reutiliza `conversation` carregada antes do envio, se existir)
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {

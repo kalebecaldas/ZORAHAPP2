@@ -232,19 +232,33 @@ async function getConvertedConversationIds(
 
     if (needsPatientCheck.length > 0) {
         const patientIds = [...new Set(needsPatientCheck.map(c => c.patientId!))]
-        const appointments = await prisma.appointment.findMany({
-            where: { patientId: { in: patientIds } },
-            select: { patientId: true, createdAt: true }
-        })
+        const needsCheckIds = new Set(needsPatientCheck.map(c => c.id))
 
+        // prismaAny: conversationId field added in migration 20260330000001 — types regenerated on deploy
+        const appointments = await (prisma as any).appointment.findMany({
+            where: { patientId: { in: patientIds } },
+            select: { patientId: true, createdAt: true, conversationId: true }
+        }) as Array<{ patientId: string; createdAt: Date; conversationId: string | null }>
+
+        // Signal 1: direct FK link (appointment.conversationId → conversation.id)
+        for (const apt of appointments) {
+            if (apt.conversationId && needsCheckIds.has(apt.conversationId)) {
+                converted.add(apt.conversationId)
+            }
+        }
+
+        // Signal 2: time-window fallback for appointments without conversationId (historical data)
         const aptsByPatient = new Map<string, Date[]>()
         for (const apt of appointments) {
-            const list = aptsByPatient.get(apt.patientId) ?? []
-            list.push(apt.createdAt)
-            aptsByPatient.set(apt.patientId, list)
+            if (!apt.conversationId) {
+                const list = aptsByPatient.get(apt.patientId) ?? []
+                list.push(apt.createdAt)
+                aptsByPatient.set(apt.patientId, list)
+            }
         }
 
         for (const c of needsPatientCheck) {
+            if (converted.has(c.id)) continue  // already resolved by direct link
             const apts = aptsByPatient.get(c.patientId!)
             if (!apts) continue
             const convEnd = c.closedAt ?? new Date()
